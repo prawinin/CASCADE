@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KineticSketch AI - Molecular Dynamics Workspace</title>
     <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
     
     <style>
         :root {
@@ -590,7 +590,7 @@
                         </div>
                         
                         <!-- Premium Visible Text Box -->
-                        <input type="text" id="visible_smiles_input" class="premium-input" placeholder="SMILES representation (e.g. CCO, C(=O)O)" onkeydown="if(event.key === 'Enter') triggerSmilesPasted()">
+                        <input type="text" id="visible_smiles_input" class="premium-input" placeholder="SMILES representation (e.g. CCO, C(=O)O)" onkeydown="if(event.key === 'Enter') triggerSmilesPasted()" />
                     </div>
                     <button class="premium-btn" onclick="triggerSmilesPasted()">Render SMILES</button>
                 </div>
@@ -628,7 +628,7 @@
                         <taipy:input value="{chat_prompt}" id="taipy_chat_prompt" />
                         <taipy:button label="Send" id="taipy_chat_send_btn" on_action="on_chat_send" />
                     </div>
-                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type visualizer commands (e.g. show cartoon, color red)..." onkeydown="if(event.key === 'Enter') triggerChatSend()">
+                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type visualizer commands (e.g. show cartoon, color red)..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
                     <button class="premium-btn" onclick="triggerChatSend()">Send</button>
                 </div>
             </div>
