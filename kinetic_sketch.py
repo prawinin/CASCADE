@@ -441,6 +441,6 @@ if __name__ == "__main__":
     gui.run(
         title="KineticSketch AI - Molecular Dynamics Workspace",
         use_reloader=False,
-        port=5000,
+        port=5001,
         dark_mode=True
     )
