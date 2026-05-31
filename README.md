@@ -29,7 +29,7 @@ KineticSketch/
 ├── visualizer.py        # Module 3: PyMOL pipes & Ollama API Integrators
 ├── models.py            # Module 4: PyTorch GNN/MLP Dynamics Predictor
 ├── checkpoint.py        # Module 5: Progress Checkpointing Service
-├── pdb_repurposing.py   # Live Class: RCSB PDB Target Mappings & Tanimoto Similarities
+├── pdb_repurposing.py   # RCSB PDB Target Repurposing & Tanimoto Similarities
 ├── index.html           # Premium Front-End HTML5 Dashboard Layout
 ├── LICENSE              # Personal Academic Use License (Owned exclusively by Prawin)
 └── .gitignore           # Pycache, virtual env, output structures, & progress logs
@@ -48,7 +48,7 @@ Ensure you have the following installed on your system:
 ### 2. Clone & Prepare Environment
 Clone the repository to your local machine:
 ```bash
-git clone https://github.com/prawin/KineticSketch.git
+git clone https://github.com/prawinin/KineticSketch.git
 cd KineticSketch
 ```
 
@@ -96,6 +96,6 @@ This software is protected under a strict **Personal Academic Use License** (det
 
 ---
 
-## 🤝 Acknowledgments
+## 🤝 Acknowledgments & Credits
 
-Special thanks to the Live Session instruction guidance that inspired the integration of the RCSB PDB Drug Repurposing similarity search mechanics into the heart of this workspace pipeline.
+Special thanks to the developers and maintainers of RDKit, PyTorch, Taipy, and the RCSB Protein Data Bank for providing the robust open-source tools and structural databases that make this advanced computational pipeline possible.
