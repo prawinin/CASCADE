@@ -4,25 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KineticSketch AI - Molecular Dynamics Workspace</title>
-    <!-- Google Fonts -->
+    <!-- Google Fonts: Inter and JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
     
     <style>
         :root {
-            --bg-base: #0a0a12;
-            --bg-card: rgba(22, 22, 38, 0.7);
-            --border-glow: rgba(0, 255, 255, 0.15);
-            --primary: #8a2be2;
-            --primary-glow: rgba(138, 43, 226, 0.4);
-            --secondary: #00f0ff;
-            --secondary-glow: rgba(0, 240, 255, 0.4);
-            --accent: #ff007f;
-            --text-main: #f5f5fc;
-            --text-muted: #8e8ea8;
-            --success: #00ff7f;
-            --warning: #ffaa00;
+            --bg-base: #0D1117;
+            --bg-panel: #161B22;
+            --bg-hover: #21262D;
+            --bg-modal: #30363D;
+            --text-primary: #F0F6FC;
+            --text-secondary: #8B949E;
+            --border-color: rgba(240, 246, 252, 0.06);
+            --accent-blue: #58A6FF;
+            --accent-purple: #BC8CFF;
+            --accent-pink: #F778BA;
+            --success: #3FB950;
+            --warning: #D29922;
+            
+            --element-C: #8B949E;
+            --element-O: #F778BA;
+            --element-N: #58A6FF;
+            --element-H: #F0F6FC;
+            --element-P: #F58C4F;
+            --element-S: #D29922;
         }
 
         * {
@@ -33,170 +40,210 @@
         }
 
         body {
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background-color: var(--bg-base);
-            background-image: 
-                radial-gradient(at 10% 20%, rgba(138, 43, 226, 0.15) 0px, transparent 50%),
-                radial-gradient(at 90% 80%, rgba(0, 240, 255, 0.1) 0px, transparent 50%);
-            color: var(--text-main);
-            min-height: 100vh;
-            overflow-x: hidden;
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+            font-feature-settings: 'tnum' 1;
         }
 
+        /* Top Bar */
         header {
-            padding: 1.5rem 2rem;
+            height: 48px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            background: rgba(10, 10, 18, 0.8);
-            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-panel);
+            padding: 0 1.25rem;
             z-index: 10;
         }
 
         .logo-container {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.6rem;
         }
 
         .logo-glow {
-            width: 14px;
-            height: 14px;
-            background: var(--secondary);
+            width: 10px;
+            height: 10px;
+            background: var(--accent-blue);
             border-radius: 50%;
-            box-shadow: 0 0 15px 4px var(--secondary-glow);
-            animation: pulse 2s infinite ease-in-out;
+            box-shadow: 0 0 12px 3px rgba(88, 166, 255, 0.4);
+            animation: pulse 3s infinite ease-in-out;
         }
 
         h1 {
-            font-size: 1.8rem;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, var(--text-main) 30%, var(--secondary) 100%);
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent-blue) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        .badge {
-            background: rgba(0, 240, 255, 0.1);
-            border: 1px solid var(--secondary);
-            color: var(--secondary);
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
+        .top-badge {
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid rgba(88, 166, 255, 0.15);
+            color: var(--accent-blue);
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
             font-weight: 600;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.3px;
             text-transform: uppercase;
         }
 
-        .dashboard {
+        /* Workspace Main Layout */
+        .workspace {
+            display: flex;
             flex: 1;
-            display: grid;
-            grid-template-columns: 1fr 480px;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            max-width: 1800px;
-            width: 100%;
-            margin: 0 auto;
+            min-height: 0;
+            position: relative;
         }
 
-        .panel {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
-            backdrop-filter: blur(16px);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        /* Left Rail (Ketcher-style toolbar) */
+        .left-rail {
+            width: 52px;
+            min-width: 52px;
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-            transition: border-color 0.3s ease;
+            align-items: center;
+            padding: 0.75rem 0;
+            gap: 0.8rem;
+            overflow-y: auto;
+            scrollbar-width: none; /* Hide standard scrollbar */
+        }
+        .left-rail::-webkit-scrollbar {
+            display: none;
         }
 
-        .panel:hover {
-            border-color: rgba(0, 240, 255, 0.15);
+        .rail-divider {
+            width: 24px;
+            height: 1px;
+            background: var(--border-color);
+            margin: 0.2rem 0;
         }
 
-        .panel-header {
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        .rail-section-label {
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transform: scale(0.95);
+        }
+
+        .rail-btn {
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .rail-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .rail-btn.active {
+            color: var(--text-primary);
+            background: rgba(88, 166, 255, 0.15);
+            border-color: rgba(88, 166, 255, 0.3);
+        }
+
+        .rail-btn.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 25%;
+            height: 50%;
+            width: 3px;
+            background: var(--accent-blue);
+            border-radius: 0 4px 4px 0;
+        }
+
+        /* Tooltip style */
+        .rail-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 60px;
+            background: var(--bg-modal);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 100;
+        }
+        .rail-btn:hover::after {
+            opacity: 1;
+        }
+
+        .rail-btn.active-element {
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-primary);
+        }
+        
+        .element-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.15rem;
+        }
+
+        /* Central Drawing Area */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0B0E14;
+            min-width: 0;
+            min-height: 0;
+            position: relative;
+        }
+
+        .canvas-header {
+            padding: 0.6rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background: rgba(22, 27, 34, 0.3);
         }
 
-        .panel-title {
-            font-size: 1.1rem;
+        .canvas-title {
+            font-size: 0.82rem;
             font-weight: 600;
+            color: var(--text-primary);
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
 
-        .panel-title i {
-            color: var(--secondary);
-        }
-
-        /* 2D Canvas Elements */
-        .canvas-area {
-            position: relative;
-            flex: 1;
-            background: radial-gradient(circle, #10101f 0%, #08080f 100%);
-            display: flex;
-            flex-direction: column;
-            min-height: 550px;
-        }
-
-        .toolbar {
-            padding: 0.75rem;
-            background: rgba(10, 10, 20, 0.5);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .tool-group {
-            display: flex;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            padding: 0.2rem;
-            gap: 0.2rem;
-        }
-
-        .tool-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-        }
-
-        .tool-btn:hover {
-            color: var(--text-main);
-            background: rgba(255, 255, 255, 0.05);
-        }
-
-        .tool-btn.active {
-            color: #000;
-            background: var(--secondary);
-            box-shadow: 0 0 10px var(--secondary-glow);
-        }
-
-        .tool-btn.active-element {
-            color: #fff;
-            box-shadow: 0 0 8px currentColor;
+        .canvas-title svg {
+            color: var(--accent-blue);
         }
 
         .canvas-container {
@@ -214,20 +261,19 @@
             height: 100%;
         }
 
-        /* SMILES Bridging & Setup styling */
-        .smiles-bridge-box {
-            padding: 1rem;
-            background: rgba(10, 10, 20, 0.4);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            display: grid;
-            grid-template-columns: 1fr auto;
+        /* Bottom SMILES input bar */
+        .smiles-bar {
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-panel);
+            border-top: 1px solid var(--border-color);
+            display: flex;
             gap: 0.75rem;
             align-items: center;
         }
 
         .smiles-wrapper {
+            flex: 1;
             position: relative;
-            width: 100%;
         }
 
         /* Hidden standard inputs that we bridge to Taipy */
@@ -235,50 +281,112 @@
             display: none !important;
         }
 
-        /* Visible styled replicas for premium styling */
         .premium-input {
             width: 100%;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 8px;
-            padding: 0.6rem 1rem;
-            color: var(--text-main);
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem 0.85rem;
+            color: var(--text-primary);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             outline: none;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
         }
 
         .premium-input:focus {
-            border-color: var(--secondary);
-            box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
         }
 
         .premium-btn {
-            background: var(--primary);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white;
-            padding: 0.6rem 1.2rem;
-            border-radius: 8px;
-            font-size: 0.85rem;
+            background: var(--accent-blue);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #0D1117;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px var(--primary-glow);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .premium-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 15px var(--primary-glow);
             filter: brightness(1.1);
+            transform: translateY(-1px);
         }
 
-        /* Right Panel Sections */
-        .right-column {
+        .premium-btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .premium-btn-secondary:hover {
+            background: var(--bg-hover);
+        }
+
+        /* Right Sidebar Panel (CSS Grid for perfect stacking heights) */
+        .right-sidebar {
+            width: 380px;
+            min-width: 380px;
+            border-left: 1px solid var(--border-color);
+            background: var(--bg-base);
             display: grid;
-            grid-template-rows: 1fr 1fr 1fr 130px;
-            gap: 1.2rem;
-            height: calc(100vh - 100px);
+            grid-template-rows: 1.1fr 0.95fr 0.95fr 140px;
+            height: 100%;
+            min-height: 0;
+        }
+
+        .panel {
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.2s ease;
+        }
+
+        .panel:last-child {
+            border-bottom: none;
+        }
+
+        .panel-header {
+            padding: 0.65rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(22, 27, 34, 0.4);
+        }
+
+        .panel-title {
+            font-size: 0.82rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: var(--text-primary);
+        }
+
+        .panel-title svg {
+            color: var(--accent-purple);
+        }
+
+        .panel-badge {
+            background: rgba(56, 139, 253, 0.1);
+            border: 1px solid rgba(56, 139, 253, 0.15);
+            color: var(--accent-blue);
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
         }
 
         /* Chat Panel */
@@ -286,59 +394,62 @@
             display: flex;
             flex-direction: column;
             height: 100%;
+            min-height: 0;
         }
 
         .chat-messages {
             flex: 1;
-            padding: 1rem;
+            padding: 0.85rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.65rem;
             background: rgba(0, 0, 0, 0.15);
-            font-size: 0.9rem;
+            font-size: 0.78rem;
         }
 
         .chat-message {
-            max-width: 85%;
-            padding: 0.6rem 0.9rem;
-            border-radius: 12px;
+            max-width: 88%;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
             line-height: 1.4;
+            animation: fadeIn 0.25s ease;
         }
 
         .message-user {
-            background: rgba(138, 43, 226, 0.2);
-            border: 1px solid rgba(138, 43, 226, 0.3);
+            background: rgba(188, 140, 255, 0.12);
+            border: 1px solid rgba(188, 140, 255, 0.2);
+            color: var(--text-primary);
             align-self: flex-end;
-            border-bottom-right-radius: 4px;
+            border-bottom-right-radius: 2px;
         }
 
         .message-system {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
             align-self: flex-start;
-            border-bottom-left-radius: 4px;
+            border-bottom-left-radius: 2px;
         }
 
         .pymol-code-block {
             font-family: 'JetBrains Mono', monospace;
-            background: #05050a !important;
-            border-left: 3px solid var(--secondary);
-            padding: 0.5rem;
-            margin-top: 0.5rem;
+            background: #090D13 !important;
+            border-left: 2px solid var(--accent-purple);
+            padding: 0.45rem;
+            margin-top: 0.4rem;
             border-radius: 4px;
-            font-size: 0.8rem;
+            font-size: 0.72rem;
             overflow-x: auto;
-            color: #50fa7b;
+            color: #7EE787;
         }
 
         .chat-input-bar {
-            padding: 0.75rem;
-            background: rgba(10, 10, 20, 0.4);
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-            display: grid;
-            grid-template-columns: 1fr auto;
-            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(0, 0, 0, 0.1);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 0.4rem;
         }
 
         /* Predictor Results */
@@ -347,19 +458,45 @@
             flex-direction: column;
             overflow: hidden;
             height: 100%;
+            min-height: 0;
         }
 
         .predictions-body {
             flex: 1;
-            padding: 1rem;
+            padding: 0.5rem;
             overflow-y: auto;
         }
 
         .predictions-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.85rem;
+            font-size: 0.72rem;
             text-align: left;
+        }
+
+        .predictions-table th {
+            padding: 0.4rem 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .predictions-table td {
+            padding: 0.4rem 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .predictions-table tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .variance-indicator {
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            margin-right: 5px;
         }
 
         /* Repurposing Results */
@@ -368,61 +505,37 @@
             flex-direction: column;
             overflow: hidden;
             height: 100%;
+            min-height: 0;
         }
 
         .repurposing-body {
             flex: 1;
-            padding: 1rem;
+            padding: 0.5rem;
             overflow-y: auto;
         }
 
         .repurposing-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.85rem;
+            font-size: 0.72rem;
             text-align: left;
         }
 
         .repurposing-table th {
-            padding: 0.5rem 0.75rem;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.08);
-            color: var(--text-muted);
+            padding: 0.4rem 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+            color: var(--text-secondary);
             font-weight: 600;
         }
 
         .repurposing-table td {
-            padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            padding: 0.4rem 0.5rem;
+            border-bottom: 1px solid var(--border-color);
             font-family: 'JetBrains Mono', monospace;
         }
 
         .repurposing-table tr:hover {
-            background: rgba(255, 255, 255, 0.01);
-        }
-
-        .predictions-table th {
-            padding: 0.5rem 0.75rem;
-            border-bottom: 2px solid rgba(255, 255, 255, 0.08);
-            color: var(--text-muted);
-            font-weight: 600;
-        }
-
-        .predictions-table td {
-            padding: 0.5rem 0.75rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .predictions-table tr:hover {
-            background: rgba(255, 255, 255, 0.01);
-        }
-
-        .variance-indicator {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            margin-right: 6px;
+            background: var(--bg-hover);
         }
 
         /* Checkpoint Panel */
@@ -430,28 +543,31 @@
             display: flex;
             flex-direction: column;
             height: 100%;
+            min-height: 0;
         }
 
         .checkpoint-body {
             flex: 1;
-            padding: 1rem;
+            padding: 0.6rem 0.8rem;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.68rem;
             overflow-y: auto;
-            background: #050508;
-            color: #8be9fd;
+            background: #090D13;
+            color: var(--accent-blue);
             display: flex;
             flex-direction: column;
-            gap: 0.4rem;
+            gap: 0.3rem;
         }
 
         .checkpoint-log-line {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.4rem;
+            line-height: 1.35;
         }
 
         .checkpoint-time {
-            color: var(--text-muted);
+            color: var(--text-secondary);
+            min-width: 54px;
         }
 
         .checkpoint-success {
@@ -461,49 +577,51 @@
         .checkpoint-warning {
             color: var(--warning);
         }
+        
+        .checkpoint-error {
+            color: var(--accent-pink);
+        }
 
-        /* Animations */
+        /* Element styling for predictions */
+        .element-C { color: var(--element-C); }
+        .element-O { color: var(--element-O); }
+        .element-N { color: var(--element-N); }
+        .element-H { color: var(--element-H); }
+        .element-P { color: var(--element-P); }
+        .element-S { color: var(--element-S); }
+
+        .element-dot.element-C { background-color: var(--element-C); }
+        .element-dot.element-O { background-color: var(--element-O); }
+        .element-dot.element-N { background-color: var(--element-N); }
+        .element-dot.element-H { background-color: var(--element-H); }
+        .element-dot.element-P { background-color: var(--element-P); }
+        .element-dot.element-S { background-color: var(--element-S); }
+
+        /* Animations & Custom Scrollbars */
         @keyframes pulse {
             0% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.15); opacity: 1; }
+            50% { transform: scale(1.08); opacity: 1; }
             100% { transform: scale(1); opacity: 0.8; }
         }
 
-        /* Taipy Override styles to inject into HTML template */
-        .hidden-taipy-element {
-            display: none !important;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        .element-C { color: #8a8a9e; }
-        .element-O { color: #ff4757; }
-        .element-N { color: #2e86de; }
-        .element-H { color: #f1f2f6; }
-        .element-P { color: #ff9f43; }
-        .element-S { color: #feca57; }
-        
-        .element-dot {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: currentColor;
-            margin-right: 4px;
-        }
-
-        /* Custom Scrollbars */
         ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
+            width: 4px;
+            height: 4px;
         }
         ::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.1);
+            background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.15);
         }
     </style>
 </head>
@@ -513,107 +631,118 @@
         <div class="logo-container">
             <div class="logo-glow"></div>
             <h1>KineticSketch AI</h1>
-            <span class="badge">Molecular dynamics workspace</span>
+            <span class="top-badge">Molecular Dynamics Workspace</span>
         </div>
-        <div style="font-size: 0.85rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+        <div style="font-size: 0.72rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display:inline-block; width:6px; height:6px; background-color:var(--success); border-radius:50%;"></span>
             VENV Active • Python 3.14+
         </div>
     </header>
 
-    <div class="dashboard">
-        <!-- Left Panel: 2D Canvas -->
-        <div class="panel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
-                    2D Chemical Drawing Canvas
+    <div class="workspace">
+        <!-- Left Navigation Rail (Ketcher-Style Toolbar) -->
+        <div class="left-rail">
+            <span class="rail-section-label">Mode</span>
+            <button id="btnDraw" class="rail-btn active" data-tooltip="Draw Tool" onclick="setMode('draw')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            </button>
+            <button id="btnMove" class="rail-btn" data-tooltip="Move / Reposition" onclick="setMode('move')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+            </button>
+            <button id="btnErase" class="rail-btn" data-tooltip="Erase Atom/Bond" onclick="setMode('erase')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21H7zM5 11l9 9"/></svg>
+            </button>
+
+            <div class="rail-divider"></div>
+            <span class="rail-section-label">Atom</span>
+            
+            <button class="rail-btn active-element" data-tooltip="Carbon (C)" onclick="setActiveElement('C', this)" style="color: var(--element-C);">
+                <span class="element-dot element-C"></span>C
+            </button>
+            <button class="rail-btn" data-tooltip="Nitrogen (N)" onclick="setActiveElement('N', this)" style="color: var(--element-N);">
+                <span class="element-dot element-N"></span>N
+            </button>
+            <button class="rail-btn" data-tooltip="Oxygen (O)" onclick="setActiveElement('O', this)" style="color: var(--element-O);">
+                <span class="element-dot element-O"></span>O
+            </button>
+            <button class="rail-btn" data-tooltip="Hydrogen (H)" onclick="setActiveElement('H', this)" style="color: var(--element-H);">
+                <span class="element-dot element-H"></span>H
+            </button>
+            <button class="rail-btn" data-tooltip="Phosphorus (P)" onclick="setActiveElement('P', this)" style="color: var(--element-P);">
+                <span class="element-dot element-P"></span>P
+            </button>
+            <button class="rail-btn" data-tooltip="Sulfur (S)" onclick="setActiveElement('S', this)" style="color: var(--element-S);">
+                <span class="element-dot element-S"></span>S
+            </button>
+
+            <div class="rail-divider"></div>
+            <span class="rail-section-label">Bond</span>
+
+            <button id="btnBond1" class="rail-btn active" data-tooltip="Single Bond" onclick="setBondType(1)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button id="btnBond2" class="rail-btn" data-tooltip="Double Bond" onclick="setBondType(2)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/></svg>
+            </button>
+            <button id="btnBond3" class="rail-btn" data-tooltip="Triple Bond" onclick="setBondType(3)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>
+            </button>
+
+            <div class="rail-divider"></div>
+            
+            <button class="rail-btn" data-tooltip="Clear Canvas" onclick="clearCanvas()" style="color: var(--accent-pink);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></svg>
+            </button>
+        </div>
+
+        <!-- Central Work Area -->
+        <div class="canvas-area">
+            <div class="canvas-header">
+                <div class="canvas-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                    2D Molecular Sketchpad Workspace
                 </div>
-                <div style="font-size: 0.8rem; color: var(--text-muted);">
-                    Click to add atom. Drag to bind.
+                <div style="font-size: 0.72rem; color: var(--text-secondary);">
+                    Snap-grid enabled • Left rail tools active
                 </div>
             </div>
-            
-            <div class="canvas-area">
-                <!-- Canvas toolbar -->
-                <div class="toolbar">
-                    <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-right: 0.5rem;">Mode:</span>
-                    <div class="tool-group">
-                        <button id="btnDraw" class="tool-btn active" onclick="setMode('draw')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                            Draw
-                        </button>
-                        <button id="btnMove" class="tool-btn" onclick="setMode('move')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5v14"/><path d="m19 9 3 3-3 3"/><path d="m5 15-3-3 3-3"/><path d="m9 5 3-3 3 3"/><path d="m15 19-3 3-3-3"/></svg>
-                            Move
-                        </button>
-                        <button id="btnErase" class="tool-btn" onclick="setMode('erase')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
-                            Erase
-                        </button>
-                    </div>
 
-                    <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-left: 0.75rem; margin-right: 0.5rem;">Element:</span>
-                    <div class="tool-group">
-                        <button class="tool-btn active-element element-C" onclick="setActiveElement('C', this)">C</button>
-                        <button class="tool-btn element-N" onclick="setActiveElement('N', this)">N</button>
-                        <button class="tool-btn element-O" onclick="setActiveElement('O', this)">O</button>
-                        <button class="tool-btn element-H" onclick="setActiveElement('H', this)">H</button>
-                        <button class="tool-btn element-P" onclick="setActiveElement('P', this)">P</button>
-                        <button class="tool-btn element-S" onclick="setActiveElement('S', this)">S</button>
-                    </div>
+            <!-- Canvas Container -->
+            <div class="canvas-container" id="canvasContainer">
+                <canvas id="molCanvas"></canvas>
+            </div>
 
-                    <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-left: 0.75rem; margin-right: 0.5rem;">Bond:</span>
-                    <div class="tool-group">
-                        <button id="btnBond1" class="tool-btn active" onclick="setBondType(1)">Single</button>
-                        <button id="btnBond2" class="tool-btn" onclick="setBondType(2)">Double</button>
-                        <button id="btnBond3" class="tool-btn" onclick="setBondType(3)">Triple</button>
+            <!-- SMILES bottom input integration -->
+            <div class="smiles-bar">
+                <div class="smiles-wrapper">
+                    <!-- Hidden Taipy inputs -->
+                    <div class="taipy-bridge-hidden">
+                        <taipy:input value="{smiles_input}" id="taipy_smiles_input" />
+                        <taipy:input value="{canvas_payload}" id="taipy_canvas_payload" />
                     </div>
-
-                    <button class="tool-btn" style="margin-left: auto; color: var(--accent);" onclick="clearCanvas()">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                        Clear
-                    </button>
+                    <!-- Visible styled text input -->
+                    <input type="text" id="visible_smiles_input" class="premium-input" placeholder="Enter molecular SMILES representation (e.g. CC(=O)O, C1=CC=CC=C1) and hit Render..." onkeydown="if(event.key === 'Enter') triggerSmilesPasted()" />
                 </div>
-
-                <!-- Canvas workspace -->
-                <div class="canvas-container" id="canvasContainer">
-                    <canvas id="molCanvas"></canvas>
-                </div>
-
-                <!-- SMILES Bridge Box -->
-                <div class="smiles-bridge-box">
-                    <div class="smiles-wrapper">
-                        <!-- Taipy Text Input (Hidden) -->
-                        <div class="taipy-bridge-hidden">
-                            <taipy:input value="{smiles_input}" id="taipy_smiles_input" />
-                            <taipy:input value="{canvas_payload}" id="taipy_canvas_payload" />
-                        </div>
-                        
-                        <!-- Premium Visible Text Box -->
-                        <input type="text" id="visible_smiles_input" class="premium-input" placeholder="SMILES representation (e.g. CCO, C(=O)O)" onkeydown="if(event.key === 'Enter') triggerSmilesPasted()" />
-                    </div>
-                    <button class="premium-btn" onclick="triggerSmilesPasted()">Render SMILES</button>
-                </div>
+                <button class="premium-btn" onclick="triggerSmilesPasted()">Render SMILES</button>
             </div>
         </div>
 
-        <!-- Right Panels -->
-        <div class="right-column">
-            <!-- Chat Panel for PyMOL commands -->
+        <!-- Right Sidebars (380px Grid layout) -->
+        <div class="right-sidebar">
+            
+            <!-- Panel 1: PyMOL Chat Interceptor -->
             <div class="panel chat-container">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                         PyMOL Language Interceptor
                     </div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
-                        qwen2.5-coder:7b
-                    </div>
+                    <span class="panel-badge">Ollama Llama3</span>
                 </div>
                 
                 <div class="chat-messages" id="chatMessages">
                     <div class="chat-message message-system">
-                        Hello! Describe PyMOL visual manipulations here. I will prompt the local Ollama LLM to intercept instructions and stream command API coordinates dynamically to your running local visualizer process.
+                        Describe desired 3D PyMOL visualization manipulations. I will prompt the local Ollama LLM to intercept instructions and stream command API coordinates dynamically.
                     </div>
                     <!-- Taipy-injected historical log list -->
                     <div id="taipy_chat_log" style="display: none;">
@@ -628,49 +757,47 @@
                         <taipy:input value="{chat_prompt}" id="taipy_chat_prompt" />
                         <taipy:button label="Send" id="taipy_chat_send_btn" on_action="on_chat_send" />
                     </div>
-                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type visualizer commands (e.g. show cartoon, color red)..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
+                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type PyMOL visual commands..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
                     <button class="premium-btn" onclick="triggerChatSend()">Send</button>
                 </div>
             </div>
 
-            <!-- MDRepo Predictor -->
+            <!-- Panel 2: Conformer Predictor -->
             <div class="panel predictions-container">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                         MDRepo Conformer Dynamics Predictor
                     </div>
-                    <span class="badge" style="background: rgba(0, 255, 127, 0.1); border-color: var(--success); color: var(--success);">Inference Ready</span>
+                    <span class="panel-badge" style="background: rgba(63, 185, 80, 0.1); border-color: rgba(63, 185, 80, 0.15); color: var(--success);">Online</span>
                 </div>
                 <div class="predictions-body">
-                    <!-- Dynamic predictions content rendered as raw HTML by Taipy -->
                     <taipy:text value="{predictions_html}" raw="true" />
                 </div>
             </div>
 
-            <!-- PDB Drug Repurposing Targets -->
+            <!-- Panel 3: PDB Repurposing Target Search -->
             <div class="panel repurposing-container">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01"/></svg>
                         PDB Drug Repurposing Target Search
                     </div>
-                    <span class="badge" style="background: rgba(0, 240, 255, 0.1); border-color: var(--secondary); color: var(--secondary);">Morgan Similarity</span>
+                    <span class="panel-badge" style="background: rgba(188, 140, 255, 0.1); border-color: rgba(188, 140, 255, 0.15); color: var(--accent-purple);">Morgan Similarity</span>
                 </div>
                 <div class="repurposing-body">
-                    <!-- Dynamic drug repurposing search list raw HTML by Taipy -->
                     <taipy:text value="{repurposing_html}" raw="true" />
                 </div>
             </div>
 
-            <!-- Checkpoint Logs -->
+            <!-- Panel 4: Checkpoint Logs -->
             <div class="panel checkpoint-container">
-                <div class="panel-header" style="padding: 0.75rem 1.25rem;">
-                    <div class="panel-title" style="font-size: 0.95rem;">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2"/></svg>
                         State Checkpointing Loop
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                    <div style="font-size: 0.65rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
                         workspace_progress.json
                     </div>
                 </div>
@@ -678,6 +805,7 @@
                     <taipy:text value="{checkpoint_logs_html}" raw="true" />
                 </div>
             </div>
+
         </div>
     </div>
 
@@ -715,9 +843,6 @@
             
             // Set the Taipy smiles_input state
             setReactInputValue("taipy_smiles_input", smilesVal);
-            
-            // We can wait a tiny fraction of time or let RDKit process it.
-            // Under Taipy, changing smiles_input triggers on_change immediately.
             console.log("Pasted SMILES sent to Taipy:", smilesVal);
         }
 
@@ -831,19 +956,21 @@
         let dragY = 0;
         let snapGrid = 15;
 
+        // Custom curated harmonized CPK Colors matching Inter dark elements
         const elementColors = {
-            'C': '#8a8a9e',
-            'O': '#ff4757',
-            'N': '#2e86de',
-            'H': '#f1f2f6',
-            'P': '#ff9f43',
-            'S': '#feca57'
+            'C': '#8B949E',
+            'O': '#F778BA',
+            'N': '#58A6FF',
+            'H': '#F0F6FC',
+            'P': '#F58C4F',
+            'S': '#D29922'
         };
 
         const atomRadius = 14;
 
         function resizeCanvas() {
             const container = document.getElementById("canvasContainer");
+            if (!container) return;
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
             redraw();
@@ -860,8 +987,10 @@
 
         function setActiveElement(el, btn) {
             activeElement = el;
-            document.querySelectorAll(".element-C, .element-N, .element-O, .element-H, .element-P, .element-S").forEach(b => {
-                b.classList.remove("active-element");
+            document.querySelectorAll(".left-rail .rail-btn").forEach(b => {
+                if (b.innerText && (b.innerText.trim() === "C" || b.innerText.trim() === "N" || b.innerText.trim() === "O" || b.innerText.trim() === "H" || b.innerText.trim() === "P" || b.innerText.trim() === "S")) {
+                    b.classList.remove("active-element");
+                }
             });
             btn.classList.add("active-element");
         }
@@ -889,9 +1018,9 @@
             }) || null;
         }
 
-        // Draw coordinate grid
+        // Draw coordinate grid (subtle, softer opacity)
         function drawGrid() {
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.02)";
+            ctx.strokeStyle = "rgba(240, 246, 252, 0.015)";
             ctx.lineWidth = 1;
             const gridSz = 40;
             for (let x = 0; x < canvas.width; x += gridSz) {
@@ -919,7 +1048,7 @@
                 const a2 = atoms.find(a => a.id === bond.target);
                 if (!a1 || !a2) return;
 
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+                ctx.strokeStyle = "rgba(240, 246, 252, 0.35)";
                 ctx.lineWidth = 3;
 
                 // Single, Double, Triple lines
@@ -953,7 +1082,7 @@
 
             // Draw active bond line while drawing
             if (activeMode === "draw" && isDragging && dragStartAtom) {
-                ctx.strokeStyle = "rgba(0, 240, 255, 0.5)";
+                ctx.strokeStyle = "rgba(88, 166, 255, 0.5)";
                 ctx.lineWidth = 2;
                 ctx.setLineDash([5, 5]);
                 ctx.beginPath();
@@ -969,8 +1098,8 @@
                 const isHovered = hoveredAtom && hoveredAtom.id === atom.id;
 
                 // Outer circle background
-                ctx.fillStyle = "#0c0c16";
-                ctx.strokeStyle = isHovered ? "var(--secondary)" : "rgba(255,255,255,0.1)";
+                ctx.fillStyle = "#161B22";
+                ctx.strokeStyle = isHovered ? "var(--accent-blue)" : "rgba(240,246,252,0.15)";
                 ctx.lineWidth = isHovered ? 2 : 1;
                 ctx.beginPath();
                 ctx.arc(atom.x, atom.y, atomRadius, 0, Math.PI * 2);
@@ -979,13 +1108,13 @@
 
                 // Hover glow
                 if (isHovered) {
-                    ctx.shadowColor = "var(--secondary-glow)";
-                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "rgba(88, 166, 255, 0.4)";
+                    ctx.shadowBlur = 8;
                 }
 
                 // Element text
                 ctx.fillStyle = color;
-                ctx.font = "bold 13px 'Outfit', sans-serif";
+                ctx.font = "bold 13px 'Inter', sans-serif";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText(atom.element, atom.x, atom.y);

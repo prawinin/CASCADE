@@ -6,12 +6,21 @@ from typing import Optional
 logger = logging.getLogger("KineticSketch.Visualizer")
 
 # Global reference to running PyMOL subprocess
-pymol_process = None
+pymol_process: Optional[subprocess.Popen] = None
+
+# Request timeout constants (in seconds)
+OLLAMA_TIMEOUT = 15.0
+PYMOL_LISTEN_TIMEOUT = 5.0
 
 def get_pymol_process() -> Optional[subprocess.Popen]:
     """
     Retrieves or spawns the local PyMOL visualizer pipeline.
+    
     Runs 'pymol -p' to listen to Python commands via stdin.
+    Returns None if PyMOL is not available or fails to spawn.
+    
+    Returns:
+        PyMOL subprocess.Popen object or None if unavailable
     """
     global pymol_process
     if pymol_process is None or pymol_process.poll() is not None:
@@ -29,16 +38,23 @@ def get_pymol_process() -> Optional[subprocess.Popen]:
             logger.info("Local PyMOL subprocess successfully launched.")
         except Exception as e:
             logger.warning(f"Unable to launch local PyMOL visualizer process (pymol -p): {e}")
-            pymol_process = False  # Set to False to signify offline state
+            pymol_process = None
     
-    return pymol_process if pymol_process is not False else None
+    return pymol_process
 
 
 def fallback_pymol_mapper(prompt: str) -> str:
     """
     Double-insurance local translation dictionary.
+    
     Invoked if Ollama server is offline or model is not loaded.
     Translates standard molecular instructions directly to PyMOL APIs.
+    
+    Args:
+        prompt: User visualization request in natural language
+    
+    Returns:
+        String of PyMOL commands, one per line
     """
     prompt_l = prompt.lower()
     commands = []
@@ -68,8 +84,10 @@ def fallback_pymol_mapper(prompt: str) -> str:
     if "rotate" in prompt_l or "turn" in prompt_l:
         commands.append("turn y, 90")
     if "bg" in prompt_l or "background" in prompt_l:
-        if "white" in prompt_l: commands.append("bg_color white")
-        else: commands.append("bg_color black")
+        if "white" in prompt_l: 
+            commands.append("bg_color white")
+        else: 
+            commands.append("bg_color black")
 
     if not commands:
         # Default load and sticks
@@ -81,7 +99,15 @@ def fallback_pymol_mapper(prompt: str) -> str:
 def query_ollama_for_pymol(prompt: str) -> str:
     """
     Queries local Ollama qwen2.5-coder:7b server to generate raw PyMOL commands.
+    
     Falls back to local fallback_pymol_mapper if offline or fails.
+    Enforces strict timeout to prevent UI hangs.
+    
+    Args:
+        prompt: User visualization request in natural language
+    
+    Returns:
+        String of PyMOL commands (either from Ollama or fallback mapper)
     """
     model_name = "qwen2.5-coder:7b"
     system_instruction = (
@@ -104,23 +130,37 @@ def query_ollama_for_pymol(prompt: str) -> str:
                 ],
                 "stream": False
             },
-            timeout=8.0
+            timeout=OLLAMA_TIMEOUT
         )
         if response.status_code == 200:
             result = response.json()
-            pymol_commands = result["message"]["content"].strip()
-            logger.info("Ollama successfully generated PyMOL commands.")
-            return pymol_commands
+            pymol_commands = result.get("message", {}).get("content", "").strip()
+            if pymol_commands:
+                logger.info("Ollama successfully generated PyMOL commands.")
+                return pymol_commands
+            else:
+                raise Exception("Empty response from Ollama")
         else:
             raise Exception(f"HTTP status code {response.status_code}")
+    except requests.Timeout:
+        logger.warning(f"Ollama request timed out ({OLLAMA_TIMEOUT}s). Using fallback.")
+        return fallback_pymol_mapper(prompt)
     except Exception as e:
-        logger.warning(f"Ollama qwen2.5-coder:7b offline. Triggering fallback command mapper. Error: {e}")
+        logger.warning(f"Ollama qwen2.5-coder:7b unavailable. Triggering fallback. Error: {e}")
         return fallback_pymol_mapper(prompt)
 
 
 def execute_pymol_commands(commands_text: str) -> bool:
     """
     Pipes raw PyMOL script text directly to stdin of local PyMOL subprocess.
+    
+    Safely handles cases where PyMOL is offline or commands are invalid.
+    
+    Args:
+        commands_text: Raw PyMOL command text to execute
+    
+    Returns:
+        True if command was successfully sent to PyMOL, False otherwise
     """
     proc = get_pymol_process()
     if proc:
@@ -131,4 +171,7 @@ def execute_pymol_commands(commands_text: str) -> bool:
             return True
         except Exception as e:
             logger.error(f"Failed to write to PyMOL subprocess stdin: {e}")
+            return False
+    
+    logger.warning("PyMOL subprocess not available")
     return False

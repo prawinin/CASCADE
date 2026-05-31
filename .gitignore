@@ -59,3 +59,4 @@ test_molecule.mol2
 workspace_progress.json
 *.log
 pip-log.txt
+.opencode

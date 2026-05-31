@@ -1,15 +1,24 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import List
 from rdkit import Chem
 
 # Common organic & bio-elements vocabulary mapping for GNN node arrays
-ELEMENT_VOCAB = ['H', 'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B', 'Si']
+ELEMENT_VOCAB: List[str] = ['H', 'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B', 'Si']
 
 def get_one_hot_nodes(mol: Chem.Mol) -> torch.Tensor:
     """
     Converts RDKit molecular elements into one-hot encoded PyTorch node features.
-    Size of encoding is len(ELEMENT_VOCAB) + 1 (last dimension is 'Other').
+    
+    Creates a one-hot encoding for each atom in the molecule. Unknown elements
+    are encoded as all-zeros in the last dimension.
+    
+    Args:
+        mol: RDKit Mol object
+    
+    Returns:
+        torch.Tensor of shape (N, 13) with one-hot encoded atom types
     """
     nodes = []
     for atom in mol.GetAtoms():
@@ -26,11 +35,26 @@ def get_one_hot_nodes(mol: Chem.Mol) -> torch.Tensor:
 class MDRepoPredictor(nn.Module):
     """
     Fast-inference rotation- and translation-invariant PyTorch neural network.
-    Processes absolute 3D Cartesian coordinates and one-hot node features.
-    Predicts simulated Root Mean Square Fluctuation (RMSF) / atomic variances
+    
+    Processes absolute 3D Cartesian coordinates and one-hot node features
+    to predict simulated Root Mean Square Fluctuation (RMSF) / atomic variances
     at 10 ns and 1 µs marks based on MDRepo open trajectory benchmarks.
+    
+    Architecture:
+    - Node embedding layer (13 → embed_dim)
+    - Gaussian RBF adjacency computation (translation & rotation invariant)
+    - Neighborhood aggregation
+    - Distance-to-center-of-mass feature
+    - MLP prediction head (2 outputs per atom)
     """
     def __init__(self, node_dim: int = 13, embed_dim: int = 32):
+        """
+        Initialize MDRepo predictor network.
+        
+        Args:
+            node_dim: Dimension of input node features (one-hot element encoding)
+            embed_dim: Dimension of node embedding layer
+        """
         super().__init__()
         # Node element embedding
         self.node_embed = nn.Linear(node_dim, embed_dim)
@@ -49,9 +73,12 @@ class MDRepoPredictor(nn.Module):
 
     def forward(self, coords: torch.Tensor, node_features: torch.Tensor) -> torch.Tensor:
         """
+        Forward pass: Predict atomic fluctuations from 3D structure.
+        
         Args:
             coords: Conformer Cartesian coordinates tensor, shape (N, 3)
             node_features: Positional one-hot encoded element array, shape (N, 13)
+        
         Returns:
             variance_predictions: Positive variance tensor, shape (N, 2)
         """

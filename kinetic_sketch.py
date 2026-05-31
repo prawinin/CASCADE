@@ -9,8 +9,9 @@ import os
 import sys
 import json
 import logging
+import html as html_module
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 # Configure native logging
 logging.basicConfig(
@@ -78,9 +79,14 @@ repurposing_html = "<div style='color: var(--text-muted); font-size: 0.95rem; fo
 checkpoint_logs_html = "<div class='checkpoint-log-line'><span class='checkpoint-time'>[INIT]</span> Checkpoint engine initialized.</div>"
 
 
-def log_checkpoint_to_ui(state: State, message: str, level: str = "success"):
+def log_checkpoint_to_ui(state: State, message: str, level: str = "success") -> None:
     """
     Appends a formatted log boundary line to the checkpoint GUI viewport.
+    
+    Args:
+        state: Taipy GUI state object
+        message: Log message to display
+        level: Log level - 'success', 'warning', 'error', or 'info'
     """
     time_str = datetime.now().strftime("%H:%M:%S")
     color_class = "checkpoint-success"
@@ -90,24 +96,41 @@ def log_checkpoint_to_ui(state: State, message: str, level: str = "success"):
         color_class = "checkpoint-error"
     elif level == "info":
         color_class = "checkpoint-time"
-        
-    line_html = f"<div class='checkpoint-log-line'><span class='checkpoint-time'>[{time_str}]</span> <span class='{color_class}'>{message}</span></div>"
+    
+    # Sanitize message to prevent HTML injection
+    safe_message = html_module.escape(message)
+    line_html = f"<div class='checkpoint-log-line'><span class='checkpoint-time'>[{time_str}]</span> <span class='{color_class}'>{safe_message}</span></div>"
     state.checkpoint_logs_html += line_html
 
 
-def run_molecular_pipeline(state: State, mol: Chem.Mol):
+def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
     """
     Coordinates conformational optimization and deep learning predictions.
-    Calls cheminformatics, PyTorch models, and checkpointing services.
+    
+    Orchestrates the full pipeline: 3D embedding → MMFF94 minimization →
+    file export → PyTorch inference → table rendering.
+    
+    Args:
+        state: Taipy GUI state object
+        mol: RDKit Mol object to process
+    
+    Returns:
+        None (updates state variables instead)
     """
     global checkpoint_manager
     if mol is None:
         return
 
-    smiles = Chem.MolToSmiles(mol)
+    try:
+        smiles = Chem.MolToSmiles(mol)
+    except Exception as e:
+        logger.error(f"Failed to generate SMILES: {e}")
+        log_checkpoint_to_ui(state, "Error: Invalid molecular structure", "error")
+        return
+    
     logger.info(f"Initiating modular dynamics pipeline for SMILES: {smiles}")
 
-    state.predictions_html = "<div style='color: var(--secondary); font-size: 0.95rem;'>Running structural dynamics optimization pipeline...</div>"
+    state.predictions_html = "<div style='color: var(--text-secondary); font-size: 0.95rem;'>Running structural dynamics optimization pipeline...</div>"
 
     # Reset progress checkpoint to INITIALIZED
     checkpoint_manager.save_checkpoint("INIT", {"smiles": smiles})
@@ -149,6 +172,10 @@ def run_molecular_pipeline(state: State, mol: Chem.Mol):
 
             elif idx == 3:
                 # 4. PyTorch Tensor extraction and predictive inference
+                if mol_h is None or mol_h.GetNumAtoms() == 0:
+                    log_checkpoint_to_ui(state, "Error: Invalid molecule for prediction", "error")
+                    return
+                
                 conf = mol_h.GetConformer()
                 positions = []
                 for i in range(mol_h.GetNumAtoms()):
@@ -185,15 +212,20 @@ def run_molecular_pipeline(state: State, mol: Chem.Mol):
 
     except Exception as e:
         logger.error(f"Error in dynamics integration pipeline: {e}", exc_info=True)
-        log_checkpoint_to_ui(state, f"Interruption detected: {str(e)}", "error")
-        state.predictions_html = f"<div style='color: var(--accent); font-size: 0.95rem;'>Pipeline Failure: {str(e)}</div>"
+        log_checkpoint_to_ui(state, f"Pipeline Error: {str(e)[:100]}", "error")
+        state.predictions_html = f"<div style='color: var(--accent-pink); font-size: 0.95rem;'>Pipeline failed. Check logs.</div>"
 
 
-def render_predictions_table(state: State, mol: Chem.Mol, predictions: torch.Tensor):
+def render_predictions_table(state: State, mol: "Chem.Mol", predictions: "torch.Tensor") -> None:
     """
     Formats neural network variance coordinates into a dynamic premium HTML table.
+    
+    Args:
+        state: Taipy GUI state object
+        mol: RDKit Mol object with conformer
+        predictions: PyTorch tensor of shape (N, 2) with variance predictions
     """
-    lines = []
+    lines: List[str] = []
     lines.append("<table class='predictions-table'>")
     lines.append("<thead><tr><th>Atom</th><th>Element</th><th>X, Y, Z Coords</th><th>10 ns Fluctuation (Å²)</th><th>1 µs Fluctuation (Å²)</th></tr></thead>")
     lines.append("<tbody>")
@@ -208,13 +240,13 @@ def render_predictions_table(state: State, mol: Chem.Mol, predictions: torch.Ten
 
         # Styles based on volatility thresholds
         color_class = "element-" + symbol
-        color_10ns = "var(--success)" if var_10ns < 0.25 else "var(--warning)" if var_10ns < 0.55 else "var(--accent)"
-        color_1us = "var(--success)" if var_1us < 0.45 else "var(--warning)" if var_1us < 0.85 else "var(--accent)"
+        color_10ns = "var(--success)" if var_10ns < 0.25 else "var(--warning)" if var_10ns < 0.55 else "var(--accent-pink)"
+        color_1us = "var(--success)" if var_1us < 0.45 else "var(--warning)" if var_1us < 0.85 else "var(--accent-pink)"
 
         lines.append("<tr>")
         lines.append(f"<td>#{i+1}</td>")
         lines.append(f"<td><span class='element-dot {color_class}'></span><span class='{color_class}'>{symbol}</span></td>")
-        lines.append(f"<td style='color: var(--text-muted)'>{pos.x:.2f}, {pos.y:.2f}, {pos.z:.2f}</td>")
+        lines.append(f"<td style='color: var(--text-secondary)'>{pos.x:.2f}, {pos.y:.2f}, {pos.z:.2f}</td>")
         lines.append(f"<td style='color: {color_10ns}'><span class='variance-indicator' style='background: {color_10ns}'></span>{var_10ns:.4f}</td>")
         lines.append(f"<td style='color: {color_1us}'><span class='variance-indicator' style='background: {color_1us}'></span>{var_1us:.4f}</td>")
         lines.append("</tr>")
@@ -223,43 +255,58 @@ def render_predictions_table(state: State, mol: Chem.Mol, predictions: torch.Ten
     state.predictions_html = "\n".join(lines)
 
 
-def render_repurposing_table(state: State, smiles: str):
+def render_repurposing_table(state: State, smiles: str) -> None:
     """
     Queries PDB repurposing targets using Morgan-Tanimoto similarity
     and formats them as a premium HTML table inside the GUI.
+    
+    Args:
+        state: Taipy GUI state object
+        smiles: SMILES string of the molecule to match
     """
-    targets = find_repurposing_targets(smiles)
+    try:
+        targets = find_repurposing_targets(smiles)
+    except Exception as e:
+        logger.error(f"Error querying PDB repurposing targets: {e}")
+        state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic; text-align: center; padding: 1rem;'>Unable to query PDB targets. Check logs.</div>"
+        return
+    
     if not targets:
-        state.repurposing_html = "<div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic; text-align: center; padding: 1rem;'>No high-similarity PDB drug targets identified. Sketched molecule represents a novel chemical fragment!</div>"
+        state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic; text-align: center; padding: 1rem;'>No high-similarity PDB drug targets identified. Sketched molecule represents a novel chemical fragment!</div>"
         return
 
-    lines = []
+    lines: List[str] = []
     lines.append("<table class='repurposing-table'>")
     lines.append("<thead><tr><th>Drug Match</th><th>PDB ID</th><th>Protein Target Receptor</th><th>Morgan Sim</th></tr></thead>")
     lines.append("<tbody>")
 
     # Show top 5 matches
     for t in targets[:5]:
-        sim_val = t["similarity"]
+        sim_val = t.get("similarity", 0.0)
         sim_percent = sim_val * 100
         
         # Color threshold for similarity
-        sim_color = "var(--success)" if sim_val > 0.6 else "var(--secondary)" if sim_val > 0.3 else "var(--text-muted)"
+        sim_color = "var(--success)" if sim_val > 0.6 else "var(--text-secondary)" if sim_val > 0.3 else "var(--text-secondary)"
         
         # Progress gauge HTML structure
         bar_gauge = (
             f"<div style='display: flex; align-items: center; gap: 8px; justify-content: flex-end;'>"
             f"<div style='background: rgba(255,255,255,0.06); border-radius: 4px; height: 6px; width: 60px; overflow: hidden;'>"
-            f"<div style='background: {sim_color}; height: 100%; width: {sim_percent}%;'></div>"
+            f"<div style='background: {sim_color}; height: 100%; width: {sim_percent:.0f}%;'></div>"
             f"</div>"
-            f"<span style='color: {sim_color}; font-weight: 600; font-size: 0.8rem; min-width: 38px; text-align: right;'>{t['binding_probability']}</span>"
+            f"<span style='color: {sim_color}; font-weight: 600; font-size: 0.8rem; min-width: 38px; text-align: right;'>{sim_percent:.0f}%</span>"
             f"</div>"
         )
 
+        # Sanitize text fields
+        drug_name = html_module.escape(t.get("matched_drug", "Unknown"))
+        pdb_id = html_module.escape(t.get("pdb_id", "N/A"))
+        target_name = html_module.escape(t.get("target_name", "Unknown"))
+
         lines.append("<tr>")
-        lines.append(f"<td style='color: var(--text-main); font-weight: 600;'>{t['matched_drug']}</td>")
-        lines.append(f"<td><span class='badge' style='background: rgba(138,43,226,0.15); border-color: var(--primary); color: #fff; padding: 1px 6px; font-size: 0.72rem; font-family: inherit;'>{t['pdb_id']}</span></td>")
-        lines.append(f"<td style='color: var(--text-muted); font-size: 0.8rem;' title='{t['function']}'>{t['target_name']}</td>")
+        lines.append(f"<td style='color: var(--text-primary); font-weight: 600;'>{drug_name}</td>")
+        lines.append(f"<td><span class='badge' style='background: rgba(188,140,255,0.15); border: 1px solid rgba(188,140,255,0.3); color: #fff; padding: 2px 6px; font-size: 0.72rem; border-radius: 4px;'>{pdb_id}</span></td>")
+        lines.append(f"<td style='color: var(--text-secondary); font-size: 0.8rem;' title='{target_name}'>{target_name}</td>")
         lines.append(f"<td>{bar_gauge}</td>")
         lines.append("</tr>")
 
@@ -270,50 +317,76 @@ def render_repurposing_table(state: State, smiles: str):
 # =====================================================================
 # TAIPY STATE REACTIVE BINDINGS (MODULE 1 BRIDGE)
 # =====================================================================
-def on_chat_send(state: State):
+def on_chat_send(state: State) -> None:
     """
     Processes chat prompt through visualizer service connection APIs.
+    
+    Translates user visualization requests to PyMOL commands via Ollama
+    (with fallback to local mapper) and pipes to running PyMOL process.
+    
+    Args:
+        state: Taipy GUI state object
     """
     prompt = state.chat_prompt
     if not prompt or not prompt.strip():
         return
 
-    # Append user bubble
-    user_bubble = f"<div class='chat-message message-user'>{prompt}</div>"
+    # Sanitize and cap prompt length
+    prompt = prompt.strip()[:2000]
+    
+    # Append user bubble (sanitized)
+    safe_prompt = html_module.escape(prompt)
+    user_bubble = f"<div class='chat-message message-user'>{safe_prompt}</div>"
     state.chat_log_html += user_bubble
 
-    # Query Ollama service (returns raw script commands)
-    pymol_commands = query_ollama_for_pymol(prompt)
+    try:
+        # Query Ollama service (returns raw script commands)
+        pymol_commands = query_ollama_for_pymol(prompt)
 
-    # Clean script command bounds
-    cleaned_lines = []
-    for line in pymol_commands.split("\n"):
-        line = line.strip()
-        if not line or line.startswith("```"):
-            continue
-        cleaned_lines.append(line)
-    commands_text = "\n".join(cleaned_lines)
+        # Clean script command bounds
+        cleaned_lines = []
+        for line in pymol_commands.split("\n"):
+            line = line.strip()
+            if not line or line.startswith("```"):
+                continue
+            cleaned_lines.append(line)
+        commands_text = "\n".join(cleaned_lines)
 
-    # Pipe commands to local visualizer subprocess
-    exec_success = execute_pymol_commands(commands_text)
+        # Pipe commands to local visualizer subprocess
+        exec_success = execute_pymol_commands(commands_text)
 
-    # Format system bubble response
-    sys_bubble = f"<div class='chat-message message-system'>"
-    if exec_success:
-        sys_bubble += "Intercepted request and piped commands directly to running PyMOL visualizer:"
-    else:
-        sys_bubble += "Ollama intercepted request (PyMOL offline - showing generated script):"
+        # Format system bubble response (sanitized)
+        sys_bubble = f"<div class='chat-message message-system'>"
+        if exec_success:
+            sys_bubble += "✓ Piped to PyMOL:"
+        else:
+            sys_bubble += "⚠ Generated (PyMOL offline):"
+        
+        safe_commands = html_module.escape(commands_text)
+        sys_bubble += f"<pre class='pymol-code-block'>{safe_commands}</pre></div>"
+        state.chat_log_html += sys_bubble
     
-    sys_bubble += f"<pre class='pymol-code-block'>{commands_text}</pre></div>"
-    state.chat_log_html += sys_bubble
+    except Exception as e:
+        logger.error(f"Error in chat handler: {e}")
+        sys_bubble = f"<div class='chat-message message-system' style='color: var(--accent-pink);'>Error processing request. Check logs.</div>"
+        state.chat_log_html += sys_bubble
 
     # Clear prompt input
     state.chat_prompt = ""
 
 
-def on_change(state: State, var_name: str, var_value: Any):
+def on_change(state: State, var_name: str, var_value: Any) -> None:
     """
     Central reactive event listener bridging sketch vectors and pasted SMILES inputs.
+    
+    Handles two primary reactions:
+    1. canvas_payload: RDKit mol reconstruction → pipeline execution
+    2. smiles_input: SMILES parsing → 2D layout → pipeline execution
+    
+    Args:
+        state: Taipy GUI state object
+        var_name: Name of the variable that changed
+        var_value: New value of the variable
     """
     if var_name == "canvas_payload":
         try:
@@ -321,10 +394,15 @@ def on_change(state: State, var_name: str, var_value: Any):
             atoms = payload.get("atoms", [])
             bonds = payload.get("bonds", [])
             
+            # Validate molecule size (max 200 atoms for performance)
+            if len(atoms) > 200:
+                log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
+                return
+            
             if not atoms:
                 state.smiles_input = ""
-                state.predictions_html = "<div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div>"
-                state.repurposing_html = "<div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Sketched drug target repurposing matches will populate here.</div>"
+                state.predictions_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div>"
+                state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic;'>Sketched drug target repurposing matches will populate here.</div>"
                 return
 
             # Reconstruct RDKit RWmol from canvas coordinates and bonds
@@ -333,9 +411,13 @@ def on_change(state: State, var_name: str, var_value: Any):
             
             for atom_data in atoms:
                 el = atom_data.get("element", "C")
-                rd_atom = Chem.Atom(el)
-                rd_idx = rw_mol.AddAtom(rd_atom)
-                atom_map[atom_data["id"]] = rd_idx
+                try:
+                    rd_atom = Chem.Atom(el)
+                    rd_idx = rw_mol.AddAtom(rd_atom)
+                    atom_map[atom_data["id"]] = rd_idx
+                except Exception as e:
+                    logger.warning(f"Invalid element {el}: {e}")
+                    continue
 
             bond_types = {
                 1: Chem.BondType.SINGLE,
@@ -349,15 +431,23 @@ def on_change(state: State, var_name: str, var_value: Any):
                 b_type = bond_data.get("type", 1)
                 
                 if src in atom_map and tgt in atom_map:
-                    rw_mol.AddBond(
-                        atom_map[src], 
-                        atom_map[tgt], 
-                        bond_types.get(b_type, Chem.BondType.SINGLE)
-                    )
+                    try:
+                        rw_mol.AddBond(
+                            atom_map[src], 
+                            atom_map[tgt], 
+                            bond_types.get(b_type, Chem.BondType.SINGLE)
+                        )
+                    except Exception as e:
+                        logger.warning(f"Invalid bond {src}-{tgt}: {e}")
+                        continue
 
             # Sanitize structure
             mol = rw_mol.GetMol()
-            Chem.SanitizeMol(mol)
+            try:
+                Chem.SanitizeMol(mol)
+            except Exception as e:
+                log_checkpoint_to_ui(state, "Error: Invalid molecule structure", "error")
+                return
             
             smiles = Chem.MolToSmiles(mol)
             state.smiles_input = smiles
@@ -365,18 +455,31 @@ def on_change(state: State, var_name: str, var_value: Any):
             # Execute computational dynamics pipeline
             run_molecular_pipeline(state, mol)
             
+        except json.JSONDecodeError as e:
+            logger.debug(f"Canvas payload JSON parse error: {e}")
         except Exception as e:
-            logger.debug(f"Parsing partial drawn state canvas payload: {e}")
+            logger.error(f"Canvas payload processing error: {e}")
 
     elif var_name == "smiles_input":
         smiles = var_value.strip()
         if not smiles:
             return
 
+        # Validate SMILES length (max 2000 chars)
+        if len(smiles) > 2000:
+            log_checkpoint_to_ui(state, "Error: SMILES string too long (max 2000 chars)", "error")
+            return
+
         try:
-            mol = Chem.MolFromSmiles(smiles)
+            # Strict sanitization with RDKit
+            mol = Chem.MolFromSmiles(smiles, sanitize=True)
             if mol is None:
-                log_checkpoint_to_ui(state, f"Invalid SMILES string entered: '{smiles}'", "error")
+                log_checkpoint_to_ui(state, f"Invalid SMILES string: '{smiles[:50]}'", "error")
+                return
+
+            # Validate molecule size
+            if mol.GetNumAtoms() > 200:
+                log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
                 return
 
             # Calculate 2D coordinates layout
@@ -420,8 +523,8 @@ def on_change(state: State, var_name: str, var_value: Any):
             run_molecular_pipeline(state, mol)
 
         except Exception as e:
-            logger.error(f"Failed to process pasted SMILES representation: {e}")
-            log_checkpoint_to_ui(state, f"SMILES Error: {str(e)}", "error")
+            logger.error(f"SMILES processing error: {e}")
+            log_checkpoint_to_ui(state, f"SMILES Error: Invalid structure", "error")
 
 
 # =====================================================================
