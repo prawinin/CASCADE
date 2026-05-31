@@ -1,0 +1,134 @@
+import logging
+import subprocess
+import requests
+from typing import Optional
+
+logger = logging.getLogger("KineticSketch.Visualizer")
+
+# Global reference to running PyMOL subprocess
+pymol_process = None
+
+def get_pymol_process() -> Optional[subprocess.Popen]:
+    """
+    Retrieves or spawns the local PyMOL visualizer pipeline.
+    Runs 'pymol -p' to listen to Python commands via stdin.
+    """
+    global pymol_process
+    if pymol_process is None or pymol_process.poll() is not None:
+        try:
+            logger.info("Initializing non-blocking subprocess PyMOL listener...")
+            # Spawning visualizer in listening mode
+            pymol_process = subprocess.Popen(
+                ["pymol", "-p"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1
+            )
+            logger.info("Local PyMOL subprocess successfully launched.")
+        except Exception as e:
+            logger.warning(f"Unable to launch local PyMOL visualizer process (pymol -p): {e}")
+            pymol_process = False  # Set to False to signify offline state
+    
+    return pymol_process if pymol_process is not False else None
+
+
+def fallback_pymol_mapper(prompt: str) -> str:
+    """
+    Double-insurance local translation dictionary.
+    Invoked if Ollama server is offline or model is not loaded.
+    Translates standard molecular instructions directly to PyMOL APIs.
+    """
+    prompt_l = prompt.lower()
+    commands = []
+    
+    # Analyze commands
+    if "load" in prompt_l or "open" in prompt_l:
+        commands.append("load molecule.sdf")
+    if "stick" in prompt_l or "wire" in prompt_l:
+        commands.append("show sticks")
+        commands.append("hide lines")
+    if "sphere" in prompt_l or "ball" in prompt_l:
+        commands.append("show spheres")
+    if "cartoon" in prompt_l or "ribbon" in prompt_l:
+        commands.append("show cartoon")
+    if "surface" in prompt_l:
+        commands.append("show surface")
+    if "color" in prompt_l:
+        colors = ["red", "green", "blue", "yellow", "cyan", "magenta", "orange", "marine", "pink"]
+        selected_color = "cyan"
+        for col in colors:
+            if col in prompt_l:
+                selected_color = col
+                break
+        commands.append(f"color {selected_color}")
+    if "zoom" in prompt_l or "center" in prompt_l:
+        commands.append("zoom")
+    if "rotate" in prompt_l or "turn" in prompt_l:
+        commands.append("turn y, 90")
+    if "bg" in prompt_l or "background" in prompt_l:
+        if "white" in prompt_l: commands.append("bg_color white")
+        else: commands.append("bg_color black")
+
+    if not commands:
+        # Default load and sticks
+        commands.extend(["load molecule.sdf", "show sticks", "zoom"])
+
+    return "\n".join(commands)
+
+
+def query_ollama_for_pymol(prompt: str) -> str:
+    """
+    Queries local Ollama qwen2.5-coder:7b server to generate raw PyMOL commands.
+    Falls back to local fallback_pymol_mapper if offline or fails.
+    """
+    model_name = "qwen2.5-coder:7b"
+    system_instruction = (
+        "You are an expert PyMOL scripting system. Your job is to translate user "
+        "visualization requests into raw, executable PyMOL command-line APIs. "
+        "Output ONLY raw PyMOL commands, one per line. "
+        "Do NOT include markdown block fencing, do NOT include python wrappers, "
+        "do NOT include prose, comments, or explanations. "
+        "For example, if the user asks to show the molecule as cartoon, output 'show cartoon' and nothing else."
+    )
+
+    try:
+        response = requests.post(
+            "http://localhost:11434/api/chat",
+            json={
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": prompt}
+                ],
+                "stream": False
+            },
+            timeout=8.0
+        )
+        if response.status_code == 200:
+            result = response.json()
+            pymol_commands = result["message"]["content"].strip()
+            logger.info("Ollama successfully generated PyMOL commands.")
+            return pymol_commands
+        else:
+            raise Exception(f"HTTP status code {response.status_code}")
+    except Exception as e:
+        logger.warning(f"Ollama qwen2.5-coder:7b offline. Triggering fallback command mapper. Error: {e}")
+        return fallback_pymol_mapper(prompt)
+
+
+def execute_pymol_commands(commands_text: str) -> bool:
+    """
+    Pipes raw PyMOL script text directly to stdin of local PyMOL subprocess.
+    """
+    proc = get_pymol_process()
+    if proc:
+        try:
+            logger.info(f"Writing commands to running PyMOL subprocess:\n{commands_text}")
+            proc.stdin.write(commands_text + "\n")
+            proc.stdin.flush()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to write to PyMOL subprocess stdin: {e}")
+    return False

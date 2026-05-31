@@ -1,0 +1,27 @@
+PERSONAL ACADEMIC USE LICENSE
+
+Copyright (c) 2026 Prawin. All rights reserved.
+
+TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+1. Ownership
+All rights, title, and interest in and to the KineticSketch AI software codebase, including but not limited to the source code, modules (checkpoint.py, models.py, cheminformatics.py, visualizer.py, pdb_repurposing.py, kinetic_sketch.py), user interface templates (index.html), and associated documentation (the "Software"), are owned exclusively by Prawin ("Owner").
+
+2. License Grant
+Subject to the terms and conditions of this License, the Owner hereby grants you a non-exclusive, non-transferable, personal, and royalty-free license to download, install, run, and use the Software solely for your own personal, non-commercial, and academic research purposes.
+
+3. Restrictions
+Under this License, you are strictly prohibited from:
+   a. Using the Software, or any part thereof, for any commercial purpose, including but not limited to paid services, contract research, or industrial product development.
+   b. Distributing, publishing, subleasing, selling, renting, or transferring the Software, or any derivative works thereof, to any third party in any form without the express prior written consent of the Owner.
+   c. Creating derivative works for public release, sharing, or distribution.
+   d. Modifying or removing any copyright notices, authorship credits, or proprietary markings present in the Software.
+
+4. Citation Requirement
+If you use the Software in any academic research, papers, publications, patents, presentations, or educational courses, you must credit the Owner ("Prawin") as the creator and provide a citation to the KineticSketch AI repository.
+
+5. Termination
+This License is effective until terminated. Your rights under this License will terminate automatically without notice from the Owner if you fail to comply with any of its terms. Upon termination, you must cease all use of the Software and destroy all copies in your possession.
+
+6. Disclaimer of Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

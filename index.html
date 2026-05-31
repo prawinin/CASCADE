@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KineticSketch AI - Molecular Dynamics Workspace</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-base: #0a0a12;
+            --bg-card: rgba(22, 22, 38, 0.7);
+            --border-glow: rgba(0, 255, 255, 0.15);
+            --primary: #8a2be2;
+            --primary-glow: rgba(138, 43, 226, 0.4);
+            --secondary: #00f0ff;
+            --secondary-glow: rgba(0, 240, 255, 0.4);
+            --accent: #ff007f;
+            --text-main: #f5f5fc;
+            --text-muted: #8e8ea8;
+            --success: #00ff7f;
+            --warning: #ffaa00;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(138, 43, 226, 0.15) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(0, 240, 255, 0.1) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(10, 10, 18, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-glow {
+            width: 14px;
+            height: 14px;
+            background: var(--secondary);
+            border-radius: 50%;
+            box-shadow: 0 0 15px 4px var(--secondary-glow);
+            animation: pulse 2s infinite ease-in-out;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, var(--text-main) 30%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--secondary);
+            color: var(--secondary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .dashboard {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 480px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1800px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: border-color 0.3s ease;
+        }
+
+        .panel:hover {
+            border-color: rgba(0, 240, 255, 0.15);
+        }
+
+        .panel-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .panel-title i {
+            color: var(--secondary);
+        }
+
+        /* 2D Canvas Elements */
+        .canvas-area {
+            position: relative;
+            flex: 1;
+            background: radial-gradient(circle, #10101f 0%, #08080f 100%);
+            display: flex;
+            flex-direction: column;
+            min-height: 550px;
+        }
+
+        .toolbar {
+            padding: 0.75rem;
+            background: rgba(10, 10, 20, 0.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .tool-group {
+            display: flex;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 0.2rem;
+            gap: 0.2rem;
+        }
+
+        .tool-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .tool-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tool-btn.active {
+            color: #000;
+            background: var(--secondary);
+            box-shadow: 0 0 10px var(--secondary-glow);
+        }
+
+        .tool-btn.active-element {
+            color: #fff;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        #molCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* SMILES Bridging & Setup styling */
+        .smiles-bridge-box {
+            padding: 1rem;
+            background: rgba(10, 10, 20, 0.4);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.75rem;
+            align-items: center;
+        }
+
+        .smiles-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        /* Hidden standard inputs that we bridge to Taipy */
+        .taipy-bridge-hidden {
+            display: none !important;
+        }
+
+        /* Visible styled replicas for premium styling */
+        .premium-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            color: var(--text-main);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .premium-input:focus {
+            border-color: var(--secondary);
+            box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
+        }
+
+        .premium-btn {
+            background: var(--primary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        .premium-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 15px var(--primary-glow);
+            filter: brightness(1.1);
+        }
+
+        /* Right Panel Sections */
+        .right-column {
+            display: grid;
+            grid-template-rows: 1fr 1fr 1fr 130px;
+            gap: 1.2rem;
+            height: calc(100vh - 100px);
+        }
+
+        /* Chat Panel */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            background: rgba(0, 0, 0, 0.15);
+            font-size: 0.9rem;
+        }
+
+        .chat-message {
+            max-width: 85%;
+            padding: 0.6rem 0.9rem;
+            border-radius: 12px;
+            line-height: 1.4;
+        }
+
+        .message-user {
+            background: rgba(138, 43, 226, 0.2);
+            border: 1px solid rgba(138, 43, 226, 0.3);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-system {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .pymol-code-block {
+            font-family: 'JetBrains Mono', monospace;
+            background: #05050a !important;
+            border-left: 3px solid var(--secondary);
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            color: #50fa7b;
+        }
+
+        .chat-input-bar {
+            padding: 0.75rem;
+            background: rgba(10, 10, 20, 0.4);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.5rem;
+        }
+
+        /* Predictor Results */
+        .predictions-container {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .predictions-body {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .predictions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        /* Repurposing Results */
+        .repurposing-container {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .repurposing-body {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .repurposing-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        .repurposing-table th {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .repurposing-table td {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .repurposing-table tr:hover {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .predictions-table th {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .predictions-table td {
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .predictions-table tr:hover {
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .variance-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        /* Checkpoint Panel */
+        .checkpoint-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .checkpoint-body {
+            flex: 1;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            overflow-y: auto;
+            background: #050508;
+            color: #8be9fd;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .checkpoint-log-line {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .checkpoint-time {
+            color: var(--text-muted);
+        }
+
+        .checkpoint-success {
+            color: var(--success);
+        }
+
+        .checkpoint-warning {
+            color: var(--warning);
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+
+        /* Taipy Override styles to inject into HTML template */
+        .hidden-taipy-element {
+            display: none !important;
+        }
+
+        .element-C { color: #8a8a9e; }
+        .element-O { color: #ff4757; }
+        .element-N { color: #2e86de; }
+        .element-H { color: #f1f2f6; }
+        .element-P { color: #ff9f43; }
+        .element-S { color: #feca57; }
+        
+        .element-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: currentColor;
+            margin-right: 4px;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">
+            <div class="logo-glow"></div>
+            <h1>KineticSketch AI</h1>
+            <span class="badge">Molecular dynamics workspace</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+            VENV Active • Python 3.14+
+        </div>
+    </header>
+
+    <div class="dashboard">
+        <!-- Left Panel: 2D Canvas -->
+        <div class="panel">
+            <div class="panel-header">
+                <div class="panel-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                    2D Chemical Drawing Canvas
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">
+                    Click to add atom. Drag to bind.
+                </div>
+            </div>
+            
+            <div class="canvas-area">
+                <!-- Canvas toolbar -->
+                <div class="toolbar">
+                    <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-right: 0.5rem;">Mode:</span>
+                    <div class="tool-group">
+                        <button id="btnDraw" class="tool-btn active" onclick="setMode('draw')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            Draw
+                        </button>
+                        <button id="btnMove" class="tool-btn" onclick="setMode('move')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5v14"/><path d="m19 9 3 3-3 3"/><path d="m5 15-3-3 3-3"/><path d="m9 5 3-3 3 3"/><path d="m15 19-3 3-3-3"/></svg>
+                            Move
+                        </button>
+                        <button id="btnErase" class="tool-btn" onclick="setMode('erase')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+                            Erase
+                        </button>
+                    </div>
+
+                    <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-left: 0.75rem; margin-right: 0.5rem;">Element:</span>
+                    <div class="tool-group">
+                        <button class="tool-btn active-element element-C" onclick="setActiveElement('C', this)">C</button>
+                        <button class="tool-btn element-N" onclick="setActiveElement('N', this)">N</button>
+                        <button class="tool-btn element-O" onclick="setActiveElement('O', this)">O</button>
+                        <button class="tool-btn element-H" onclick="setActiveElement('H', this)">H</button>
+                        <button class="tool-btn element-P" onclick="setActiveElement('P', this)">P</button>
+                        <button class="tool-btn element-S" onclick="setActiveElement('S', this)">S</button>
+                    </div>
+
+                    <span style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-left: 0.75rem; margin-right: 0.5rem;">Bond:</span>
+                    <div class="tool-group">
+                        <button id="btnBond1" class="tool-btn active" onclick="setBondType(1)">Single</button>
+                        <button id="btnBond2" class="tool-btn" onclick="setBondType(2)">Double</button>
+                        <button id="btnBond3" class="tool-btn" onclick="setBondType(3)">Triple</button>
+                    </div>
+
+                    <button class="tool-btn" style="margin-left: auto; color: var(--accent);" onclick="clearCanvas()">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                        Clear
+                    </button>
+                </div>
+
+                <!-- Canvas workspace -->
+                <div class="canvas-container" id="canvasContainer">
+                    <canvas id="molCanvas"></canvas>
+                </div>
+
+                <!-- SMILES Bridge Box -->
+                <div class="smiles-bridge-box">
+                    <div class="smiles-wrapper">
+                        <!-- Taipy Text Input (Hidden) -->
+                        <div class="taipy-bridge-hidden">
+                            <taipy:input value="{smiles_input}" id="taipy_smiles_input" />
+                            <taipy:input value="{canvas_payload}" id="taipy_canvas_payload" />
+                        </div>
+                        
+                        <!-- Premium Visible Text Box -->
+                        <input type="text" id="visible_smiles_input" class="premium-input" placeholder="SMILES representation (e.g. CCO, C(=O)O)" onkeydown="if(event.key === 'Enter') triggerSmilesPasted()">
+                    </div>
+                    <button class="premium-btn" onclick="triggerSmilesPasted()">Render SMILES</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panels -->
+        <div class="right-column">
+            <!-- Chat Panel for PyMOL commands -->
+            <div class="panel chat-container">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        PyMOL Language Interceptor
+                    </div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">
+                        qwen2.5-coder:7b
+                    </div>
+                </div>
+                
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-message message-system">
+                        Hello! Describe PyMOL visual manipulations here. I will prompt the local Ollama LLM to intercept instructions and stream command API coordinates dynamically to your running local visualizer process.
+                    </div>
+                    <!-- Taipy-injected historical log list -->
+                    <div id="taipy_chat_log" style="display: none;">
+                        <taipy:text value="{chat_log_html}" raw="true" />
+                    </div>
+                    <div id="dynamicChatLog"></div>
+                </div>
+
+                <div class="chat-input-bar">
+                    <!-- Hidden Taipy inputs for chat -->
+                    <div class="taipy-bridge-hidden">
+                        <taipy:input value="{chat_prompt}" id="taipy_chat_prompt" />
+                        <taipy:button label="Send" id="taipy_chat_send_btn" on_action="on_chat_send" />
+                    </div>
+                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type visualizer commands (e.g. show cartoon, color red)..." onkeydown="if(event.key === 'Enter') triggerChatSend()">
+                    <button class="premium-btn" onclick="triggerChatSend()">Send</button>
+                </div>
+            </div>
+
+            <!-- MDRepo Predictor -->
+            <div class="panel predictions-container">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        MDRepo Conformer Dynamics Predictor
+                    </div>
+                    <span class="badge" style="background: rgba(0, 255, 127, 0.1); border-color: var(--success); color: var(--success);">Inference Ready</span>
+                </div>
+                <div class="predictions-body">
+                    <!-- Dynamic predictions content rendered as raw HTML by Taipy -->
+                    <taipy:text value="{predictions_html}" raw="true" />
+                </div>
+            </div>
+
+            <!-- PDB Drug Repurposing Targets -->
+            <div class="panel repurposing-container">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+                        PDB Drug Repurposing Target Search
+                    </div>
+                    <span class="badge" style="background: rgba(0, 240, 255, 0.1); border-color: var(--secondary); color: var(--secondary);">Morgan Similarity</span>
+                </div>
+                <div class="repurposing-body">
+                    <!-- Dynamic drug repurposing search list raw HTML by Taipy -->
+                    <taipy:text value="{repurposing_html}" raw="true" />
+                </div>
+            </div>
+
+            <!-- Checkpoint Logs -->
+            <div class="panel checkpoint-container">
+                <div class="panel-header" style="padding: 0.75rem 1.25rem;">
+                    <div class="panel-title" style="font-size: 0.95rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+                        State Checkpointing Loop
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                        workspace_progress.json
+                    </div>
+                </div>
+                <div class="checkpoint-body" id="checkpointBody">
+                    <taipy:text value="{checkpoint_logs_html}" raw="true" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden element that updates whenever canvas_payload is modified on backend -->
+    <div id="canvas_payload_watcher" style="display: none;">
+        <taipy:text value="{canvas_payload}" />
+    </div>
+
+    <!-- Script section for Canvas 2D Interaction -->
+    <script>
+        // React Input Value Setter Utility
+        function setReactInputValue(containerId, value) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const input = container.querySelector("input") || container.querySelector("textarea");
+            if (!input) return;
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            nativeInputValueSetter.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        // Trigger action on Taipy Button
+        function clickTaipyButton(buttonId) {
+            const btn = document.getElementById(buttonId);
+            if (btn) {
+                const clickTarget = btn.querySelector("button") || btn;
+                clickTarget.click();
+            }
+        }
+
+        // SMILES pasting bridge
+        function triggerSmilesPasted() {
+            const smilesVal = document.getElementById("visible_smiles_input").value;
+            if (!smilesVal) return;
+            
+            // Set the Taipy smiles_input state
+            setReactInputValue("taipy_smiles_input", smilesVal);
+            
+            // We can wait a tiny fraction of time or let RDKit process it.
+            // Under Taipy, changing smiles_input triggers on_change immediately.
+            console.log("Pasted SMILES sent to Taipy:", smilesVal);
+        }
+
+        // Chat prompts bridge
+        function triggerChatSend() {
+            const chatVal = document.getElementById("visible_chat_prompt").value;
+            if (!chatVal) return;
+            
+            // Set Taipy state
+            setReactInputValue("taipy_chat_prompt", chatVal);
+            
+            // Clear input box
+            document.getElementById("visible_chat_prompt").value = "";
+            
+            // Click Send Button
+            setTimeout(() => {
+                clickTaipyButton("taipy_chat_send_btn");
+            }, 50);
+        }
+
+        // Sync Chat Logs from hidden Taipy DIV
+        function syncChatLogs() {
+            const src = document.getElementById("taipy_chat_log");
+            const dest = document.getElementById("dynamicChatLog");
+            if (src && dest) {
+                dest.innerHTML = src.innerHTML;
+                
+                // Scroll chat to bottom
+                const container = document.getElementById("chatMessages");
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        }
+
+        // Setup MutationObserver on Chat Logs and Canvas Payload
+        window.addEventListener('load', () => {
+            // Watch for Chat Logs
+            const chatWatcher = document.getElementById("taipy_chat_log");
+            if (chatWatcher) {
+                const chatObserver = new MutationObserver(() => {
+                    syncChatLogs();
+                });
+                chatObserver.observe(chatWatcher, { childList: true, subtree: true, characterData: true });
+            }
+
+            // Sync visible SMILES input if changed from backend
+            const backendSmilesWatcher = document.getElementById("taipy_smiles_input");
+            if (backendSmilesWatcher) {
+                const smilesObserver = new MutationObserver(() => {
+                    const input = backendSmilesWatcher.querySelector("input") || backendSmilesWatcher.querySelector("textarea");
+                    if (input) {
+                        document.getElementById("visible_smiles_input").value = input.value;
+                    }
+                });
+                smilesObserver.observe(backendSmilesWatcher, { childList: true, subtree: true, attributes: true });
+            }
+
+            // Watch for Canvas Redraw payloads from Backend
+            const payloadWatcher = document.getElementById("canvas_payload_watcher");
+            if (payloadWatcher) {
+                const payloadObserver = new MutationObserver(() => {
+                    const val = payloadWatcher.innerText || payloadWatcher.textContent;
+                    if (val && val.trim() && val !== lastSentPayload) {
+                        try {
+                            const data = JSON.parse(val);
+                            loadCanvasData(data);
+                        } catch (e) {
+                            console.error("MutationObserver: failed to parse canvas payload:", e);
+                        }
+                    }
+                });
+                payloadObserver.observe(payloadWatcher, { childList: true, subtree: true, characterData: true });
+            }
+
+            // Scroll Checkpoints
+            const cpBody = document.getElementById("checkpointBody");
+            if (cpBody) {
+                const cpObserver = new MutationObserver(() => {
+                    cpBody.scrollTop = cpBody.scrollHeight;
+                });
+                cpObserver.observe(cpBody, { childList: true, subtree: true });
+            }
+
+            // Setup Canvas size
+            resizeCanvas();
+            drawGrid();
+        });
+
+        // ==========================================
+        // 2D Molecular Sketcher Canvas Engine (HTML5)
+        // ==========================================
+        const canvas = document.getElementById("molCanvas");
+        const ctx = canvas.getContext("2d");
+        let activeMode = "draw"; // "draw", "move", "erase"
+        let activeElement = "C";
+        let activeBondType = 1; // 1, 2, 3
+
+        let atoms = [];
+        let bonds = [];
+        let nextAtomId = 1;
+        
+        let lastSentPayload = "";
+
+        // Dragging & Interaction variables
+        let selectedAtom = null;
+        let hoveredAtom = null;
+        let dragStartAtom = null;
+        let isDragging = false;
+        let dragX = 0;
+        let dragY = 0;
+        let snapGrid = 15;
+
+        const elementColors = {
+            'C': '#8a8a9e',
+            'O': '#ff4757',
+            'N': '#2e86de',
+            'H': '#f1f2f6',
+            'P': '#ff9f43',
+            'S': '#feca57'
+        };
+
+        const atomRadius = 14;
+
+        function resizeCanvas() {
+            const container = document.getElementById("canvasContainer");
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            redraw();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function setMode(mode) {
+            activeMode = mode;
+            document.getElementById("btnDraw").classList.toggle("active", mode === "draw");
+            document.getElementById("btnMove").classList.toggle("active", mode === "move");
+            document.getElementById("btnErase").classList.toggle("active", mode === "erase");
+        }
+
+        function setActiveElement(el, btn) {
+            activeElement = el;
+            document.querySelectorAll(".element-C, .element-N, .element-O, .element-H, .element-P, .element-S").forEach(b => {
+                b.classList.remove("active-element");
+            });
+            btn.classList.add("active-element");
+        }
+
+        function setBondType(type) {
+            activeBondType = type;
+            document.getElementById("btnBond1").classList.toggle("active", type === 1);
+            document.getElementById("btnBond2").classList.toggle("active", type === 2);
+            document.getElementById("btnBond3").classList.toggle("active", type === 3);
+        }
+
+        function clearCanvas() {
+            atoms = [];
+            bonds = [];
+            nextAtomId = 1;
+            redraw();
+            pushPayload();
+        }
+
+        // Find atom at (x, y) coordinates
+        function getAtomAt(x, y) {
+            return atoms.find(atom => {
+                const dist = Math.hypot(atom.x - x, atom.y - y);
+                return dist < atomRadius + 6;
+            }) || null;
+        }
+
+        // Draw coordinate grid
+        function drawGrid() {
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.02)";
+            ctx.lineWidth = 1;
+            const gridSz = 40;
+            for (let x = 0; x < canvas.width; x += gridSz) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSz) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        // Main redraw function
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+
+            // 1. Draw Bonds
+            bonds.forEach(bond => {
+                const a1 = atoms.find(a => a.id === bond.source);
+                const a2 = atoms.find(a => a.id === bond.target);
+                if (!a1 || !a2) return;
+
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+                ctx.lineWidth = 3;
+
+                // Single, Double, Triple lines
+                const angle = Math.atan2(a2.y - a1.y, a2.x - a1.x);
+                const offset_x = Math.sin(angle) * 5;
+                const offset_y = Math.cos(angle) * 5;
+
+                if (bond.type === 1) {
+                    ctx.beginPath();
+                    ctx.moveTo(a1.x, a1.y);
+                    ctx.lineTo(a2.x, a2.y);
+                    ctx.stroke();
+                } else if (bond.type === 2) {
+                    ctx.beginPath();
+                    ctx.moveTo(a1.x - offset_x, a1.y + offset_y);
+                    ctx.lineTo(a2.x - offset_x, a2.y + offset_y);
+                    ctx.moveTo(a1.x + offset_x, a1.y - offset_y);
+                    ctx.lineTo(a2.x + offset_x, a2.y - offset_y);
+                    ctx.stroke();
+                } else if (bond.type === 3) {
+                    ctx.beginPath();
+                    ctx.moveTo(a1.x, a1.y);
+                    ctx.lineTo(a2.x, a2.y);
+                    ctx.moveTo(a1.x - offset_x * 1.5, a1.y + offset_y * 1.5);
+                    ctx.lineTo(a2.x - offset_x * 1.5, a2.y + offset_y * 1.5);
+                    ctx.moveTo(a1.x + offset_x * 1.5, a1.y - offset_y * 1.5);
+                    ctx.lineTo(a2.x + offset_x * 1.5, a2.y - offset_y * 1.5);
+                    ctx.stroke();
+                }
+            });
+
+            // Draw active bond line while drawing
+            if (activeMode === "draw" && isDragging && dragStartAtom) {
+                ctx.strokeStyle = "rgba(0, 240, 255, 0.5)";
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(dragStartAtom.x, dragStartAtom.y);
+                ctx.lineTo(dragX, dragY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 2. Draw Atoms
+            atoms.forEach(atom => {
+                const color = elementColors[atom.element] || '#ffffff';
+                const isHovered = hoveredAtom && hoveredAtom.id === atom.id;
+
+                // Outer circle background
+                ctx.fillStyle = "#0c0c16";
+                ctx.strokeStyle = isHovered ? "var(--secondary)" : "rgba(255,255,255,0.1)";
+                ctx.lineWidth = isHovered ? 2 : 1;
+                ctx.beginPath();
+                ctx.arc(atom.x, atom.y, atomRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Hover glow
+                if (isHovered) {
+                    ctx.shadowColor = "var(--secondary-glow)";
+                    ctx.shadowBlur = 10;
+                }
+
+                // Element text
+                ctx.fillStyle = color;
+                ctx.font = "bold 13px 'Outfit', sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(atom.element, atom.x, atom.y);
+
+                // Clear shadow
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        // Handle mouse canvas actions
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const clickedAtom = getAtomAt(x, y);
+
+            if (activeMode === "draw") {
+                if (clickedAtom) {
+                    // Start drawing bond
+                    dragStartAtom = clickedAtom;
+                    isDragging = true;
+                    dragX = x;
+                    dragY = y;
+                } else {
+                    // Create new atom
+                    const newAtom = {
+                        id: nextAtomId++,
+                        x: Math.round(x / snapGrid) * snapGrid,
+                        y: Math.round(y / snapGrid) * snapGrid,
+                        element: activeElement
+                    };
+                    atoms.push(newAtom);
+                    redraw();
+                    pushPayload();
+                }
+            } else if (activeMode === "move") {
+                if (clickedAtom) {
+                    selectedAtom = clickedAtom;
+                    isDragging = true;
+                }
+            } else if (activeMode === "erase") {
+                if (clickedAtom) {
+                    // Delete atom and connected bonds
+                    atoms = atoms.filter(a => a.id !== clickedAtom.id);
+                    bonds = bonds.filter(b => b.source !== clickedAtom.id && b.target !== clickedAtom.id);
+                    redraw();
+                    pushPayload();
+                } else {
+                    // Check if clicked a bond
+                    bonds = bonds.filter(bond => {
+                        const a1 = atoms.find(a => a.id === bond.source);
+                        const a2 = atoms.find(a => a.id === bond.target);
+                        if (!a1 || !a2) return true;
+                        
+                        // Distance from point to line segment
+                        const d = distToSegment({x, y}, a1, a2);
+                        return d > 8; // If within 8px, delete it
+                    });
+                    redraw();
+                    pushPayload();
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const oldHover = hoveredAtom;
+            hoveredAtom = getAtomAt(x, y);
+
+            if (oldHover !== hoveredAtom) {
+                redraw();
+            }
+
+            if (isDragging) {
+                if (activeMode === "draw") {
+                    dragX = x;
+                    dragY = y;
+                    redraw();
+                } else if (activeMode === "move" && selectedAtom) {
+                    selectedAtom.x = Math.round(x / snapGrid) * snapGrid;
+                    selectedAtom.y = Math.round(y / snapGrid) * snapGrid;
+                    redraw();
+                }
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (activeMode === "draw" && dragStartAtom) {
+                const targetAtom = getAtomAt(x, y);
+                if (targetAtom && targetAtom.id !== dragStartAtom.id) {
+                    // Check if bond already exists
+                    const existingBond = bonds.find(b => 
+                        (b.source === dragStartAtom.id && b.target === targetAtom.id) ||
+                        (b.source === targetAtom.id && b.target === dragStartAtom.id)
+                    );
+
+                    if (existingBond) {
+                        // Toggle bond type or update it
+                        existingBond.type = activeBondType;
+                    } else {
+                        // Create a new bond
+                        bonds.push({
+                            source: dragStartAtom.id,
+                            target: targetAtom.id,
+                            type: activeBondType
+                        });
+                    }
+                    pushPayload();
+                }
+                dragStartAtom = null;
+            }
+
+            if (activeMode === "move" && selectedAtom) {
+                selectedAtom = null;
+                pushPayload();
+            }
+
+            redraw();
+        });
+
+        // Math utilities for bond click-erasure
+        function dist2(v, w) { return (v.x - w.x)**2 + (v.y - w.y)**2; }
+        function distToSegmentSquared(p, v, w) {
+            const l2 = dist2(v, w);
+            if (l2 === 0) return dist2(p, v);
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return dist2(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
+        }
+        function distToSegment(p, v, w) { return Math.sqrt(distToSegmentSquared(p, v, w)); }
+
+        // PUSH payload from Canvas to Taipy Backend
+        function pushPayload() {
+            const payload = {
+                atoms: atoms.map(a => ({ id: a.id, x: a.x, y: a.y, element: a.element })),
+                bonds: bonds.map(b => ({ source: b.source, target: b.target, type: b.type }))
+            };
+            const payloadStr = JSON.stringify(payload);
+            lastSentPayload = payloadStr;
+            setReactInputValue("taipy_canvas_payload", payloadStr);
+            console.log("Drawn canvas payload pushed:", payloadStr);
+        }
+
+        // LOAD canvas data from Backend (e.g. from pasted SMILES)
+        function loadCanvasData(data) {
+            if (!data || !data.atoms) return;
+            
+            // Re-scale coordinates to fit canvas nicely
+            atoms = [];
+            bonds = [];
+            
+            if (data.atoms.length === 0) {
+                redraw();
+                return;
+            }
+
+            // Find bounds of loaded data
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            data.atoms.forEach(a => {
+                if (a.x < minX) minX = a.x;
+                if (a.x > maxX) maxX = a.x;
+                if (a.y < minY) minY = a.y;
+                if (a.y > maxY) maxY = a.y;
+            });
+
+            // Center of loaded structure
+            const dataCenterX = (minX + maxX) / 2;
+            const dataCenterY = (minY + maxY) / 2;
+
+            // Center of canvas
+            const canvasCenterX = canvas.width / 2;
+            const canvasCenterY = canvas.height / 2;
+
+            // Determine scaling factor
+            let scale = 50; // default scaling factor for RDKit raw 2D coords
+            if (maxX - minX > 0.1 || maxY - minY > 0.1) {
+                const scaleX = (canvas.width - 200) / (maxX - minX);
+                const scaleY = (canvas.height - 200) / (maxY - minY);
+                scale = Math.min(scaleX, scaleY);
+                // Limit scale to a reasonable size
+                scale = Math.max(20, Math.min(scale, 100));
+            }
+
+            // Load atoms with scaled/centered coords
+            data.atoms.forEach(a => {
+                atoms.push({
+                    id: a.id,
+                    x: Math.round((canvasCenterX + (a.x - dataCenterX) * scale) / snapGrid) * snapGrid,
+                    y: Math.round((canvasCenterY + (a.y - dataCenterY) * scale) / snapGrid) * snapGrid,
+                    element: a.element
+                });
+            });
+
+            // Load bonds
+            if (data.bonds) {
+                data.bonds.forEach(b => {
+                    bonds.push({
+                        source: b.source,
+                        target: b.target,
+                        type: b.type
+                    });
+                });
+            }
+
+            // Find highest atom ID to keep nextAtomId sequential
+            nextAtomId = Math.max(...atoms.map(a => a.id), 0) + 1;
+
+            redraw();
+            console.log("Canvas loaded structures from RDKit backend!");
+        }
+    </script>
+</body>
+</html>
