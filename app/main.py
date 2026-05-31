@@ -13,6 +13,14 @@ import html as html_module
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+# Setup relative paths so the project can be run from anywhere
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+services_dir = os.path.join(current_dir, "services")
+if services_dir not in sys.path:
+    sys.path.insert(0, services_dir)
+
 # Configure native logging
 logging.basicConfig(
     level=logging.INFO,
@@ -23,13 +31,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger("KineticSketch.Main")
 
-# Import custom modular services
+# Import custom modular services from services package
 try:
-    from checkpoint import CheckpointManager
-    from models import MDRepoPredictor, get_one_hot_nodes
-    from cheminformatics import optimize_conformer_3d, write_all_conformers
-    from visualizer import query_ollama_for_pymol, execute_pymol_commands, get_pymol_process
-    from pdb_repurposing import find_repurposing_targets
+    from services import (
+        CheckpointManager,
+        optimize_conformer_3d,
+        write_all_conformers,
+        query_ollama_for_pymol,
+        execute_pymol_commands,
+        get_pymol_process,
+        find_repurposing_targets,
+        MDRepoPredictor,
+        get_one_hot_nodes
+    )
 except ImportError as e:
     logger.critical(f"Failed to import local modules! Ensure they exist. Error: {e}")
     sys.exit(1)
@@ -536,8 +550,9 @@ if __name__ == "__main__":
     # Pre-spawn PyMOL pipeline dynamically
     get_pymol_process()
     
-    # Load frontend index template
-    html_page = Html("index.html")
+    # Load frontend index template relatively using dynamic path resolution
+    html_path = os.path.join(current_dir, "gui", "index.html")
+    html_page = Html(html_path)
     
     # Run Taipy GUI web server
     gui = Gui(page=html_page)

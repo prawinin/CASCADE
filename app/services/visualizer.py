@@ -5,12 +5,20 @@ from typing import Optional
 
 logger = logging.getLogger("KineticSketch.Visualizer")
 
+import sys
+import os
+# Allow relative importing of config module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import get_config
+
+config = get_config()
+
 # Global reference to running PyMOL subprocess
 pymol_process: Optional[subprocess.Popen] = None
 
-# Request timeout constants (in seconds)
-OLLAMA_TIMEOUT = 15.0
-PYMOL_LISTEN_TIMEOUT = 5.0
+# Request timeout constants (loaded dynamically from central config)
+OLLAMA_TIMEOUT = float(config.OLLAMA_TIMEOUT)
+PYMOL_LISTEN_TIMEOUT = float(config.PYMOL_LISTEN_TIMEOUT)
 
 def get_pymol_process() -> Optional[subprocess.Popen]:
     """
@@ -109,7 +117,8 @@ def query_ollama_for_pymol(prompt: str) -> str:
     Returns:
         String of PyMOL commands (either from Ollama or fallback mapper)
     """
-    model_name = "qwen2.5-coder:7b"
+    model_name = config.OLLAMA_MODEL
+    api_endpoint = f"{config.OLLAMA_API_URL.rstrip('/')}/api/chat"
     system_instruction = (
         "You are an expert PyMOL scripting system. Your job is to translate user "
         "visualization requests into raw, executable PyMOL command-line APIs. "
@@ -121,7 +130,7 @@ def query_ollama_for_pymol(prompt: str) -> str:
 
     try:
         response = requests.post(
-            "http://localhost:11434/api/chat",
+            api_endpoint,
             json={
                 "model": model_name,
                 "messages": [

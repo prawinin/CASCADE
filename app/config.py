@@ -13,6 +13,10 @@ import os
 import json
 from typing import Optional, Dict, Any
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file at the root of the project
+load_dotenv()
 
 
 class Config:
@@ -35,7 +39,7 @@ class Config:
 
     # Ollama AI Integration
     OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
+    OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
     OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", 15))
     OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "1").lower() in ("1", "true", "yes")
 

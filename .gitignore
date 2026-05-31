@@ -60,3 +60,8 @@ workspace_progress.json
 *.log
 pip-log.txt
 .opencode
+
+# Non-production Developer Documentation (Keep Local Only)
+DEPLOYMENT.md
+TESTING.md
+COMPLETION_SUMMARY.md
