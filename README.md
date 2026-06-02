@@ -24,13 +24,15 @@ Designed and engineered exclusively by **Prawin**, KineticSketch AI brings premi
 
 ```text
 KineticSketch/
-├── kinetic_sketch.py    # Module 1: Taipy Orchestrator & GUI Reactive Server
-├── cheminformatics.py  # Module 2: RDKit 3D Conformation & File Exporters
-├── visualizer.py        # Module 3: PyMOL pipes & Ollama API Integrators
-├── models.py            # Module 4: PyTorch GNN/MLP Dynamics Predictor
-├── checkpoint.py        # Module 5: Progress Checkpointing Service
-├── pdb_repurposing.py   # RCSB PDB Target Repurposing & Tanimoto Similarities
-├── index.html           # Premium Front-End HTML5 Dashboard Layout
+├── kinetic_sketch.py        # Production launcher
+├── run.py                   # Root launcher used by kinetic_sketch.py
+├── app/main.py              # Taipy orchestrator and GUI server
+├── app/services/            # RDKit, PyTorch, PyMOL, checkpoint, and PDB services
+├── app/gui/index.html       # HTML5 molecular workbench UI
+├── requirements.txt         # Runtime dependencies
+├── requirements-test.txt    # Test and quality tooling
+├── Dockerfile               # Production container build
+├── docker-compose.yml       # Local/container orchestration
 ├── LICENSE              # Personal Academic Use License (Owned exclusively by Prawin)
 └── .gitignore           # Pycache, virtual env, output structures, & progress logs
 ```
@@ -59,7 +61,7 @@ python3 -m venv venv --system-site-packages
 source venv/bin/activate
 
 # Install required libraries
-pip install rdkit torch taipy marshmallow==3.21.2 apispec sqlalchemy openpyxl tzlocal deepdiff toml
+pip install -r requirements.txt
 ```
 
 > [!NOTE]
@@ -71,7 +73,7 @@ pip install rdkit torch taipy marshmallow==3.21.2 apispec sqlalchemy openpyxl tz
 
 To start the local web dashboard server, execute:
 ```bash
-python kinetic_sketch.py
+venv/bin/python kinetic_sketch.py
 ```
 
 Once the server initializes, open your web browser and navigate to:
@@ -120,17 +122,16 @@ KineticSketch AI has been fully optimized for production deployment with:
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for complete cloud deployment guides.
 
-### 🧪 Comprehensive Testing
-- **30+ Unit & Integration Tests**: >90% code coverage
-- **Test Suite**: `pytest` with coverage reporting, performance benchmarks
-- **Test Categories**: Unit tests, integration tests, performance tests, edge cases
-- **CI/CD Ready**: GitHub Actions configuration example
-- **Quality Checks**: mypy type checking, flake8 linting, black formatting
+### 🧪 Testing & Quality Checks
+- **Smoke Checks**: Python compile checks and import validation for deployment builds
+- **Test Tooling**: `pytest` with coverage support via `requirements-test.txt`
+- **Quality Tooling**: mypy type checking, flake8 linting, black formatting, and isort
 
 Run tests with:
 ```bash
 pip install -r requirements-test.txt
-pytest -v --cov=.
+python -m py_compile kinetic_sketch.py run.py app/main.py app/services/*.py
+pytest -v --cov=.  # when project tests are added
 ```
 
 See [TESTING.md](TESTING.md) for detailed testing documentation.
@@ -161,7 +162,7 @@ Key settings:
 ## 📚 Documentation
 
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Cloud deployment guides (Heroku, Railway, Azure, AWS)
-- **[TESTING.md](TESTING.md)** - Testing guide with 30+ test cases
+- **[TESTING.md](TESTING.md)** - Testing and quality-check guide
 - **[implementation_plan.md](implementation_plan.md)** - Architecture and design decisions
 - **config.py** - Centralized configuration with validation
 

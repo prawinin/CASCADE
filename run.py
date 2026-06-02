@@ -14,7 +14,11 @@ app_dir = os.path.join(current_dir, "app")
 if app_dir not in sys.path:
     sys.path.insert(0, app_dir)
 
-if __name__ == "__main__":
+def main() -> None:
     # Boot the Taipy main module
     main_script_path = os.path.join(app_dir, "main.py")
     runpy.run_path(main_script_path, run_name="__main__")
+
+
+if __name__ == "__main__":
+    main()

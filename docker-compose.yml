@@ -1,7 +1,6 @@
 version: '3.9'
 
 services:
-  # Main KineticSketch application
   app:
     build:
       context: .
@@ -15,16 +14,13 @@ services:
       - PORT=5000
       - PYMOL_SERVER_HOST=pymol
       - PYMOL_SERVER_PORT=9123
-      - PYMOL_ENABLED=1
+      - PYMOL_ENABLED=0
       - OLLAMA_API_URL=http://ollama:11434
-      - OLLAMA_ENABLED=1
+      - OLLAMA_ENABLED=0
       - MOLECULE_SIZE_LIMIT=200
       - SMILES_LENGTH_LIMIT=2000
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
-    depends_on:
-      - pymol
-      - ollama
     networks:
       - kinetic-sketch
     restart: unless-stopped
@@ -37,7 +33,6 @@ services:
       retries: 3
       start_period: 5s
 
-  # PyMOL Server (optional, can be disabled)
   pymol:
     image: pymol/pymol:latest
     container_name: kinetic-sketch-pymol
@@ -48,11 +43,9 @@ services:
     networks:
       - kinetic-sketch
     restart: unless-stopped
-    # Uncomment to disable PyMOL service
-    # profiles:
-    #   - disabled
+    profiles:
+      - visualizer
 
-  # Ollama AI Service (optional, for local LLM)
   ollama:
     image: ollama/ollama:latest
     container_name: kinetic-sketch-ollama
@@ -66,9 +59,8 @@ services:
     restart: unless-stopped
     volumes:
       - ollama-data:/root/.ollama
-    # Uncomment to disable Ollama service
-    # profiles:
-    #   - disabled
+    profiles:
+      - llm
 
   # Optional: Prometheus for metrics collection
   prometheus:
@@ -94,13 +86,7 @@ volumes:
   prometheus-data:
 
 # Usage:
-# docker-compose up -d              # Start all services
-# docker-compose down               # Stop all services
-# docker-compose logs -f app        # View app logs
-# docker-compose ps                 # List running containers
-#
-# To disable PyMOL or Ollama:
-# docker-compose --profile disabled up -d
-#
-# To include monitoring:
-# docker-compose --profile monitoring up -d
+# docker compose up -d                         # Start the production-safe app only
+# docker compose --profile llm up -d           # Include local Ollama
+# docker compose --profile visualizer up -d    # Include PyMOL sidecar
+# docker compose --profile monitoring up -d    # Include Prometheus

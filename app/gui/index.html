@@ -443,18 +443,6 @@
             border-bottom-left-radius: 2px;
         }
 
-        .pymol-code-block {
-            font-family: 'JetBrains Mono', monospace;
-            background: #090D13 !important;
-            border-left: 2px solid var(--accent-purple);
-            padding: 0.45rem;
-            margin-top: 0.4rem;
-            border-radius: 4px;
-            font-size: 0.72rem;
-            overflow-x: auto;
-            color: #7EE787;
-        }
-
         .chat-input-bar {
             padding: 0.5rem;
             background: rgba(0, 0, 0, 0.1);
@@ -584,8 +572,7 @@
         .checkpoint-body {
             flex: 1;
             padding: 0.6rem 0.8rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.68rem;
+            font-size: 0.72rem;
             overflow-y: auto;
             background: #090D13;
             color: var(--accent-blue);
@@ -602,7 +589,8 @@
 
         .checkpoint-time {
             color: var(--text-secondary);
-            min-width: 54px;
+            min-width: 58px;
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .checkpoint-success {
@@ -762,7 +750,7 @@
         </div>
         <div style="font-size: 0.72rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; gap: 0.5rem;">
             <span style="display:inline-block; width:6px; height:6px; background-color:var(--success); border-radius:50%;"></span>
-            VENV Active • Python 3.14+
+            Analysis Engine Ready
         </div>
     </header>
 
@@ -827,10 +815,10 @@
             <div class="canvas-header">
                 <div class="canvas-title">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                    2D Molecular Sketchpad Workspace
+                    2D Molecular Sketchpad
                 </div>
                 <div style="font-size: 0.72rem; color: var(--text-secondary);">
-                    Snap-grid enabled • Left rail tools active
+                    Snap-grid enabled
                 </div>
             </div>
 
@@ -862,14 +850,14 @@
                 <div class="panel-header">
                     <div class="panel-title">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                        PyMOL Language Interceptor
+                        PyMOL Assistant
                     </div>
-                    <span class="panel-badge">Ollama Llama3</span>
+                    <span class="panel-badge">Visualizer</span>
                 </div>
                 
                 <div class="chat-messages" id="chatMessages">
                     <div class="chat-message message-system">
-                        Describe desired 3D PyMOL visualization manipulations. I will prompt the local Ollama LLM to intercept instructions and stream command API coordinates dynamically.
+                        Describe how you want the 3D molecule displayed in PyMOL.
                     </div>
                     <!-- Taipy-injected historical log list -->
                     <div id="taipy_chat_log" style="display: none;">
@@ -884,7 +872,7 @@
                         <taipy:input value="{chat_prompt}" id="taipy_chat_prompt" />
                         <taipy:button label="Send" id="taipy_chat_send_btn" on_action="on_chat_send" />
                     </div>
-                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type PyMOL visual commands..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
+                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Describe the PyMOL view..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
                     <button class="premium-btn" onclick="triggerChatSend()">Send</button>
                 </div>
             </div>
@@ -922,10 +910,10 @@
                 <div class="panel-header">
                     <div class="panel-title">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2"></path></svg>
-                        State Checkpointing Loop
+                        Analysis Progress
                     </div>
-                    <div style="font-size: 0.65rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
-                        workspace_progress.json
+                    <div style="font-size: 0.65rem; color: var(--text-secondary);">
+                        Live
                     </div>
                 </div>
                 <div class="checkpoint-body" id="checkpointBody">
@@ -943,6 +931,17 @@
 
     <!-- Script section for Canvas 2D Interaction -->
     <script>
+        const APP_DEBUG = false;
+        function debugLog(message, detail) {
+            if (APP_DEBUG) {
+                if (detail === undefined) {
+                    console.log(message);
+                } else {
+                    console.log(message, detail);
+                }
+            }
+        }
+
         // React Input Value Setter Utility
         function setReactInputValue(containerId, value) {
             const container = document.getElementById(containerId);
@@ -970,7 +969,7 @@
             
             // Set the Taipy smiles_input state
             setReactInputValue("taipy_smiles_input", smilesVal);
-            console.log("Pasted SMILES sent to Taipy:", smilesVal);
+            debugLog("SMILES sent to backend:", smilesVal);
         }
 
         // Chat prompts bridge
@@ -1038,7 +1037,7 @@
                             const data = JSON.parse(val);
                             loadCanvasData(data);
                         } catch (e) {
-                            console.error("MutationObserver: failed to parse canvas payload:", e);
+                            debugLog("Failed to parse canvas payload:", e);
                         }
                     }
                 });
@@ -1392,7 +1391,7 @@
             const payloadStr = JSON.stringify(payload);
             lastSentPayload = payloadStr;
             setReactInputValue("taipy_canvas_payload", payloadStr);
-            console.log("Drawn canvas payload pushed:", payloadStr);
+            debugLog("Canvas payload pushed:", payloadStr);
         }
 
         // LOAD canvas data from Backend (e.g. from pasted SMILES)
@@ -1460,7 +1459,7 @@
             nextAtomId = Math.max(...atoms.map(a => a.id), 0) + 1;
 
             redraw();
-            console.log("Canvas loaded structures from RDKit backend!");
+            debugLog("Canvas loaded structure from backend.");
         }
     </script>
 </body>

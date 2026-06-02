@@ -1,0 +1,13 @@
+rdkit
+torch
+taipy
+python-dotenv
+requests
+tqdm
+marshmallow==3.21.2
+apispec
+sqlalchemy
+openpyxl
+tzlocal
+deepdiff
+toml

@@ -21,9 +21,13 @@ services_dir = os.path.join(current_dir, "services")
 if services_dir not in sys.path:
     sys.path.insert(0, services_dir)
 
+from config import get_config
+
+config = get_config()
+
 # Configure native logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, config.LOG_LEVEL.upper(), logging.INFO),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -65,11 +69,14 @@ except ImportError:
 
 try:
     from taipy.gui import Gui, Html, State
+    from flask import Flask, jsonify
 except ImportError:
     logger.error("Taipy GUI framework not available!")
     Gui = None
     Html = None
     State = None
+    Flask = None
+    jsonify = None
 
 try:
     from tqdm import tqdm
@@ -90,7 +97,7 @@ chat_prompt = ""
 chat_log_html = ""
 predictions_html = "<div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div>"
 repurposing_html = "<div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Sketched drug target repurposing matches will populate here.</div>"
-checkpoint_logs_html = "<div class='checkpoint-log-line'><span class='checkpoint-time'>[INIT]</span> Checkpoint engine initialized.</div>"
+checkpoint_logs_html = "<div class='checkpoint-log-line'><span class='checkpoint-time'>[READY]</span> Workspace ready for analysis.</div>"
 
 
 def log_checkpoint_to_ui(state: State, message: str, level: str = "success") -> None:
@@ -372,12 +379,11 @@ def on_chat_send(state: State) -> None:
         # Format system bubble response (sanitized)
         sys_bubble = f"<div class='chat-message message-system'>"
         if exec_success:
-            sys_bubble += "✓ Piped to PyMOL:"
+            sys_bubble += "Visualization request sent to PyMOL."
         else:
-            sys_bubble += "⚠ Generated (PyMOL offline):"
-        
-        safe_commands = html_module.escape(commands_text)
-        sys_bubble += f"<pre class='pymol-code-block'>{safe_commands}</pre></div>"
+            sys_bubble += "PyMOL is offline. The request was interpreted and kept in the server log."
+        logger.info("Generated PyMOL command sequence: %s", commands_text)
+        sys_bubble += "</div>"
         state.chat_log_html += sys_bubble
     
     except Exception as e:
@@ -546,19 +552,43 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
 # =====================================================================
 if __name__ == "__main__":
     logger.info("Starting modular KineticSketch AI Workspace Server...")
+    is_valid, config_errors = config.validate()
+    if not is_valid:
+        for error in config_errors:
+            logger.warning("Configuration warning: %s", error)
     
-    # Pre-spawn PyMOL pipeline dynamically
-    get_pymol_process()
+    if config.PYMOL_ENABLED:
+        # Pre-spawn PyMOL pipeline dynamically when configured.
+        get_pymol_process()
     
     # Load frontend index template relatively using dynamic path resolution
     html_path = os.path.join(current_dir, "gui", "index.html")
     html_page = Html(html_path)
+
+    flask_app = Flask(__name__) if Flask is not None else None
+
+    if flask_app is not None:
+        @flask_app.get("/health")
+        def health():
+            return jsonify({
+                "status": "healthy",
+                "environment": config.ENVIRONMENT,
+                "services": {
+                    "rdkit": "available" if Chem is not None else "unavailable",
+                    "torch": "available" if torch is not None else "unavailable",
+                    "pymol": "enabled" if config.PYMOL_ENABLED else "disabled",
+                    "ollama": "enabled" if config.OLLAMA_ENABLED else "disabled",
+                },
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+            })
     
     # Run Taipy GUI web server
-    gui = Gui(page=html_page)
+    gui = Gui(page=html_page, flask=flask_app)
     gui.run(
         title="KineticSketch AI - Molecular Dynamics Workspace",
         use_reloader=False,
-        port=5001,
+        host=config.HOST,
+        port=config.PORT,
+        debug=config.DEBUG,
         dark_mode=True
     )

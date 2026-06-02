@@ -31,6 +31,10 @@ def get_pymol_process() -> Optional[subprocess.Popen]:
         PyMOL subprocess.Popen object or None if unavailable
     """
     global pymol_process
+    if not config.PYMOL_ENABLED:
+        logger.info("PyMOL integration is disabled by configuration.")
+        return None
+
     if pymol_process is None or pymol_process.poll() is not None:
         try:
             logger.info("Initializing non-blocking subprocess PyMOL listener...")
@@ -127,6 +131,10 @@ def query_ollama_for_pymol(prompt: str) -> str:
         "do NOT include prose, comments, or explanations. "
         "For example, if the user asks to show the molecule as cartoon, output 'show cartoon' and nothing else."
     )
+
+    if not config.OLLAMA_ENABLED:
+        logger.info("Ollama integration is disabled by configuration. Using local PyMOL mapper.")
+        return fallback_pymol_mapper(prompt)
 
     try:
         response = requests.post(
