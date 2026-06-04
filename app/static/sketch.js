@@ -1,13 +1,34 @@
 
         // React Input Value Setter Utility
         function setReactInputValue(containerId, value) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            const input = container.querySelector("input") || container.querySelector("textarea");
-            if (!input) return;
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            nativeInputValueSetter.call(input, value);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
+            const el = document.getElementById(containerId);
+            if (!el) {
+                console.warn("setReactInputValue: element not found:", containerId);
+                return;
+            }
+            
+            // If the element itself is input/textarea, use it. Otherwise search children.
+            const tagName = el.tagName.toLowerCase();
+            const input = (tagName === "input" || tagName === "textarea") 
+                ? el 
+                : (el.querySelector("input") || el.querySelector("textarea"));
+                
+            if (!input) {
+                console.warn("setReactInputValue: input element not found inside:", containerId);
+                return;
+            }
+            
+            const isTextarea = input.tagName.toLowerCase() === "textarea";
+            const proto = isTextarea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+            
+            try {
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, "value").set;
+                nativeInputValueSetter.call(input, value);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                console.log(`setReactInputValue: successfully set ${containerId} to:`, value);
+            } catch (e) {
+                console.error(`setReactInputValue: failed to set value for ${containerId}:`, e);
+            }
         }
 
         // Trigger action on Taipy Button
