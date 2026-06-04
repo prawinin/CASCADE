@@ -93,42 +93,49 @@
             }
         }
 
-        // Setup MutationObserver on Chat Logs and Canvas Payload
-        window.addEventListener('load', () => {
-            // Watch for Chat Logs
+        let observersInitialized = false;
+        function initializeObservers() {
+            if (observersInitialized) return;
+            
             const chatWatcher = document.getElementById("taipy_chat_log");
-            if (chatWatcher) {
-                const chatObserver = new MutationObserver(() => {
-                    syncChatLogs();
-                });
-                chatObserver.observe(chatWatcher, { childList: true, subtree: true, characterData: true });
-                syncChatLogs();
+            const predictionsWatcher = document.getElementById("taipy_predictions_html");
+            const repurposingWatcher = document.getElementById("taipy_repurposing_html");
+            const checkpointWatcher = document.getElementById("taipy_checkpoint_logs");
+            const backendSmilesWatcher = document.getElementById("taipy_smiles_input");
+            const payloadWatcher = document.getElementById("canvas_payload_watcher");
+            
+            // Wait until the essential inputs and watcher elements are loaded by React
+            if (!chatWatcher || !predictionsWatcher || !repurposingWatcher || !checkpointWatcher || !backendSmilesWatcher || !payloadWatcher) {
+                return;
             }
+            
+            observersInitialized = true;
+            console.log("Taipy elements successfully mounted. Setting up MutationObservers...");
+
+            // Watch for Chat Logs
+            const chatObserver = new MutationObserver(() => {
+                syncChatLogs();
+            });
+            chatObserver.observe(chatWatcher, { childList: true, subtree: true, characterData: true });
+            syncChatLogs();
 
             // Watch for Predictions HTML from Backend
-            const predictionsWatcher = document.getElementById("taipy_predictions_html");
-            if (predictionsWatcher) {
-                const predictionsObserver = new MutationObserver(() => {
-                    syncContainer("taipy_predictions_html", "dynamicPredictions");
-                });
-                predictionsObserver.observe(predictionsWatcher, { childList: true, subtree: true, characterData: true });
+            const predictionsObserver = new MutationObserver(() => {
                 syncContainer("taipy_predictions_html", "dynamicPredictions");
-            }
+            });
+            predictionsObserver.observe(predictionsWatcher, { childList: true, subtree: true, characterData: true });
+            syncContainer("taipy_predictions_html", "dynamicPredictions");
 
             // Watch for Repurposing HTML from Backend
-            const repurposingWatcher = document.getElementById("taipy_repurposing_html");
-            if (repurposingWatcher) {
-                const repurposingObserver = new MutationObserver(() => {
-                    syncContainer("taipy_repurposing_html", "dynamicRepurposing");
-                });
-                repurposingObserver.observe(repurposingWatcher, { childList: true, subtree: true, characterData: true });
+            const repurposingObserver = new MutationObserver(() => {
                 syncContainer("taipy_repurposing_html", "dynamicRepurposing");
-            }
+            });
+            repurposingObserver.observe(repurposingWatcher, { childList: true, subtree: true, characterData: true });
+            syncContainer("taipy_repurposing_html", "dynamicRepurposing");
 
             // Watch for Checkpoint Logs from Backend
-            const checkpointWatcher = document.getElementById("taipy_checkpoint_logs");
             const cpBody = document.getElementById("checkpointBody");
-            if (checkpointWatcher && cpBody) {
+            if (cpBody) {
                 const checkpointObserver = new MutationObserver(() => {
                     syncContainer("taipy_checkpoint_logs", "dynamicCheckpointLogs");
                     cpBody.scrollTop = cpBody.scrollHeight;
@@ -139,35 +146,39 @@
             }
 
             // Sync visible SMILES input if changed from backend
-            const backendSmilesWatcher = document.getElementById("taipy_smiles_input");
-            if (backendSmilesWatcher) {
-                const smilesObserver = new MutationObserver(() => {
-                    const input = backendSmilesWatcher.querySelector("input") || backendSmilesWatcher.querySelector("textarea");
-                    if (input) {
-                        document.getElementById("visible_smiles_input").value = input.value;
-                    }
-                });
-                smilesObserver.observe(backendSmilesWatcher, { childList: true, subtree: true, attributes: true });
-            }
+            const smilesObserver = new MutationObserver(() => {
+                const input = backendSmilesWatcher.querySelector("input") || backendSmilesWatcher.querySelector("textarea");
+                if (input) {
+                    document.getElementById("visible_smiles_input").value = input.value;
+                }
+            });
+            smilesObserver.observe(backendSmilesWatcher, { childList: true, subtree: true, attributes: true });
 
             // Watch for Canvas Redraw payloads from Backend
-            const payloadWatcher = document.getElementById("canvas_payload_watcher");
-            if (payloadWatcher) {
-                const payloadObserver = new MutationObserver(() => {
-                    const val = payloadWatcher.innerText || payloadWatcher.textContent;
-                    if (val && val.trim() && val !== lastSentPayload) {
-                        try {
-                            const data = JSON.parse(val);
-                            loadCanvasData(data);
-                        } catch (e) {
-                            console.error("MutationObserver: failed to parse canvas payload:", e);
-                        }
+            const payloadObserver = new MutationObserver(() => {
+                const val = payloadWatcher.innerText || payloadWatcher.textContent;
+                if (val && val.trim() && val !== lastSentPayload) {
+                    try {
+                        const data = JSON.parse(val);
+                        loadCanvasData(data);
+                    } catch (e) {
+                        console.error("MutationObserver: failed to parse canvas payload:", e);
                     }
-                });
-                payloadObserver.observe(payloadWatcher, { childList: true, subtree: true, characterData: true });
-            }
+                }
+            });
+            payloadObserver.observe(payloadWatcher, { childList: true, subtree: true, characterData: true });
+        }
 
-            // Setup Canvas size
+        // Poll every 100ms until all elements are mounted and observers are initialized
+        const checkExistInterval = setInterval(() => {
+            initializeObservers();
+            if (observersInitialized) {
+                clearInterval(checkExistInterval);
+            }
+        }, 100);
+
+        // Setup Canvas size on load
+        window.addEventListener('load', () => {
             resizeCanvas();
             drawGrid();
         });
