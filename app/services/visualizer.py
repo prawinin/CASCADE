@@ -145,6 +145,10 @@ def query_ollama_for_pymol(prompt: str) -> str:
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": prompt}
                 ],
+                "options": {
+                    "temperature": 0.0,
+                    "num_predict": 40
+                },
                 "stream": False
             },
             timeout=OLLAMA_TIMEOUT
