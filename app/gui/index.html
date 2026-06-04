@@ -7,59 +7,119 @@
     <!-- Google Fonts: Inter and JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet" />
+
     <style>
+        /* ============================================================
+           DESIGN SYSTEM — White/Light Premium Theme
+           Inspired by Benchling + Ketcher + ChemDraw + Linear
+           ============================================================ */
         :root {
-            --bg-base: #0D1117;
-            --bg-panel: #161B22;
-            --bg-hover: #21262D;
-            --bg-modal: #30363D;
-            --text-primary: #F0F6FC;
-            --text-secondary: #8B949E;
-            --border-color: rgba(240, 246, 252, 0.06);
-            --accent-blue: #58A6FF;
-            --accent-purple: #BC8CFF;
-            --accent-pink: #F778BA;
-            --success: #3FB950;
-            --warning: #D29922;
-            
-            --element-C: #8B949E;
-            --element-O: #F778BA;
-            --element-N: #58A6FF;
-            --element-H: #F0F6FC;
-            --element-P: #F58C4F;
-            --element-S: #D29922;
+            /* Surface Colors */
+            --bg-base: #F8F9FB;
+            --bg-panel: #FFFFFF;
+            --bg-sidebar: #F1F3F5;
+            --bg-hover: #EDF0F4;
+            --bg-active: #E8EBF0;
+            --bg-canvas: #FAFBFC;
+            --bg-header: #FFFFFF;
+            --bg-input: #FFFFFF;
+
+            /* Text Colors */
+            --text-primary: #1A1D23;
+            --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF;
+            --text-inverse: #FFFFFF;
+
+            /* Border Colors */
+            --border-primary: #E5E7EB;
+            --border-subtle: #F0F1F3;
+            --border-focus: #2563EB;
+
+            /* Accent Colors */
+            --accent-blue: #2563EB;
+            --accent-blue-light: #EFF6FF;
+            --accent-blue-mid: #DBEAFE;
+            --accent-blue-hover: #1D4ED8;
+
+            --accent-purple: #7C3AED;
+            --accent-purple-light: #F5F3FF;
+            --accent-purple-mid: #EDE9FE;
+
+            --accent-green: #059669;
+            --accent-green-light: #ECFDF5;
+
+            --accent-amber: #D97706;
+            --accent-amber-light: #FFFBEB;
+
+            --accent-red: #DC2626;
+            --accent-red-light: #FEF2F2;
+
+            /* Element CPK Colors (for light bg) */
+            --element-C: #6B7280;
+            --element-O: #DC2626;
+            --element-N: #2563EB;
+            --element-H: #9CA3AF;
+            --element-P: #EA580C;
+            --element-S: #CA8A04;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+            --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.15);
+
+            /* Radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-pill: 100px;
         }
 
-        * {
+        /* ============================================================
+           BASE RESET & TYPOGRAPHY
+           ============================================================ */
+        *,
+        *::before,
+        *::after {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            user-select: none;
+        }
+
+        button, input, select, textarea {
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            outline: none;
         }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background-color: var(--bg-base);
             color: var(--text-primary);
-            height: 100vh;
+            height: 100dvh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             font-feature-settings: 'tnum' 1;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Top Bar */
+        /* ============================================================
+           TOP HEADER BAR
+           ============================================================ */
         header {
-            height: 48px;
+            height: 52px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-primary);
+            background: var(--bg-header);
             padding: 0 1.25rem;
             z-index: 10;
+            box-shadow: var(--shadow-sm);
         }
 
         .logo-container {
@@ -71,34 +131,59 @@
         .logo-glow {
             width: 10px;
             height: 10px;
-            background: var(--accent-blue);
+            background: linear-gradient(135deg, var(--accent-blue) 0%, #3B82F6 100%);
             border-radius: 50%;
-            box-shadow: 0 0 12px 3px rgba(88, 166, 255, 0.4);
+            box-shadow: 0 0 8px 2px rgba(37, 99, 235, 0.3);
             animation: pulse 3s infinite ease-in-out;
         }
 
         h1 {
-            font-size: 1.15rem;
+            font-size: 1.05rem;
             font-weight: 700;
             letter-spacing: -0.3px;
-            background: linear-gradient(135deg, var(--text-primary) 30%, var(--accent-blue) 100%);
+            color: var(--text-primary);
+        }
+
+        h1 span {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .top-badge {
-            background: rgba(88, 166, 255, 0.1);
-            border: 1px solid rgba(88, 166, 255, 0.15);
+            background: var(--accent-blue-light);
+            border: 1px solid var(--accent-blue-mid);
             color: var(--accent-blue);
-            padding: 0.15rem 0.5rem;
-            border-radius: 6px;
-            font-size: 0.7rem;
+            padding: 0.15rem 0.55rem;
+            border-radius: var(--radius-pill);
+            font-size: 0.65rem;
             font-weight: 600;
             letter-spacing: 0.3px;
             text-transform: uppercase;
         }
 
-        /* Workspace Main Layout */
+        .status-indicator {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(5, 150, 105, 0.4);
+        }
+
+        /* ============================================================
+           WORKSPACE MAIN LAYOUT
+           ============================================================ */
         .workspace {
             display: flex;
             flex: 1;
@@ -106,20 +191,23 @@
             position: relative;
         }
 
-        /* Left Rail (Ketcher-style toolbar) */
+        /* ============================================================
+           LEFT TOOLBAR RAIL (Ketcher-inspired)
+           ============================================================ */
         .left-rail {
-            width: 52px;
-            min-width: 52px;
-            background: var(--bg-panel);
-            border-right: 1px solid var(--border-color);
+            width: 56px;
+            min-width: 56px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-primary);
             display: flex;
             flex-direction: column;
             align-items: center;
             padding: 0.75rem 0;
-            gap: 0.8rem;
+            gap: 0.5rem;
             overflow-y: auto;
-            scrollbar-width: none; /* Hide standard scrollbar */
+            scrollbar-width: none;
         }
+
         .left-rail::-webkit-scrollbar {
             display: none;
         }
@@ -127,17 +215,16 @@
         .rail-divider {
             width: 24px;
             height: 1px;
-            background: var(--border-color);
-            margin: 0.2rem 0;
+            background: var(--border-primary);
+            margin: 0.25rem 0;
         }
 
         .rail-section-label {
-            font-size: 0.6rem;
+            font-size: 0.55rem;
             font-weight: 700;
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            transform: scale(0.95);
+            letter-spacing: 0.6px;
         }
 
         .rail-btn {
@@ -145,98 +232,139 @@
             height: 36px;
             background: transparent;
             border: 1px solid transparent;
-            border-radius: 8px;
+            border-radius: var(--radius-md);
             color: var(--text-secondary);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.15s ease;
             position: relative;
         }
 
-        .rail-btn:hover {
+        .rail-btn:hover:not(:disabled) {
             color: var(--text-primary);
             background: var(--bg-hover);
-            transform: translateY(-1px);
         }
 
         .rail-btn.active {
-            color: var(--text-primary);
-            background: rgba(88, 166, 255, 0.15);
-            border-color: rgba(88, 166, 255, 0.3);
+            color: var(--accent-blue);
+            background: var(--accent-blue-light);
+            border-color: var(--accent-blue-mid);
         }
 
         .rail-btn.active::before {
             content: '';
             position: absolute;
-            left: 0;
+            left: -1px;
             top: 25%;
             height: 50%;
             width: 3px;
             background: var(--accent-blue);
-            border-radius: 0 4px 4px 0;
-            animation: borderSlideIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 0 3px 3px 0;
+            animation: borderSlideIn 0.2s ease;
         }
 
-        /* Tooltip style */
+        /* Tooltip */
         .rail-btn::after {
             content: attr(data-tooltip);
             position: absolute;
-            left: 60px;
-            background: var(--bg-modal);
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.72rem;
+            left: 52px;
+            background: var(--text-primary);
+            color: var(--text-inverse);
+            padding: 0.25rem 0.55rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
             font-weight: 500;
             white-space: nowrap;
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.15s ease;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            box-shadow: var(--shadow-md);
             z-index: 100;
         }
+
         .rail-btn:hover::after {
             opacity: 1;
         }
 
-        .rail-btn.active-element {
-            border: 1px solid var(--border-color);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-primary);
-        }
-        
-        .element-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 0.15rem;
+        /* Element tooltip (same positioning) */
+        .rail-btn-element::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 46px;
+            background: var(--text-primary);
+            color: var(--text-inverse);
+            padding: 0.25rem 0.55rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            box-shadow: var(--shadow-md);
+            z-index: 100;
         }
 
-        /* Central Drawing Area */
+        .rail-btn-element:hover::after {
+            opacity: 1;
+        }
+
+        /* Atom element buttons — CPK circular nodes */
+        .rail-btn-element {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--border-primary);
+            font-weight: 700;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: var(--bg-panel);
+            position: relative;
+        }
+
+        .rail-btn-element:hover {
+            transform: scale(1.08);
+            border-color: currentColor;
+            box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent);
+        }
+
+        .rail-btn-element.active-element {
+            background: currentColor !important;
+            color: var(--text-inverse) !important;
+            border-color: transparent !important;
+            box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 20%, transparent) !important;
+        }
+
+        /* ============================================================
+           CENTRAL CANVAS AREA
+           ============================================================ */
         .canvas-area {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #0B0E14;
+            background: var(--bg-canvas);
             min-width: 0;
             min-height: 0;
             position: relative;
         }
 
         .canvas-header {
-            padding: 0.6rem 1.25rem;
-            border-bottom: 1px solid var(--border-color);
+            padding: 0.55rem 1.25rem;
+            border-bottom: 1px solid var(--border-primary);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(22, 27, 34, 0.3);
+            background: var(--bg-panel);
         }
 
         .canvas-title {
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 600;
             color: var(--text-primary);
             display: flex;
@@ -244,8 +372,13 @@
             gap: 0.5rem;
         }
 
-        .canvas-title svg {
+        .canvas-title i {
             color: var(--accent-blue);
+        }
+
+        .canvas-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-tertiary);
         }
 
         .canvas-container {
@@ -263,13 +396,15 @@
             height: 100%;
         }
 
-        /* Bottom SMILES input bar */
+        /* ============================================================
+           SMILES INPUT BAR (bottom of canvas)
+           ============================================================ */
         .smiles-bar {
-            padding: 0.75rem 1.25rem;
+            padding: 0.65rem 1.25rem;
             background: var(--bg-panel);
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid var(--border-primary);
             display: flex;
-            gap: 0.75rem;
+            gap: 0.65rem;
             align-items: center;
         }
 
@@ -278,68 +413,79 @@
             position: relative;
         }
 
-        /* Hidden standard inputs that we bridge to Taipy */
+        /* Hidden bridge inputs */
         .taipy-bridge-hidden {
             display: none !important;
         }
 
         .premium-input {
             width: 100%;
-            background: rgba(0, 0, 0, 0.25);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
             padding: 0.5rem 0.85rem;
             color: var(--text-primary);
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.8rem;
-            outline: none;
-            transition: all 0.2s ease;
+            font-size: 0.78rem;
+            transition: all 0.15s ease;
+        }
+
+        .premium-input::placeholder {
+            color: var(--text-tertiary);
         }
 
         .premium-input:focus {
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
+            box-shadow: var(--shadow-focus);
         }
 
         .premium-btn {
             background: var(--accent-blue);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            color: #0D1117;
-            padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
+            border: none;
+            color: var(--text-inverse);
+            padding: 0.5rem 1.1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.78rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.15s ease;
+            white-space: nowrap;
         }
 
-        .premium-btn:hover {
-            filter: brightness(1.1);
-            transform: translateY(-1px);
+        .premium-btn:hover:not(:disabled) {
+            background: var(--accent-blue-hover);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .premium-btn:active {
+            transform: scale(0.98);
         }
 
         .premium-btn-secondary {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border-color);
+            background: var(--bg-panel);
+            border: 1px solid var(--border-primary);
             color: var(--text-primary);
             padding: 0.5rem 1rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
+            border-radius: var(--radius-md);
+            font-size: 0.78rem;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
         }
 
-        .premium-btn-secondary:hover {
+        .premium-btn-secondary:hover:not(:disabled) {
             background: var(--bg-hover);
+            border-color: var(--border-primary);
         }
 
-        /* Right Sidebar Panel (CSS Grid for perfect stacking heights) */
+        /* ============================================================
+           RIGHT SIDEBAR — Panel Stack
+           ============================================================ */
         .right-sidebar {
-            width: 380px;
-            min-width: 380px;
-            border-left: 1px solid var(--border-color);
-            background: var(--bg-base);
+            width: 390px;
+            min-width: 390px;
+            border-left: 1px solid var(--border-primary);
+            background: var(--bg-sidebar);
             display: grid;
             grid-template-rows: 1.1fr 0.95fr 0.95fr 140px;
             height: 100%;
@@ -348,15 +494,11 @@
 
         .panel {
             background: var(--bg-panel);
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-primary);
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            transition: all 0.2s ease;
-        }
-
-        .panel:hover {
-            background: rgba(22, 27, 34, 0.6);
+            transition: background-color 0.15s ease;
         }
 
         .panel:last-child {
@@ -364,21 +506,16 @@
         }
 
         .panel-header {
-            padding: 0.65rem 1rem;
-            border-bottom: 1px solid var(--border-color);
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(22, 27, 34, 0.4);
-            transition: background-color 0.2s ease;
-        }
-
-        .panel-header:hover {
-            background: rgba(22, 27, 34, 0.8);
+            background: var(--bg-base);
         }
 
         .panel-title {
-            font-size: 0.82rem;
+            font-size: 0.78rem;
             font-weight: 600;
             display: flex;
             align-items: center;
@@ -386,21 +523,40 @@
             color: var(--text-primary);
         }
 
-        .panel-title svg {
-            color: var(--accent-purple);
+        .panel-title i {
+            font-size: 13px;
         }
 
+        .panel-title .icon-blue { color: var(--accent-blue); }
+        .panel-title .icon-green { color: var(--accent-green); }
+        .panel-title .icon-purple { color: var(--accent-purple); }
+        .panel-title .icon-gray { color: var(--text-tertiary); }
+
         .panel-badge {
-            background: rgba(56, 139, 253, 0.1);
-            border: 1px solid rgba(56, 139, 253, 0.15);
+            background: var(--accent-blue-light);
+            border: 1px solid var(--accent-blue-mid);
             color: var(--accent-blue);
-            padding: 0.1rem 0.4rem;
-            border-radius: 4px;
-            font-size: 0.65rem;
+            padding: 0.1rem 0.45rem;
+            border-radius: var(--radius-pill);
+            font-size: 0.62rem;
             font-weight: 600;
         }
 
-        /* Chat Panel */
+        .panel-badge-green {
+            background: var(--accent-green-light);
+            border: 1px solid rgba(5, 150, 105, 0.15);
+            color: var(--accent-green);
+        }
+
+        .panel-badge-purple {
+            background: var(--accent-purple-light);
+            border: 1px solid rgba(124, 58, 237, 0.15);
+            color: var(--accent-purple);
+        }
+
+        /* ============================================================
+           CHAT PANEL
+           ============================================================ */
         .chat-container {
             display: flex;
             flex-direction: column;
@@ -410,48 +566,62 @@
 
         .chat-messages {
             flex: 1;
-            padding: 0.85rem;
+            padding: 0.75rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 0.65rem;
-            background: rgba(0, 0, 0, 0.15);
-            font-size: 0.78rem;
+            gap: 0.55rem;
+            background: var(--bg-panel);
+            font-size: 0.76rem;
         }
 
         .chat-message {
             max-width: 88%;
             padding: 0.5rem 0.75rem;
-            border-radius: 8px;
-            line-height: 1.4;
+            border-radius: var(--radius-md);
+            line-height: 1.5;
             animation: fadeIn 0.25s ease;
         }
 
         .message-user {
-            background: rgba(188, 140, 255, 0.12);
-            border: 1px solid rgba(188, 140, 255, 0.2);
+            background: var(--accent-blue-light);
+            border: 1px solid var(--accent-blue-mid);
             color: var(--text-primary);
             align-self: flex-end;
             border-bottom-right-radius: 2px;
         }
 
         .message-system {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border-color);
+            background: var(--bg-base);
+            border: 1px solid var(--border-primary);
             color: var(--text-secondary);
             align-self: flex-start;
             border-bottom-left-radius: 2px;
         }
 
+        .pymol-code-block {
+            font-family: 'JetBrains Mono', monospace;
+            background: #1E293B !important;
+            color: #86EFAC !important;
+            border-left: 3px solid var(--accent-purple);
+            padding: 0.5rem 0.65rem;
+            margin-top: 0.4rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            overflow-x: auto;
+        }
+
         .chat-input-bar {
             padding: 0.5rem;
-            background: rgba(0, 0, 0, 0.1);
-            border-top: 1px solid var(--border-color);
+            background: var(--bg-base);
+            border-top: 1px solid var(--border-subtle);
             display: flex;
             gap: 0.4rem;
         }
 
-        /* Predictor Results */
+        /* ============================================================
+           PREDICTIONS PANEL
+           ============================================================ */
         .predictions-container {
             display: flex;
             flex-direction: column;
@@ -469,64 +639,42 @@
         .predictions-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.72rem;
+            font-size: 0.7rem;
             text-align: left;
         }
 
         .predictions-table th {
             padding: 0.4rem 0.5rem;
-            border-bottom: 2px solid var(--border-color);
+            border-bottom: 2px solid var(--border-primary);
             color: var(--text-secondary);
             font-weight: 600;
+            background: var(--bg-base);
+            position: sticky;
+            top: 0;
         }
 
         .predictions-table td {
             padding: 0.4rem 0.5rem;
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-subtle);
             font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
         }
 
         .predictions-table tr {
-            transition: background-color 0.15s ease;
-        }
-
-        .predictions-table tbody tr:nth-child(odd) {
-            background: rgba(22, 27, 34, 0.5);
+            transition: background-color 0.12s ease;
         }
 
         .predictions-table tbody tr:nth-child(even) {
-            background: rgba(22, 27, 34, 0.3);
+            background: var(--bg-base);
         }
 
-        .predictions-table tr:hover {
+        .predictions-table tbody tr:hover {
             background: var(--bg-hover) !important;
         }
 
-        .repurposing-table tr {
-            transition: background-color 0.15s ease;
-        }
-
-        .repurposing-table tbody tr:nth-child(odd) {
-            background: rgba(22, 27, 34, 0.5);
-        }
-
-        .repurposing-table tbody tr:nth-child(even) {
-            background: rgba(22, 27, 34, 0.3);
-        }
-
-        .repurposing-table tr:hover {
-            background: var(--bg-hover) !important;
-        }
-
-        .variance-indicator {
-            display: inline-block;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            margin-right: 5px;
-        }
-
-        /* Repurposing Results */
+        /* ============================================================
+           REPURPOSING PANEL
+           ============================================================ */
         .repurposing-container {
             display: flex;
             flex-direction: column;
@@ -544,24 +692,50 @@
         .repurposing-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.72rem;
+            font-size: 0.7rem;
             text-align: left;
         }
 
         .repurposing-table th {
             padding: 0.4rem 0.5rem;
-            border-bottom: 2px solid var(--border-color);
+            border-bottom: 2px solid var(--border-primary);
             color: var(--text-secondary);
             font-weight: 600;
+            background: var(--bg-base);
+            position: sticky;
+            top: 0;
         }
 
         .repurposing-table td {
             padding: 0.4rem 0.5rem;
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-subtle);
             font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
         }
 
-        /* Checkpoint Panel */
+        .repurposing-table tr {
+            transition: background-color 0.12s ease;
+        }
+
+        .repurposing-table tbody tr:nth-child(even) {
+            background: var(--bg-base);
+        }
+
+        .repurposing-table tbody tr:hover {
+            background: var(--bg-hover) !important;
+        }
+
+        .variance-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        /* ============================================================
+           CHECKPOINT PANEL
+           ============================================================ */
         .checkpoint-container {
             display: flex;
             flex-direction: column;
@@ -571,41 +745,43 @@
 
         .checkpoint-body {
             flex: 1;
-            padding: 0.6rem 0.8rem;
-            font-size: 0.72rem;
+            padding: 0.55rem 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.66rem;
             overflow-y: auto;
-            background: #090D13;
-            color: var(--accent-blue);
+            background: #1E293B;
+            color: #94A3B8;
             display: flex;
             flex-direction: column;
-            gap: 0.3rem;
+            gap: 0.25rem;
         }
 
         .checkpoint-log-line {
             display: flex;
             gap: 0.4rem;
-            line-height: 1.35;
+            line-height: 1.4;
         }
 
         .checkpoint-time {
-            color: var(--text-secondary);
-            min-width: 58px;
-            font-family: 'JetBrains Mono', monospace;
+            color: #64748B;
+            min-width: 54px;
         }
 
         .checkpoint-success {
-            color: var(--success);
+            color: #4ADE80;
         }
 
         .checkpoint-warning {
-            color: var(--warning);
-        }
-        
-        .checkpoint-error {
-            color: var(--accent-pink);
+            color: #FBBF24;
         }
 
-        /* Element styling for predictions */
+        .checkpoint-error {
+            color: #F87171;
+        }
+
+        /* ============================================================
+           ELEMENT STYLING
+           ============================================================ */
         .element-C { color: var(--element-C); }
         .element-O { color: var(--element-O); }
         .element-N { color: var(--element-N); }
@@ -613,6 +789,7 @@
         .element-P { color: var(--element-P); }
         .element-S { color: var(--element-S); }
 
+        .element-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
         .element-dot.element-C { background-color: var(--element-C); }
         .element-dot.element-O { background-color: var(--element-O); }
         .element-dot.element-N { background-color: var(--element-N); }
@@ -620,47 +797,61 @@
         .element-dot.element-P { background-color: var(--element-P); }
         .element-dot.element-S { background-color: var(--element-S); }
 
-        /* Animations & Custom Scrollbars */
+        /* ============================================================
+           ANIMATIONS
+           ============================================================ */
         @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.8; }
-            50% { transform: scale(1.08); opacity: 1; }
-            100% { transform: scale(1); opacity: 0.8; }
+            0%   { transform: scale(1); opacity: 0.85; }
+            50%  { transform: scale(1.06); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.85; }
         }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(4px); }
-            to { opacity: 1; transform: translateY(0); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
         @keyframes borderSlideIn {
             from { transform: scaleY(0); opacity: 0; }
-            to { transform: scaleY(1); opacity: 1; }
+            to   { transform: scaleY(1); opacity: 1; }
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* ============================================================
+           SCROLLBARS
+           ============================================================ */
         ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
+            width: 5px;
+            height: 5px;
         }
         ::-webkit-scrollbar-track {
             background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 2px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.15);
+            background: rgba(0, 0, 0, 0.18);
         }
 
-        /* Responsive Design */
+        /* ============================================================
+           RESPONSIVE DESIGN
+           ============================================================ */
         @media (max-width: 1280px) {
             .right-sidebar {
                 width: 320px;
                 min-width: 320px;
             }
-
             .panel-title {
-                font-size: 0.75rem;
+                font-size: 0.72rem;
             }
         }
 
@@ -668,22 +859,19 @@
             .workspace {
                 flex-direction: column-reverse;
             }
-
             .right-sidebar {
                 width: 100%;
                 min-width: 100%;
                 height: auto;
                 border-left: none;
-                border-top: 1px solid var(--border-color);
+                border-top: 1px solid var(--border-primary);
                 grid-template-rows: auto auto auto auto;
                 max-height: 40vh;
                 overflow-y: auto;
             }
-
             .panel {
                 min-height: 100px;
             }
-
             .canvas-area {
                 min-height: 50vh;
             }
@@ -692,28 +880,28 @@
         @media (max-width: 768px) {
             .left-rail {
                 width: 44px;
+                min-width: 44px;
                 padding: 0.5rem 0;
-                gap: 0.6rem;
+                gap: 0.4rem;
             }
-
             .rail-btn {
                 width: 32px;
                 height: 32px;
-                font-size: 0.7rem;
             }
-
+            .rail-btn-element {
+                width: 28px;
+                height: 28px;
+                font-size: 0.65rem;
+            }
             header {
                 padding: 0 0.75rem;
             }
-
             h1 {
-                font-size: 1rem;
+                font-size: 0.95rem;
             }
-
             .top-badge {
                 display: none;
             }
-
             .right-sidebar {
                 max-height: 35vh;
             }
@@ -722,35 +910,33 @@
         @media (max-width: 480px) {
             .left-rail {
                 width: 40px;
-                gap: 0.4rem;
+                min-width: 40px;
+                gap: 0.3rem;
             }
-
             .rail-btn {
                 width: 28px;
                 height: 28px;
             }
-
             .panel-title {
                 font-size: 0.65rem;
             }
-
             input, textarea {
-                font-size: 16px;
+                font-size: 16px; /* prevent iOS zoom */
             }
         }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 <body>
 
     <header>
         <div class="logo-container">
             <div class="logo-glow"></div>
-            <h1>KineticSketch AI</h1>
-            <span class="top-badge">Molecular Dynamics Workspace</span>
+            <h1>Kinetic<span>Sketch</span> AI</h1>
         </div>
-        <div style="font-size: 0.72rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; gap: 0.5rem;">
-            <span style="display:inline-block; width:6px; height:6px; background-color:var(--success); border-radius:50%;"></span>
-            Analysis Engine Ready
+        <div class="status-indicator">
+            <span class="status-dot"></span>
+            Ready
         </div>
     </header>
 
@@ -759,54 +945,42 @@
         <div class="left-rail">
             <span class="rail-section-label">Mode</span>
             <button id="btnDraw" class="rail-btn active" data-tooltip="Draw Tool" onclick="setMode('draw')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                <i class="fa-solid fa-pen" style="font-size: 14px;"></i>
             </button>
             <button id="btnMove" class="rail-btn" data-tooltip="Move / Reposition" onclick="setMode('move')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"></path></svg>
+                <i class="fa-solid fa-arrows-up-down-left-right" style="font-size: 14px;"></i>
             </button>
             <button id="btnErase" class="rail-btn" data-tooltip="Erase Atom/Bond" onclick="setMode('erase')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21H7zM5 11l9 9"></path></svg>
+                <i class="fa-solid fa-eraser" style="font-size: 14px;"></i>
             </button>
 
             <div class="rail-divider"></div>
             <span class="rail-section-label">Atom</span>
-            
-            <button class="rail-btn active-element" data-tooltip="Carbon (C)" onclick="setActiveElement('C', this)" style="color: var(--element-C);">
-                <span class="element-dot element-C"></span>C
-            </button>
-            <button class="rail-btn" data-tooltip="Nitrogen (N)" onclick="setActiveElement('N', this)" style="color: var(--element-N);">
-                <span class="element-dot element-N"></span>N
-            </button>
-            <button class="rail-btn" data-tooltip="Oxygen (O)" onclick="setActiveElement('O', this)" style="color: var(--element-O);">
-                <span class="element-dot element-O"></span>O
-            </button>
-            <button class="rail-btn" data-tooltip="Hydrogen (H)" onclick="setActiveElement('H', this)" style="color: var(--element-H);">
-                <span class="element-dot element-H"></span>H
-            </button>
-            <button class="rail-btn" data-tooltip="Phosphorus (P)" onclick="setActiveElement('P', this)" style="color: var(--element-P);">
-                <span class="element-dot element-P"></span>P
-            </button>
-            <button class="rail-btn" data-tooltip="Sulfur (S)" onclick="setActiveElement('S', this)" style="color: var(--element-S);">
-                <span class="element-dot element-S"></span>S
-            </button>
+
+            <button class="rail-btn-element active-element" data-tooltip="Carbon (C)" onclick="setActiveElement('C', this)" style="color: var(--element-C);">C</button>
+            <button class="rail-btn-element" data-tooltip="Nitrogen (N)" onclick="setActiveElement('N', this)" style="color: var(--element-N);">N</button>
+            <button class="rail-btn-element" data-tooltip="Oxygen (O)" onclick="setActiveElement('O', this)" style="color: var(--element-O);">O</button>
+            <button class="rail-btn-element" data-tooltip="Hydrogen (H)" onclick="setActiveElement('H', this)" style="color: var(--element-H);">H</button>
+            <button class="rail-btn-element" data-tooltip="Phosphorus (P)" onclick="setActiveElement('P', this)" style="color: var(--element-P);">P</button>
+            <button class="rail-btn-element" data-tooltip="Sulfur (S)" onclick="setActiveElement('S', this)" style="color: var(--element-S);">S</button>
 
             <div class="rail-divider"></div>
             <span class="rail-section-label">Bond</span>
 
             <button id="btnBond1" class="rail-btn active" data-tooltip="Single Bond" onclick="setBondType(1)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <i class="fa-solid fa-minus" style="font-size: 14px;"></i>
             </button>
             <button id="btnBond2" class="rail-btn" data-tooltip="Double Bond" onclick="setBondType(2)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="9" x2="19" y2="9"></line><line x1="5" y1="15" x2="19" y2="15"></line></svg>
+                <i class="fa-solid fa-equals" style="font-size: 14px;"></i>
             </button>
             <button id="btnBond3" class="rail-btn" data-tooltip="Triple Bond" onclick="setBondType(3)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="7" x2="19" y2="7"></line><line x1="5" y1="12" x2="19" y2="12"></line><line x1="5" y1="17" x2="19" y2="17"></line></svg>
+                <i class="fa-solid fa-bars" style="font-size: 14px;"></i>
             </button>
 
             <div class="rail-divider"></div>
-            
-            <button class="rail-btn" data-tooltip="Clear Canvas" onclick="clearCanvas()" style="color: var(--accent-pink);">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"></path></svg>
+
+            <button class="rail-btn" data-tooltip="Clear Canvas" onclick="clearCanvas()" style="color: var(--accent-red);">
+                <i class="fa-solid fa-trash-can" style="font-size: 14px;"></i>
             </button>
         </div>
 
@@ -814,12 +988,10 @@
         <div class="canvas-area">
             <div class="canvas-header">
                 <div class="canvas-title">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                    <i class="fa-solid fa-circle-nodes" style="font-size: 14px;"></i>
                     2D Molecular Sketchpad
                 </div>
-                <div style="font-size: 0.72rem; color: var(--text-secondary);">
-                    Snap-grid enabled
-                </div>
+
             </div>
 
             <!-- Canvas Container -->
@@ -832,32 +1004,31 @@
                 <div class="smiles-wrapper">
                     <!-- Hidden Taipy inputs -->
                     <div class="taipy-bridge-hidden">
-                        <taipy:input value="{smiles_input}" id="taipy_smiles_input" />
-                        <taipy:input value="{canvas_payload}" id="taipy_canvas_payload" />
+                        <taipy:input value="{smiles_input}" id="taipy_smiles_input"></taipy:input>
+                        <taipy:input value="{canvas_payload}" id="taipy_canvas_payload"></taipy:input>
                     </div>
                     <!-- Visible styled text input -->
-                    <input type="text" id="visible_smiles_input" class="premium-input" placeholder="Enter molecular SMILES representation (e.g. CC(=O)O, C1=CC=CC=C1) and hit Render..." onkeydown="if(event.key === 'Enter') triggerSmilesPasted()" />
+                    <input type="text" id="visible_smiles_input" class="premium-input" placeholder="Enter SMILES (e.g. CC(=O)O, C1=CC=CC=C1) and hit Render..." onkeydown="if(event.key === 'Enter') triggerSmilesPasted()"></input>
                 </div>
                 <button class="premium-btn" onclick="triggerSmilesPasted()">Render SMILES</button>
             </div>
         </div>
 
-        <!-- Right Sidebars (380px Grid layout) -->
+        <!-- Right Sidebar Panel Stack -->
         <div class="right-sidebar">
-            
+
             <!-- Panel 1: PyMOL Chat Interceptor -->
             <div class="panel chat-container">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                        PyMOL Assistant
+                        <i class="fa-solid fa-comments icon-blue"></i>
+                        PyMOL Chat
                     </div>
-                    <span class="panel-badge">Visualizer</span>
                 </div>
-                
+
                 <div class="chat-messages" id="chatMessages">
                     <div class="chat-message message-system">
-                        Describe how you want the 3D molecule displayed in PyMOL.
+                        Describe your desired 3D visualization and I'll generate the corresponding PyMOL commands.
                     </div>
                     <!-- Taipy-injected historical log list -->
                     <div id="taipy_chat_log" style="display: none;">
@@ -869,10 +1040,10 @@
                 <div class="chat-input-bar">
                     <!-- Hidden Taipy inputs for chat -->
                     <div class="taipy-bridge-hidden">
-                        <taipy:input value="{chat_prompt}" id="taipy_chat_prompt" />
-                        <taipy:button label="Send" id="taipy_chat_send_btn" on_action="on_chat_send" />
+                        <taipy:input value="{chat_prompt}" id="taipy_chat_prompt"></taipy:input>
+                        <taipy:button label="Send" id="taipy_chat_send_btn" on_action="on_chat_send"></taipy:button>
                     </div>
-                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Describe the PyMOL view..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
+                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type PyMOL visual commands..." onkeydown="if(event.key === 'Enter') triggerChatSend()"></input>
                     <button class="premium-btn" onclick="triggerChatSend()">Send</button>
                 </div>
             </div>
@@ -881,10 +1052,9 @@
             <div class="panel predictions-container">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
-                        MDRepo Conformer Dynamics Predictor
+                        <i class="fa-solid fa-chart-line icon-green"></i>
+                        Conformer Predictions
                     </div>
-                    <span class="panel-badge" style="background: rgba(63, 185, 80, 0.1); border-color: rgba(63, 185, 80, 0.15); color: var(--success);">Online</span>
                 </div>
                 <div class="predictions-body">
                     <taipy:text value="{predictions_html}" raw="true" />
@@ -895,10 +1065,9 @@
             <div class="panel repurposing-container">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01"></path></svg>
-                        PDB Drug Repurposing Target Search
+                        <i class="fa-solid fa-tags icon-purple"></i>
+                        Drug Repurposing
                     </div>
-                    <span class="panel-badge" style="background: rgba(188, 140, 255, 0.1); border-color: rgba(188, 140, 255, 0.15); color: var(--accent-purple);">Morgan Similarity</span>
                 </div>
                 <div class="repurposing-body">
                     <taipy:text value="{repurposing_html}" raw="true" />
@@ -909,11 +1078,8 @@
             <div class="panel checkpoint-container">
                 <div class="panel-header">
                     <div class="panel-title">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2"></path></svg>
-                        Analysis Progress
-                    </div>
-                    <div style="font-size: 0.65rem; color: var(--text-secondary);">
-                        Live
+                        <i class="fa-solid fa-database icon-gray"></i>
+                        Activity Log
                     </div>
                 </div>
                 <div class="checkpoint-body" id="checkpointBody">
@@ -926,541 +1092,10 @@
 
     <!-- Hidden element that updates whenever canvas_payload is modified on backend -->
     <div id="canvas_payload_watcher" style="display: none;">
-        <taipy:text value="{canvas_payload}" />
+        <taipy:text value="{canvas_payload}" raw="true" />
     </div>
 
     <!-- Script section for Canvas 2D Interaction -->
-    <script>
-        const APP_DEBUG = false;
-        function debugLog(message, detail) {
-            if (APP_DEBUG) {
-                if (detail === undefined) {
-                    console.log(message);
-                } else {
-                    console.log(message, detail);
-                }
-            }
-        }
-
-        // React Input Value Setter Utility
-        function setReactInputValue(containerId, value) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            const input = container.querySelector("input") || container.querySelector("textarea");
-            if (!input) return;
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            nativeInputValueSetter.call(input, value);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-
-        // Trigger action on Taipy Button
-        function clickTaipyButton(buttonId) {
-            const btn = document.getElementById(buttonId);
-            if (btn) {
-                const clickTarget = btn.querySelector("button") || btn;
-                clickTarget.click();
-            }
-        }
-
-        // SMILES pasting bridge
-        function triggerSmilesPasted() {
-            const smilesVal = document.getElementById("visible_smiles_input").value;
-            if (!smilesVal) return;
-            
-            // Set the Taipy smiles_input state
-            setReactInputValue("taipy_smiles_input", smilesVal);
-            debugLog("SMILES sent to backend:", smilesVal);
-        }
-
-        // Chat prompts bridge
-        function triggerChatSend() {
-            const chatVal = document.getElementById("visible_chat_prompt").value;
-            if (!chatVal) return;
-            
-            // Set Taipy state
-            setReactInputValue("taipy_chat_prompt", chatVal);
-            
-            // Clear input box
-            document.getElementById("visible_chat_prompt").value = "";
-            
-            // Click Send Button
-            setTimeout(() => {
-                clickTaipyButton("taipy_chat_send_btn");
-            }, 50);
-        }
-
-        // Sync Chat Logs from hidden Taipy DIV
-        function syncChatLogs() {
-            const src = document.getElementById("taipy_chat_log");
-            const dest = document.getElementById("dynamicChatLog");
-            if (src && dest) {
-                dest.innerHTML = src.innerHTML;
-                
-                // Scroll chat to bottom
-                const container = document.getElementById("chatMessages");
-                if (container) {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }
-        }
-
-        // Setup MutationObserver on Chat Logs and Canvas Payload
-        window.addEventListener('load', () => {
-            // Watch for Chat Logs
-            const chatWatcher = document.getElementById("taipy_chat_log");
-            if (chatWatcher) {
-                const chatObserver = new MutationObserver(() => {
-                    syncChatLogs();
-                });
-                chatObserver.observe(chatWatcher, { childList: true, subtree: true, characterData: true });
-            }
-
-            // Sync visible SMILES input if changed from backend
-            const backendSmilesWatcher = document.getElementById("taipy_smiles_input");
-            if (backendSmilesWatcher) {
-                const smilesObserver = new MutationObserver(() => {
-                    const input = backendSmilesWatcher.querySelector("input") || backendSmilesWatcher.querySelector("textarea");
-                    if (input) {
-                        document.getElementById("visible_smiles_input").value = input.value;
-                    }
-                });
-                smilesObserver.observe(backendSmilesWatcher, { childList: true, subtree: true, attributes: true });
-            }
-
-            // Watch for Canvas Redraw payloads from Backend
-            const payloadWatcher = document.getElementById("canvas_payload_watcher");
-            if (payloadWatcher) {
-                const payloadObserver = new MutationObserver(() => {
-                    const val = payloadWatcher.innerText || payloadWatcher.textContent;
-                    if (val && val.trim() && val !== lastSentPayload) {
-                        try {
-                            const data = JSON.parse(val);
-                            loadCanvasData(data);
-                        } catch (e) {
-                            debugLog("Failed to parse canvas payload:", e);
-                        }
-                    }
-                });
-                payloadObserver.observe(payloadWatcher, { childList: true, subtree: true, characterData: true });
-            }
-
-            // Scroll Checkpoints
-            const cpBody = document.getElementById("checkpointBody");
-            if (cpBody) {
-                const cpObserver = new MutationObserver(() => {
-                    cpBody.scrollTop = cpBody.scrollHeight;
-                });
-                cpObserver.observe(cpBody, { childList: true, subtree: true });
-            }
-
-            // Setup Canvas size
-            resizeCanvas();
-            drawGrid();
-        });
-
-        // ==========================================
-        // 2D Molecular Sketcher Canvas Engine (HTML5)
-        // ==========================================
-        const canvas = document.getElementById("molCanvas");
-        const ctx = canvas.getContext("2d");
-        let activeMode = "draw"; // "draw", "move", "erase"
-        let activeElement = "C";
-        let activeBondType = 1; // 1, 2, 3
-
-        let atoms = [];
-        let bonds = [];
-        let nextAtomId = 1;
-        
-        let lastSentPayload = "";
-
-        // Dragging & Interaction variables
-        let selectedAtom = null;
-        let hoveredAtom = null;
-        let dragStartAtom = null;
-        let isDragging = false;
-        let dragX = 0;
-        let dragY = 0;
-        let snapGrid = 15;
-
-        // Custom curated harmonized CPK Colors matching Inter dark elements
-        const elementColors = {
-            'C': '#8B949E',
-            'O': '#F778BA',
-            'N': '#58A6FF',
-            'H': '#F0F6FC',
-            'P': '#F58C4F',
-            'S': '#D29922'
-        };
-
-        const atomRadius = 14;
-
-        function resizeCanvas() {
-            const container = document.getElementById("canvasContainer");
-            if (!container) return;
-            canvas.width = container.clientWidth;
-            canvas.height = container.clientHeight;
-            redraw();
-        }
-
-        window.addEventListener('resize', resizeCanvas);
-
-        function setMode(mode) {
-            activeMode = mode;
-            document.getElementById("btnDraw").classList.toggle("active", mode === "draw");
-            document.getElementById("btnMove").classList.toggle("active", mode === "move");
-            document.getElementById("btnErase").classList.toggle("active", mode === "erase");
-        }
-
-        function setActiveElement(el, btn) {
-            activeElement = el;
-            document.querySelectorAll(".left-rail .rail-btn").forEach(b => {
-                if (b.innerText && (b.innerText.trim() === "C" || b.innerText.trim() === "N" || b.innerText.trim() === "O" || b.innerText.trim() === "H" || b.innerText.trim() === "P" || b.innerText.trim() === "S")) {
-                    b.classList.remove("active-element");
-                }
-            });
-            btn.classList.add("active-element");
-        }
-
-        function setBondType(type) {
-            activeBondType = type;
-            document.getElementById("btnBond1").classList.toggle("active", type === 1);
-            document.getElementById("btnBond2").classList.toggle("active", type === 2);
-            document.getElementById("btnBond3").classList.toggle("active", type === 3);
-        }
-
-        function clearCanvas() {
-            atoms = [];
-            bonds = [];
-            nextAtomId = 1;
-            redraw();
-            pushPayload();
-        }
-
-        // Find atom at (x, y) coordinates
-        function getAtomAt(x, y) {
-            return atoms.find(atom => {
-                const dist = Math.hypot(atom.x - x, atom.y - y);
-                return dist < atomRadius + 6;
-            }) || null;
-        }
-
-        // Draw coordinate grid (subtle, softer opacity)
-        function drawGrid() {
-            ctx.strokeStyle = "rgba(240, 246, 252, 0.015)";
-            ctx.lineWidth = 1;
-            const gridSz = 40;
-            for (let x = 0; x < canvas.width; x += gridSz) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
-                ctx.stroke();
-            }
-            for (let y = 0; y < canvas.height; y += gridSz) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
-                ctx.stroke();
-            }
-        }
-
-        // Main redraw function
-        function redraw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawGrid();
-
-            // 1. Draw Bonds
-            bonds.forEach(bond => {
-                const a1 = atoms.find(a => a.id === bond.source);
-                const a2 = atoms.find(a => a.id === bond.target);
-                if (!a1 || !a2) return;
-
-                ctx.strokeStyle = "rgba(240, 246, 252, 0.35)";
-                ctx.lineWidth = 3;
-
-                // Single, Double, Triple lines
-                const angle = Math.atan2(a2.y - a1.y, a2.x - a1.x);
-                const offset_x = Math.sin(angle) * 5;
-                const offset_y = Math.cos(angle) * 5;
-
-                if (bond.type === 1) {
-                    ctx.beginPath();
-                    ctx.moveTo(a1.x, a1.y);
-                    ctx.lineTo(a2.x, a2.y);
-                    ctx.stroke();
-                } else if (bond.type === 2) {
-                    ctx.beginPath();
-                    ctx.moveTo(a1.x - offset_x, a1.y + offset_y);
-                    ctx.lineTo(a2.x - offset_x, a2.y + offset_y);
-                    ctx.moveTo(a1.x + offset_x, a1.y - offset_y);
-                    ctx.lineTo(a2.x + offset_x, a2.y - offset_y);
-                    ctx.stroke();
-                } else if (bond.type === 3) {
-                    ctx.beginPath();
-                    ctx.moveTo(a1.x, a1.y);
-                    ctx.lineTo(a2.x, a2.y);
-                    ctx.moveTo(a1.x - offset_x * 1.5, a1.y + offset_y * 1.5);
-                    ctx.lineTo(a2.x - offset_x * 1.5, a2.y + offset_y * 1.5);
-                    ctx.moveTo(a1.x + offset_x * 1.5, a1.y - offset_y * 1.5);
-                    ctx.lineTo(a2.x + offset_x * 1.5, a2.y - offset_y * 1.5);
-                    ctx.stroke();
-                }
-            });
-
-            // Draw active bond line while drawing
-            if (activeMode === "draw" && isDragging && dragStartAtom) {
-                ctx.strokeStyle = "rgba(88, 166, 255, 0.5)";
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 5]);
-                ctx.beginPath();
-                ctx.moveTo(dragStartAtom.x, dragStartAtom.y);
-                ctx.lineTo(dragX, dragY);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            // 2. Draw Atoms
-            atoms.forEach(atom => {
-                const color = elementColors[atom.element] || '#ffffff';
-                const isHovered = hoveredAtom && hoveredAtom.id === atom.id;
-
-                // Outer circle background
-                ctx.fillStyle = "#161B22";
-                ctx.strokeStyle = isHovered ? "var(--accent-blue)" : "rgba(240,246,252,0.15)";
-                ctx.lineWidth = isHovered ? 2 : 1;
-                ctx.beginPath();
-                ctx.arc(atom.x, atom.y, atomRadius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-
-                // Hover glow
-                if (isHovered) {
-                    ctx.shadowColor = "rgba(88, 166, 255, 0.4)";
-                    ctx.shadowBlur = 8;
-                }
-
-                // Element text
-                ctx.fillStyle = color;
-                ctx.font = "bold 13px 'Inter', sans-serif";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText(atom.element, atom.x, atom.y);
-
-                // Clear shadow
-                ctx.shadowBlur = 0;
-            });
-        }
-
-        // Handle mouse canvas actions
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const clickedAtom = getAtomAt(x, y);
-
-            if (activeMode === "draw") {
-                if (clickedAtom) {
-                    // Start drawing bond
-                    dragStartAtom = clickedAtom;
-                    isDragging = true;
-                    dragX = x;
-                    dragY = y;
-                } else {
-                    // Create new atom
-                    const newAtom = {
-                        id: nextAtomId++,
-                        x: Math.round(x / snapGrid) * snapGrid,
-                        y: Math.round(y / snapGrid) * snapGrid,
-                        element: activeElement
-                    };
-                    atoms.push(newAtom);
-                    redraw();
-                    pushPayload();
-                }
-            } else if (activeMode === "move") {
-                if (clickedAtom) {
-                    selectedAtom = clickedAtom;
-                    isDragging = true;
-                }
-            } else if (activeMode === "erase") {
-                if (clickedAtom) {
-                    // Delete atom and connected bonds
-                    atoms = atoms.filter(a => a.id !== clickedAtom.id);
-                    bonds = bonds.filter(b => b.source !== clickedAtom.id && b.target !== clickedAtom.id);
-                    redraw();
-                    pushPayload();
-                } else {
-                    // Check if clicked a bond
-                    bonds = bonds.filter(bond => {
-                        const a1 = atoms.find(a => a.id === bond.source);
-                        const a2 = atoms.find(a => a.id === bond.target);
-                        if (!a1 || !a2) return true;
-                        
-                        // Distance from point to line segment
-                        const d = distToSegment({x, y}, a1, a2);
-                        return d > 8; // If within 8px, delete it
-                    });
-                    redraw();
-                    pushPayload();
-                }
-            }
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            const oldHover = hoveredAtom;
-            hoveredAtom = getAtomAt(x, y);
-
-            if (oldHover !== hoveredAtom) {
-                redraw();
-            }
-
-            if (isDragging) {
-                if (activeMode === "draw") {
-                    dragX = x;
-                    dragY = y;
-                    redraw();
-                } else if (activeMode === "move" && selectedAtom) {
-                    selectedAtom.x = Math.round(x / snapGrid) * snapGrid;
-                    selectedAtom.y = Math.round(y / snapGrid) * snapGrid;
-                    redraw();
-                }
-            }
-        });
-
-        canvas.addEventListener('mouseup', (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            if (activeMode === "draw" && dragStartAtom) {
-                const targetAtom = getAtomAt(x, y);
-                if (targetAtom && targetAtom.id !== dragStartAtom.id) {
-                    // Check if bond already exists
-                    const existingBond = bonds.find(b => 
-                        (b.source === dragStartAtom.id && b.target === targetAtom.id) ||
-                        (b.source === targetAtom.id && b.target === dragStartAtom.id)
-                    );
-
-                    if (existingBond) {
-                        // Toggle bond type or update it
-                        existingBond.type = activeBondType;
-                    } else {
-                        // Create a new bond
-                        bonds.push({
-                            source: dragStartAtom.id,
-                            target: targetAtom.id,
-                            type: activeBondType
-                        });
-                    }
-                    pushPayload();
-                }
-                dragStartAtom = null;
-            }
-
-            if (activeMode === "move" && selectedAtom) {
-                selectedAtom = null;
-                pushPayload();
-            }
-
-            redraw();
-        });
-
-        // Math utilities for bond click-erasure
-        function dist2(v, w) { return (v.x - w.x)**2 + (v.y - w.y)**2; }
-        function distToSegmentSquared(p, v, w) {
-            const l2 = dist2(v, w);
-            if (l2 === 0) return dist2(p, v);
-            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
-            t = Math.max(0, Math.min(1, t));
-            return dist2(p, { x: v.x + t * (w.x - v.x), y: v.y + t * (w.y - v.y) });
-        }
-        function distToSegment(p, v, w) { return Math.sqrt(distToSegmentSquared(p, v, w)); }
-
-        // PUSH payload from Canvas to Taipy Backend
-        function pushPayload() {
-            const payload = {
-                atoms: atoms.map(a => ({ id: a.id, x: a.x, y: a.y, element: a.element })),
-                bonds: bonds.map(b => ({ source: b.source, target: b.target, type: b.type }))
-            };
-            const payloadStr = JSON.stringify(payload);
-            lastSentPayload = payloadStr;
-            setReactInputValue("taipy_canvas_payload", payloadStr);
-            debugLog("Canvas payload pushed:", payloadStr);
-        }
-
-        // LOAD canvas data from Backend (e.g. from pasted SMILES)
-        function loadCanvasData(data) {
-            if (!data || !data.atoms) return;
-            
-            // Re-scale coordinates to fit canvas nicely
-            atoms = [];
-            bonds = [];
-            
-            if (data.atoms.length === 0) {
-                redraw();
-                return;
-            }
-
-            // Find bounds of loaded data
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            data.atoms.forEach(a => {
-                if (a.x < minX) minX = a.x;
-                if (a.x > maxX) maxX = a.x;
-                if (a.y < minY) minY = a.y;
-                if (a.y > maxY) maxY = a.y;
-            });
-
-            // Center of loaded structure
-            const dataCenterX = (minX + maxX) / 2;
-            const dataCenterY = (minY + maxY) / 2;
-
-            // Center of canvas
-            const canvasCenterX = canvas.width / 2;
-            const canvasCenterY = canvas.height / 2;
-
-            // Determine scaling factor
-            let scale = 50; // default scaling factor for RDKit raw 2D coords
-            if (maxX - minX > 0.1 || maxY - minY > 0.1) {
-                const scaleX = (canvas.width - 200) / (maxX - minX);
-                const scaleY = (canvas.height - 200) / (maxY - minY);
-                scale = Math.min(scaleX, scaleY);
-                // Limit scale to a reasonable size
-                scale = Math.max(20, Math.min(scale, 100));
-            }
-
-            // Load atoms with scaled/centered coords
-            data.atoms.forEach(a => {
-                atoms.push({
-                    id: a.id,
-                    x: Math.round((canvasCenterX + (a.x - dataCenterX) * scale) / snapGrid) * snapGrid,
-                    y: Math.round((canvasCenterY + (a.y - dataCenterY) * scale) / snapGrid) * snapGrid,
-                    element: a.element
-                });
-            });
-
-            // Load bonds
-            if (data.bonds) {
-                data.bonds.forEach(b => {
-                    bonds.push({
-                        source: b.source,
-                        target: b.target,
-                        type: b.type
-                    });
-                });
-            }
-
-            // Find highest atom ID to keep nextAtomId sequential
-            nextAtomId = Math.max(...atoms.map(a => a.id), 0) + 1;
-
-            redraw();
-            debugLog("Canvas loaded structure from backend.");
-        }
-    </script>
+    <script src="/static/sketch.js"></script>
 </body>
 </html>
