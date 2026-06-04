@@ -25,6 +25,9 @@
                 const nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, "value").set;
                 nativeInputValueSetter.call(input, value);
                 input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+                // For Taipy, it often listens to 'blur' or 'keyup' with Enter
+                input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
                 console.log(`setReactInputValue: successfully set ${containerId} to:`, value);
             } catch (e) {
                 console.error(`setReactInputValue: failed to set value for ${containerId}:`, e);
@@ -48,6 +51,11 @@
             // Set the Taipy smiles_input state
             setReactInputValue("taipy_smiles_input", smilesVal);
             console.log("Pasted SMILES sent to Taipy:", smilesVal);
+            
+            // Click Render Button
+            setTimeout(() => {
+                clickTaipyButton("taipy_smiles_btn");
+            }, 50);
         }
 
         // Chat prompts bridge

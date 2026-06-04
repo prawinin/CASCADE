@@ -1008,6 +1008,7 @@
                     <div class="taipy-bridge-hidden">
                         <taipy:input value="{smiles_input}" id="taipy_smiles_input"></taipy:input>
                         <taipy:input value="{canvas_payload}" id="taipy_canvas_payload"></taipy:input>
+                        <taipy:button id="taipy_smiles_btn" on_action="on_smiles_action" style="display:none;"></taipy:button>
                     </div>
                     <!-- Visible styled text input -->
                     <input type="text" id="visible_smiles_input" class="premium-input" placeholder="Enter SMILES (e.g. CC(=O)O, C1=CC=CC=C1) and hit Render..." onkeydown="if(event.key === 'Enter') triggerSmilesPasted()"></input>
@@ -1107,6 +1108,6 @@
     </div>
 
     <!-- Script section for Canvas 2D Interaction -->
-    <script src="/static/sketch.js"></script>
+    <script src="/static/sketch.js?v=2"></script>
 </body>
 </html>

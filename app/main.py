@@ -481,7 +481,13 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
             logger.error(f"Canvas payload processing error: {e}")
 
     elif var_name == "smiles_input":
-        smiles = var_value.strip()
+        # Handle live edits if any, though explicit action is preferred
+        pass
+
+def on_smiles_action(state: State) -> None:
+    """Explicitly handles SMILES submission from the Render button."""
+    try:
+        smiles = state.smiles_input.strip()
         if not smiles:
             return
 
@@ -490,62 +496,56 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
             log_checkpoint_to_ui(state, "Error: SMILES string too long (max 2000 chars)", "error")
             return
 
-        try:
-            # Strict sanitization with RDKit
-            mol = Chem.MolFromSmiles(smiles, sanitize=True)
-            if mol is None:
-                log_checkpoint_to_ui(state, f"Invalid SMILES string: '{smiles[:50]}'", "error")
-                return
+        # Strict sanitization with RDKit
+        mol = Chem.MolFromSmiles(smiles, sanitize=True)
+        if mol is None:
+            log_checkpoint_to_ui(state, f"Invalid SMILES string: '{smiles[:50]}'", "error")
+            return
 
-            # Validate molecule size
-            if mol.GetNumAtoms() > 200:
-                log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
-                return
+        # Validate molecule size
+        if mol.GetNumAtoms() > 200:
+            log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
+            return
 
-            # Calculate 2D coordinates layout
-            rdDepictor.Compute2DCoords(mol)
-            conf = mol.GetConformer()
+        # Calculate 2D coordinates layout
+        rdDepictor.Compute2DCoords(mol)
+        conf = mol.GetConformer()
 
-            # Format canvas rendering coordinate payload
-            canvas_atoms = []
-            for i in range(mol.GetNumAtoms()):
-                atom = mol.GetAtomWithIdx(i)
-                pos = conf.GetAtomPosition(i)
-                canvas_atoms.append({
-                    "id": i + 1,
-                    "x": pos.x * 50.0,
-                    "y": pos.y * 50.0,
-                    "element": atom.GetSymbol()
-                })
+        # Format canvas rendering coordinate payload
+        canvas_atoms = []
+        for i in range(mol.GetNumAtoms()):
+            atom = mol.GetAtomWithIdx(i)
+            pos = conf.GetAtomPosition(i)
+            canvas_atoms.append({
+                "id": i + 1,
+                "x": pos.x * 50.0,
+                "y": pos.y * 50.0,
+                "element": atom.GetSymbol()
+            })
 
-            canvas_bonds = []
-            for bond in mol.GetBonds():
-                bt = bond.GetBondType()
-                b_type = 1
-                if bt == Chem.BondType.DOUBLE: b_type = 2
-                elif bt == Chem.BondType.TRIPLE: b_type = 3
-                
-                canvas_bonds.append({
-                    "source": bond.GetBeginAtomIdx() + 1,
-                    "target": bond.GetEndAtomIdx() + 1,
-                    "type": b_type
-                })
-
-            payload = {
-                "atoms": canvas_atoms,
-                "bonds": canvas_bonds
-            }
+        canvas_bonds = []
+        for bond in mol.GetBonds():
+            bt = bond.GetBondType()
+            b_type = 1
+            if bt == Chem.BondType.DOUBLE: b_type = 2
+            elif bt == Chem.BondType.TRIPLE: b_type = 3
             
-            # Update canvas payload (Observer redraws canvas in browser!)
-            state.canvas_payload = json.dumps(payload)
-            
-            # Run computational pipeline
-            run_molecular_pipeline(state, mol)
+            canvas_bonds.append({
+                "source": bond.GetBeginAtomIdx() + 1,
+                "target": bond.GetEndAtomIdx() + 1,
+                "type": b_type
+            })
 
-        except Exception as e:
-            logger.error(f"SMILES processing error: {e}")
-            log_checkpoint_to_ui(state, f"SMILES Error: Invalid structure", "error")
+        # Set canvas payload to render on frontend
+        payload = json.dumps({"atoms": canvas_atoms, "bonds": canvas_bonds})
+        state.canvas_payload = payload
 
+        # Execute computational dynamics pipeline
+        run_molecular_pipeline(state, mol)
+        
+    except Exception as e:
+        logger.error(f"SMILES action error: {e}")
+        log_checkpoint_to_ui(state, f"Error processing SMILES: {e}", "error")
 
 # =====================================================================
 # SERVER RUN ENTRYPOINT
