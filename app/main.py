@@ -11,6 +11,7 @@ import json
 import logging
 import html as html_module
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 # Setup relative paths so the project can be run from anywhere
@@ -69,7 +70,7 @@ except ImportError:
 
 try:
     from taipy.gui import Gui, Html, State
-    from flask import Flask, jsonify
+    from flask import Flask, jsonify, request
 except ImportError:
     logger.error("Taipy GUI framework not available!")
     Gui = None
@@ -93,6 +94,8 @@ checkpoint_manager = CheckpointManager()
 # =====================================================================
 canvas_payload = "{}"
 smiles_input = ""
+smiles_submit_token = ""
+last_smiles_submission_key = ""
 chat_prompt = ""
 chat_log_html = ""
 predictions_html = "<div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div>"
@@ -335,6 +338,79 @@ def render_repurposing_table(state: State, smiles: str) -> None:
     state.repurposing_html = "\n".join(lines)
 
 
+def process_smiles_submission(state: State, smiles: str, submission_key: Optional[str] = None) -> bool:
+    """Validate a SMILES string, render it to 2D, and run the analysis pipeline."""
+    global last_smiles_submission_key
+    smiles = (smiles or "").strip()
+    if not smiles:
+        return False
+
+    if submission_key and submission_key == last_smiles_submission_key:
+        return False
+
+    try:
+        # Validate SMILES length (max 2000 chars)
+        if len(smiles) > 2000:
+            log_checkpoint_to_ui(state, "Error: SMILES string too long (max 2000 chars)", "error")
+            return False
+
+        # Strict sanitization with RDKit
+        mol = Chem.MolFromSmiles(smiles, sanitize=True)
+        if mol is None:
+            log_checkpoint_to_ui(state, f"Invalid SMILES string: '{smiles[:50]}'", "error")
+            return False
+
+        # Validate molecule size
+        if mol.GetNumAtoms() > 200:
+            log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
+            return False
+
+        # Calculate 2D coordinates layout
+        rdDepictor.Compute2DCoords(mol)
+        conf = mol.GetConformer()
+
+        # Format canvas rendering coordinate payload
+        canvas_atoms = []
+        for i in range(mol.GetNumAtoms()):
+            atom = mol.GetAtomWithIdx(i)
+            pos = conf.GetAtomPosition(i)
+            canvas_atoms.append({
+                "id": i + 1,
+                "x": pos.x * 50.0,
+                "y": pos.y * 50.0,
+                "element": atom.GetSymbol()
+            })
+
+        canvas_bonds = []
+        for bond in mol.GetBonds():
+            bt = bond.GetBondType()
+            b_type = 1
+            if bt == Chem.BondType.DOUBLE:
+                b_type = 2
+            elif bt == Chem.BondType.TRIPLE:
+                b_type = 3
+
+            canvas_bonds.append({
+                "source": bond.GetBeginAtomIdx() + 1,
+                "target": bond.GetEndAtomIdx() + 1,
+                "type": b_type
+            })
+
+        # Set canvas payload to render on frontend
+        payload = json.dumps({"atoms": canvas_atoms, "bonds": canvas_bonds})
+        state.canvas_payload = payload
+
+        # Execute computational dynamics pipeline
+        if submission_key:
+            last_smiles_submission_key = submission_key
+        run_molecular_pipeline(state, mol)
+        return True
+    except Exception as e:
+        logger.error(f"SMILES submission error: {e}")
+        log_checkpoint_to_ui(state, f"Error processing SMILES: {e}", "error")
+        return False
+
+
 # =====================================================================
 # TAIPY STATE REACTIVE BINDINGS (MODULE 1 BRIDGE)
 # =====================================================================
@@ -481,71 +557,44 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
             logger.error(f"Canvas payload processing error: {e}")
 
     elif var_name == "smiles_input":
-        # Handle live edits if any, though explicit action is preferred
+        # Keep the submitted SMILES in state; the explicit submit token triggers processing.
         pass
 
-def on_smiles_action(state: State) -> None:
-    """Explicitly handles SMILES submission from the Render button."""
+    elif var_name == "smiles_submit_token":
+        process_smiles_submission(state, state.smiles_input, str(var_value))
+
+
+def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
+    """Run the SMILES pipeline on a lightweight state object and return serializable output."""
+    response_state = state
+    if response_state is None:
+        response_state = SimpleNamespace(
+            smiles_input="",
+            canvas_payload="{}",
+            predictions_html=predictions_html,
+            repurposing_html=repurposing_html,
+            checkpoint_logs_html=checkpoint_logs_html,
+        )
+
+    success = process_smiles_submission(
+        response_state,
+        smiles,
+        f"api:{smiles}:{datetime.utcnow().isoformat()}",
+    )
+    canvas_payload_obj = {}
     try:
-        smiles = state.smiles_input.strip()
-        if not smiles:
-            return
+        canvas_payload_obj = json.loads(getattr(response_state, "canvas_payload", "{}") or "{}")
+    except Exception:
+        canvas_payload_obj = {}
 
-        # Validate SMILES length (max 2000 chars)
-        if len(smiles) > 2000:
-            log_checkpoint_to_ui(state, "Error: SMILES string too long (max 2000 chars)", "error")
-            return
-
-        # Strict sanitization with RDKit
-        mol = Chem.MolFromSmiles(smiles, sanitize=True)
-        if mol is None:
-            log_checkpoint_to_ui(state, f"Invalid SMILES string: '{smiles[:50]}'", "error")
-            return
-
-        # Validate molecule size
-        if mol.GetNumAtoms() > 200:
-            log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
-            return
-
-        # Calculate 2D coordinates layout
-        rdDepictor.Compute2DCoords(mol)
-        conf = mol.GetConformer()
-
-        # Format canvas rendering coordinate payload
-        canvas_atoms = []
-        for i in range(mol.GetNumAtoms()):
-            atom = mol.GetAtomWithIdx(i)
-            pos = conf.GetAtomPosition(i)
-            canvas_atoms.append({
-                "id": i + 1,
-                "x": pos.x * 50.0,
-                "y": pos.y * 50.0,
-                "element": atom.GetSymbol()
-            })
-
-        canvas_bonds = []
-        for bond in mol.GetBonds():
-            bt = bond.GetBondType()
-            b_type = 1
-            if bt == Chem.BondType.DOUBLE: b_type = 2
-            elif bt == Chem.BondType.TRIPLE: b_type = 3
-            
-            canvas_bonds.append({
-                "source": bond.GetBeginAtomIdx() + 1,
-                "target": bond.GetEndAtomIdx() + 1,
-                "type": b_type
-            })
-
-        # Set canvas payload to render on frontend
-        payload = json.dumps({"atoms": canvas_atoms, "bonds": canvas_bonds})
-        state.canvas_payload = payload
-
-        # Execute computational dynamics pipeline
-        run_molecular_pipeline(state, mol)
-        
-    except Exception as e:
-        logger.error(f"SMILES action error: {e}")
-        log_checkpoint_to_ui(state, f"Error processing SMILES: {e}", "error")
+    return {
+        "ok": success,
+        "smiles": smiles,
+        "canvas_payload": canvas_payload_obj,
+        "predictions_html": getattr(response_state, "predictions_html", predictions_html),
+        "repurposing_html": getattr(response_state, "repurposing_html", repurposing_html),
+        "checkpoint_logs_html": getattr(response_state, "checkpoint_logs_html", checkpoint_logs_html),
+    }
 
 # =====================================================================
 # SERVER RUN ENTRYPOINT
@@ -558,37 +607,66 @@ if __name__ == "__main__":
             logger.warning("Configuration warning: %s", error)
     
     if config.PYMOL_ENABLED:
-        # Pre-spawn PyMOL pipeline dynamically when configured.
         get_pymol_process()
     
-    # Load frontend index template relatively using dynamic path resolution
-    html_path = os.path.join(current_dir, "gui", "index.html")
-    html_page = Html(html_path)
+    # Pure Flask app — serves our index.html directly without Taipy's React shell
+    from flask import Flask, jsonify, request, send_from_directory
+    flask_app = Flask(__name__, static_folder=os.path.join(current_dir, "static"))
 
-    flask_app = Flask(__name__) if Flask is not None else None
+    gui_dir = os.path.join(current_dir, "gui")
 
-    if flask_app is not None:
-        @flask_app.get("/health")
-        def health():
-            return jsonify({
-                "status": "healthy",
-                "environment": config.ENVIRONMENT,
-                "services": {
-                    "rdkit": "available" if Chem is not None else "unavailable",
-                    "torch": "available" if torch is not None else "unavailable",
-                    "pymol": "enabled" if config.PYMOL_ENABLED else "disabled",
-                    "ollama": "enabled" if config.OLLAMA_ENABLED else "disabled",
-                },
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-            })
-    
-    # Run Taipy GUI web server
-    gui = Gui(page=html_page, flask=flask_app)
-    gui.run(
-        title="KineticSketch - Molecular Dynamics Workspace",
-        use_reloader=False,
+    # Serve index.html at root
+    @flask_app.get("/")
+    def index():
+        return send_from_directory(gui_dir, "index.html")
+
+    # Serve any file from gui/ directory (CSS, fonts, etc.)
+    @flask_app.get("/gui/<path:filename>")
+    def gui_file(filename):
+        return send_from_directory(gui_dir, filename)
+
+    @flask_app.get("/health")
+    def health():
+        return jsonify({
+            "status": "healthy",
+            "environment": config.ENVIRONMENT,
+            "services": {
+                "rdkit": "available" if Chem is not None else "unavailable",
+                "torch": "available" if torch is not None else "unavailable",
+                "pymol": "enabled" if config.PYMOL_ENABLED else "disabled",
+                "ollama": "enabled" if config.OLLAMA_ENABLED else "disabled",
+            },
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        })
+
+    @flask_app.post("/api/analyze_smiles")
+    def analyze_smiles():
+        payload = request.get_json(silent=True) or {}
+        smiles = str(payload.get("smiles", "")).strip()
+        if not smiles:
+            return jsonify({"ok": False, "error": "SMILES is required."}), 400
+        response = build_smiles_response(None, smiles)
+        status_code = 200 if response.get("ok") else 422
+        return jsonify(response), status_code
+
+    @flask_app.post("/api/chat")
+    def chat():
+        payload = request.get_json(silent=True) or {}
+        prompt = str(payload.get("prompt", "")).strip()
+        if not prompt:
+            return jsonify({"ok": False, "error": "Prompt is required."}), 400
+        try:
+            cmd, source = query_ollama_for_pymol(prompt)
+            result = execute_pymol_commands([cmd]) if cmd else "No command generated."
+            return jsonify({"ok": True, "command": cmd, "result": result, "source": source})
+        except Exception as e:
+            logger.error(f"Chat API error: {e}")
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+    logger.info(f" * Server starting on http://{config.HOST}:{config.PORT}")
+    flask_app.run(
         host=config.HOST,
         port=config.PORT,
         debug=config.DEBUG,
-        dark_mode=False
+        use_reloader=False,
     )

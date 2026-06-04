@@ -11,23 +11,21 @@
             const tagName = el.tagName.toLowerCase();
             const input = (tagName === "input" || tagName === "textarea") 
                 ? el 
-                : (el.querySelector("input") || el.querySelector("textarea"));
+                : (el.querySelector("input") || el.querySelector("textarea") || el.shadowRoot?.querySelector("input") || el.shadowRoot?.querySelector("textarea"));
                 
-            if (!input) {
-                console.warn("setReactInputValue: input element not found inside:", containerId);
-                return;
-            }
-            
-            const isTextarea = input.tagName.toLowerCase() === "textarea";
-            const proto = isTextarea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-            
             try {
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, "value").set;
-                nativeInputValueSetter.call(input, value);
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (input) {
+                    const isTextarea = input.tagName.toLowerCase() === "textarea";
+                    const proto = isTextarea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(proto, "value").set;
+                    nativeInputValueSetter.call(input, value);
+                } else {
+                    el.value = value;
+                }
+                el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
                 // For Taipy, it often listens to 'blur' or 'keyup' with Enter
-                input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, composed: true }));
                 console.log(`setReactInputValue: successfully set ${containerId} to:`, value);
             } catch (e) {
                 console.error(`setReactInputValue: failed to set value for ${containerId}:`, e);
@@ -44,162 +42,144 @@
         }
 
         // SMILES pasting bridge
-        function triggerSmilesPasted() {
+        async function triggerSmilesPasted() {
             const smilesVal = document.getElementById("visible_smiles_input").value;
-            if (!smilesVal) return;
-            
-            // Set the Taipy smiles_input state
-            setReactInputValue("taipy_smiles_input", smilesVal);
-            console.log("Pasted SMILES sent to Taipy:", smilesVal);
-            
-            // Click Render Button
-            setTimeout(() => {
-                clickTaipyButton("taipy_smiles_btn");
-            }, 50);
-        }
-
-        // Chat prompts bridge
-        function triggerChatSend() {
-            const chatVal = document.getElementById("visible_chat_prompt").value;
-            if (!chatVal) return;
-            
-            // Set Taipy state
-            setReactInputValue("taipy_chat_prompt", chatVal);
-            
-            // Clear input box
-            document.getElementById("visible_chat_prompt").value = "";
-            
-            // Click Send Button
-            setTimeout(() => {
-                clickTaipyButton("taipy_chat_send_btn");
-            }, 50);
-        }
-
-        // General HTML Entity Decoding and Sync Utility
-        function syncContainer(srcId, destId) {
-            const src = document.getElementById(srcId);
-            const dest = document.getElementById(destId);
-            if (src && dest) {
-                const htmlContent = src.innerHTML;
-                if (htmlContent.includes("&lt;") || htmlContent.includes("&gt;") || htmlContent.includes("&amp;lt;") || htmlContent.includes("&amp;gt;")) {
-                    // It is HTML-escaped, so decode the tags from innerText/textContent
-                    dest.innerHTML = src.textContent || src.innerText;
-                } else {
-                    // Not escaped, sync directly
-                    dest.innerHTML = htmlContent;
+            if (!smilesVal) {
+                // If no SMILES input, check if we have drawn something on the canvas
+                if (atoms.length === 0) {
+                    const logBox = document.getElementById("dynamicCheckpointLogs");
+                    if (logBox) {
+                        logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[WARNING]</span> Please draw a molecule or enter a SMILES string to analyze.</div>`;
+                    }
+                    return;
                 }
-            }
-        }
-
-        // Sync Chat Logs from hidden Taipy DIV
-        function syncChatLogs() {
-            syncContainer("taipy_chat_log", "dynamicChatLog");
-            // Scroll chat to bottom
-            const container = document.getElementById("chatMessages");
-            if (container) {
-                container.scrollTop = container.scrollHeight;
-            }
-        }
-
-        let observersInitialized = false;
-        function initializeObservers() {
-            if (observersInitialized) return;
-            
-            const chatWatcher = document.getElementById("taipy_chat_log");
-            const predictionsWatcher = document.getElementById("taipy_predictions_html");
-            const repurposingWatcher = document.getElementById("taipy_repurposing_html");
-            const checkpointWatcher = document.getElementById("taipy_checkpoint_logs");
-            const backendSmilesWatcher = document.getElementById("taipy_smiles_input");
-            const payloadWatcher = document.getElementById("canvas_payload_watcher");
-            
-            // Wait until the essential inputs and watcher elements are loaded by React
-            if (!chatWatcher || !predictionsWatcher || !repurposingWatcher || !checkpointWatcher || !backendSmilesWatcher || !payloadWatcher) {
+                // If we have drawn molecules, we could trigger analysis via canvas payload,
+                // but since canvas payload is already processed via Taipy reactivity,
+                // we just notify the user that analysis is already in progress or completed.
+                const logBox = document.getElementById("dynamicCheckpointLogs");
+                if (logBox) {
+                    logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[INFO]</span> Molecule drawn on canvas is being analyzed automatically. Check the panels for results.</div>`;
+                }
                 return;
             }
-            
-            observersInitialized = true;
-            console.log("Taipy elements successfully mounted. Setting up MutationObservers...");
 
-            // Watch for Chat Logs
-            const chatObserver = new MutationObserver(() => {
-                syncChatLogs();
-            });
-            chatObserver.observe(chatWatcher, { childList: true, subtree: true, characterData: true });
-            syncChatLogs();
-
-            // Watch for Predictions HTML from Backend
-            const predictionsObserver = new MutationObserver(() => {
-                syncContainer("taipy_predictions_html", "dynamicPredictions");
-            });
-            predictionsObserver.observe(predictionsWatcher, { childList: true, subtree: true, characterData: true });
-            syncContainer("taipy_predictions_html", "dynamicPredictions");
-
-            // Watch for Repurposing HTML from Backend
-            const repurposingObserver = new MutationObserver(() => {
-                syncContainer("taipy_repurposing_html", "dynamicRepurposing");
-            });
-            repurposingObserver.observe(repurposingWatcher, { childList: true, subtree: true, characterData: true });
-            syncContainer("taipy_repurposing_html", "dynamicRepurposing");
-
-            // Watch for Checkpoint Logs from Backend
-            const cpBody = document.getElementById("checkpointBody");
-            if (cpBody) {
-                const checkpointObserver = new MutationObserver(() => {
-                    syncContainer("taipy_checkpoint_logs", "dynamicCheckpointLogs");
-                    cpBody.scrollTop = cpBody.scrollHeight;
-                });
-                checkpointObserver.observe(checkpointWatcher, { childList: true, subtree: true, characterData: true });
-                syncContainer("taipy_checkpoint_logs", "dynamicCheckpointLogs");
-                cpBody.scrollTop = cpBody.scrollHeight;
+            const renderButton = document.querySelector(".smiles-bar .premium-btn");
+            if (renderButton) {
+                renderButton.disabled = true;
+                renderButton.textContent = "Loading...";
             }
 
-            // Sync visible SMILES input if changed from backend
-            const smilesObserver = new MutationObserver(() => {
-                const input = backendSmilesWatcher.querySelector("input") || backendSmilesWatcher.querySelector("textarea");
-                if (input) {
-                    document.getElementById("visible_smiles_input").value = input.value;
+            try {
+                const response = await fetch("/api/analyze_smiles", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ smiles: smilesVal })
+                });
+                const data = await response.json();
+                applyAnalysisResponse(data);
+                console.log("SMILES analysis response:", data);
+            } catch (e) {
+                const logBox = document.getElementById("dynamicCheckpointLogs");
+                if (logBox) {
+                    logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[ERROR]</span> Failed to analyze SMILES.</div>`;
                 }
-            });
-            smilesObserver.observe(backendSmilesWatcher, { childList: true, subtree: true, attributes: true });
-
-            // Watch for Canvas Redraw payloads from Backend
-            const payloadObserver = new MutationObserver(() => {
-                const val = payloadWatcher.innerText || payloadWatcher.textContent;
-                if (val && val.trim() && val !== lastSentPayload) {
-                    try {
-                        const data = JSON.parse(val);
-                        loadCanvasData(data);
-                    } catch (e) {
-                        console.error("MutationObserver: failed to parse canvas payload:", e);
-                    }
+                console.error("triggerSmilesPasted: request failed:", e);
+            } finally {
+                if (renderButton) {
+                    renderButton.disabled = false;
+                    renderButton.textContent = "Render";
                 }
-            });
-            payloadObserver.observe(payloadWatcher, { childList: true, subtree: true, characterData: true });
+            }
         }
 
-        // Poll every 100ms until all elements are mounted and observers are initialized
-        const checkExistInterval = setInterval(() => {
-            initializeObservers();
-            if (observersInitialized) {
-                clearInterval(checkExistInterval);
+        // Chat prompts bridge — posts directly to /api/chat
+        async function triggerChatSend() {
+            const chatVal = document.getElementById("visible_chat_prompt").value.trim();
+            if (!chatVal) return;
+
+            const sendBtn = document.querySelector(".chat-input-bar .premium-btn");
+            if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Sending..."; }
+
+            // Optimistically show the user's message
+            const chatLog = document.getElementById("dynamicChatLog");
+            if (chatLog) {
+                const msg = document.createElement("div");
+                msg.className = "chat-message message-user";
+                msg.textContent = chatVal;
+                chatLog.appendChild(msg);
+                document.getElementById("chatMessages").scrollTop = 99999;
             }
-        }, 100);
+            document.getElementById("visible_chat_prompt").value = "";
+
+            try {
+                const response = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt: chatVal })
+                });
+                const data = await response.json();
+                if (chatLog) {
+                    const reply = document.createElement("div");
+                    reply.className = "chat-message message-system";
+                    reply.textContent = data.ok
+                        ? (data.command ? `PyMOL: ${data.command}` : "No command generated.")
+                        : `Error: ${data.error}`;
+                    chatLog.appendChild(reply);
+                    document.getElementById("chatMessages").scrollTop = 99999;
+                }
+            } catch (e) {
+                if (chatLog) {
+                    const err = document.createElement("div");
+                    err.className = "chat-message message-system";
+                    err.textContent = "Connection error. Is the server running?";
+                    chatLog.appendChild(err);
+                }
+                console.error("triggerChatSend failed:", e);
+            } finally {
+                if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send"; }
+            }
+        }
+
+        // Apply full analysis API response to the UI
+        function applyAnalysisResponse(data) {
+            if (!data) return;
+            if (data.canvas_payload && data.canvas_payload.atoms) {
+                loadCanvasData(data.canvas_payload);
+            }
+            if (typeof data.predictions_html === "string") {
+                document.getElementById("dynamicPredictions").innerHTML = data.predictions_html;
+            }
+            if (typeof data.repurposing_html === "string") {
+                document.getElementById("dynamicRepurposing").innerHTML = data.repurposing_html;
+            }
+            if (typeof data.checkpoint_logs_html === "string") {
+                const cpLogs = document.getElementById("dynamicCheckpointLogs");
+                cpLogs.innerHTML = data.checkpoint_logs_html;
+                const cpBody = document.getElementById("checkpointBody");
+                if (cpBody) cpBody.scrollTop = cpBody.scrollHeight;
+            }
+        }
 
         // Setup Canvas size on load
         window.addEventListener('load', () => {
-            resizeCanvas();
-            drawGrid();
+            canvas = document.getElementById("molCanvas");
+            if (canvas) {
+                ctx = canvas.getContext("2d");
+                resizeCanvas();
+                drawGrid();
+            }
         });
 
         // ==========================================
         // 2D Molecular Sketcher Canvas Engine (HTML5)
         // ==========================================
-        const canvas = document.getElementById("molCanvas");
-        const ctx = canvas.getContext("2d");
+        let canvas = document.getElementById("molCanvas");
+        let ctx = canvas ? canvas.getContext("2d") : null;
         let activeMode = "draw"; // "draw", "move", "erase"
         let activeElement = "C";
         let activeBondType = 1; // 1, 2, 3
-
         let atoms = [];
         let bonds = [];
         let nextAtomId = 1;
@@ -229,7 +209,7 @@
 
         function resizeCanvas() {
             const container = document.getElementById("canvasContainer");
-            if (!container) return;
+            if (!container || !canvas) return;
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
             redraw();
@@ -279,6 +259,7 @@
 
         // Draw coordinate grid (subtle, softer opacity)
         function drawGrid() {
+            if (!ctx || !canvas) return;
             ctx.strokeStyle = "rgba(0, 0, 0, 0.04)";
             ctx.lineWidth = 1;
             const gridSz = 40;
@@ -298,6 +279,7 @@
 
         // Main redraw function
         function redraw() {
+            if (!ctx || !canvas) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawGrid();
 
@@ -384,125 +366,127 @@
         }
 
         // Handle mouse canvas actions
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const clickedAtom = getAtomAt(x, y);
+        if (canvas) {
+            canvas.addEventListener('mousedown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const clickedAtom = getAtomAt(x, y);
 
-            if (activeMode === "draw") {
-                if (clickedAtom) {
-                    // Start drawing bond
-                    dragStartAtom = clickedAtom;
-                    isDragging = true;
-                    dragX = x;
-                    dragY = y;
-                } else {
-                    // Create new atom
-                    const newAtom = {
-                        id: nextAtomId++,
-                        x: Math.round(x / snapGrid) * snapGrid,
-                        y: Math.round(y / snapGrid) * snapGrid,
-                        element: activeElement
-                    };
-                    atoms.push(newAtom);
-                    redraw();
-                    pushPayload();
-                }
-            } else if (activeMode === "move") {
-                if (clickedAtom) {
-                    selectedAtom = clickedAtom;
-                    isDragging = true;
-                }
-            } else if (activeMode === "erase") {
-                if (clickedAtom) {
-                    // Delete atom and connected bonds
-                    atoms = atoms.filter(a => a.id !== clickedAtom.id);
-                    bonds = bonds.filter(b => b.source !== clickedAtom.id && b.target !== clickedAtom.id);
-                    redraw();
-                    pushPayload();
-                } else {
-                    // Check if clicked a bond
-                    bonds = bonds.filter(bond => {
-                        const a1 = atoms.find(a => a.id === bond.source);
-                        const a2 = atoms.find(a => a.id === bond.target);
-                        if (!a1 || !a2) return true;
-                        
-                        // Distance from point to line segment
-                        const d = distToSegment({x, y}, a1, a2);
-                        return d > 8; // If within 8px, delete it
-                    });
-                    redraw();
-                    pushPayload();
-                }
-            }
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            const oldHover = hoveredAtom;
-            hoveredAtom = getAtomAt(x, y);
-
-            if (oldHover !== hoveredAtom) {
-                redraw();
-            }
-
-            if (isDragging) {
                 if (activeMode === "draw") {
-                    dragX = x;
-                    dragY = y;
-                    redraw();
-                } else if (activeMode === "move" && selectedAtom) {
-                    selectedAtom.x = Math.round(x / snapGrid) * snapGrid;
-                    selectedAtom.y = Math.round(y / snapGrid) * snapGrid;
+                    if (clickedAtom) {
+                        // Start drawing bond
+                        dragStartAtom = clickedAtom;
+                        isDragging = true;
+                        dragX = x;
+                        dragY = y;
+                    } else {
+                        // Create new atom
+                        const newAtom = {
+                            id: nextAtomId++,
+                            x: Math.round(x / snapGrid) * snapGrid,
+                            y: Math.round(y / snapGrid) * snapGrid,
+                            element: activeElement
+                        };
+                        atoms.push(newAtom);
+                        redraw();
+                        pushPayload();
+                    }
+                } else if (activeMode === "move") {
+                    if (clickedAtom) {
+                        selectedAtom = clickedAtom;
+                        isDragging = true;
+                    }
+                } else if (activeMode === "erase") {
+                    if (clickedAtom) {
+                        // Delete atom and connected bonds
+                        atoms = atoms.filter(a => a.id !== clickedAtom.id);
+                        bonds = bonds.filter(b => b.source !== clickedAtom.id && b.target !== clickedAtom.id);
+                        redraw();
+                        pushPayload();
+                    } else {
+                        // Check if clicked a bond
+                        bonds = bonds.filter(bond => {
+                            const a1 = atoms.find(a => a.id === bond.source);
+                            const a2 = atoms.find(a => a.id === bond.target);
+                            if (!a1 || !a2) return true;
+                            
+                            // Distance from point to line segment
+                            const d = distToSegment({x, y}, a1, a2);
+                            return d > 8; // If within 8px, delete it
+                        });
+                        redraw();
+                        pushPayload();
+                    }
+                }
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const oldHover = hoveredAtom;
+                hoveredAtom = getAtomAt(x, y);
+
+                if (oldHover !== hoveredAtom) {
                     redraw();
                 }
-            }
-        });
 
-        canvas.addEventListener('mouseup', (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            if (activeMode === "draw" && dragStartAtom) {
-                const targetAtom = getAtomAt(x, y);
-                if (targetAtom && targetAtom.id !== dragStartAtom.id) {
-                    // Check if bond already exists
-                    const existingBond = bonds.find(b => 
-                        (b.source === dragStartAtom.id && b.target === targetAtom.id) ||
-                        (b.source === targetAtom.id && b.target === dragStartAtom.id)
-                    );
-
-                    if (existingBond) {
-                        // Toggle bond type or update it
-                        existingBond.type = activeBondType;
-                    } else {
-                        // Create a new bond
-                        bonds.push({
-                            source: dragStartAtom.id,
-                            target: targetAtom.id,
-                            type: activeBondType
-                        });
+                if (isDragging) {
+                    if (activeMode === "draw") {
+                        dragX = x;
+                        dragY = y;
+                        redraw();
+                    } else if (activeMode === "move" && selectedAtom) {
+                        selectedAtom.x = Math.round(x / snapGrid) * snapGrid;
+                        selectedAtom.y = Math.round(y / snapGrid) * snapGrid;
+                        redraw();
                     }
+                }
+            });
+
+            canvas.addEventListener('mouseup', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                if (activeMode === "draw" && dragStartAtom) {
+                    const targetAtom = getAtomAt(x, y);
+                    if (targetAtom && targetAtom.id !== dragStartAtom.id) {
+                        // Check if bond already exists
+                        const existingBond = bonds.find(b => 
+                            (b.source === dragStartAtom.id && b.target === targetAtom.id) ||
+                            (b.source === targetAtom.id && b.target === dragStartAtom.id)
+                        );
+
+                        if (existingBond) {
+                            // Toggle bond type or update it
+                            existingBond.type = activeBondType;
+                        } else {
+                            // Create a new bond
+                            bonds.push({
+                                source: dragStartAtom.id,
+                                target: targetAtom.id,
+                                type: activeBondType
+                            });
+                        }
+                        pushPayload();
+                    }
+                    dragStartAtom = null;
+                }
+
+                if (activeMode === "move" && selectedAtom) {
+                    selectedAtom = null;
                     pushPayload();
                 }
-                dragStartAtom = null;
-            }
 
-            if (activeMode === "move" && selectedAtom) {
-                selectedAtom = null;
-                pushPayload();
-            }
-
-            redraw();
-        });
+                redraw();
+            });
+        }
 
         // Math utilities for bond click-erasure
         function dist2(v, w) { return (v.x - w.x)**2 + (v.y - w.y)**2; }

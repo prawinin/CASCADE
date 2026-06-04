@@ -1004,14 +1004,7 @@
             <!-- SMILES bottom input integration -->
             <div class="smiles-bar">
                 <div class="smiles-wrapper">
-                    <!-- Hidden Taipy inputs -->
-                    <div class="taipy-bridge-hidden">
-                        <taipy:input value="{smiles_input}" id="taipy_smiles_input"></taipy:input>
-                        <taipy:input value="{canvas_payload}" id="taipy_canvas_payload"></taipy:input>
-                        <taipy:button id="taipy_smiles_btn" on_action="on_smiles_action" style="display:none;"></taipy:button>
-                    </div>
-                    <!-- Visible styled text input -->
-                    <input type="text" id="visible_smiles_input" class="premium-input" placeholder="Enter SMILES (e.g. CC(=O)O, C1=CC=CC=C1) and hit Render..." onkeydown="if(event.key === 'Enter') triggerSmilesPasted()"></input>
+                    <input type="text" id="visible_smiles_input" class="premium-input" placeholder="Enter SMILES (e.g. CC(=O)O, C1=CC=CC=C1) and hit Render..." onkeydown="if(event.key === 'Enter') triggerSmilesPasted()" />
                 </div>
                 <button class="premium-btn" onclick="triggerSmilesPasted()">Render</button>
             </div>
@@ -1033,20 +1026,11 @@
                     <div class="chat-message message-system">
                         Describe your desired 3D visualization and I'll generate the corresponding PyMOL commands.
                     </div>
-                    <!-- Taipy-injected historical log list -->
-                    <div id="taipy_chat_log" style="display: none;">
-                        <taipy:text value="{chat_log_html}" mode="raw" />
-                    </div>
                     <div id="dynamicChatLog"></div>
                 </div>
 
                 <div class="chat-input-bar">
-                    <!-- Hidden Taipy inputs for chat -->
-                    <div class="taipy-bridge-hidden">
-                        <taipy:input value="{chat_prompt}" id="taipy_chat_prompt"></taipy:input>
-                        <taipy:button label="Send" id="taipy_chat_send_btn" on_action="on_chat_send"></taipy:button>
-                    </div>
-                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type PyMOL visual commands..." onkeydown="if(event.key === 'Enter') triggerChatSend()"></input>
+                    <input type="text" id="visible_chat_prompt" class="premium-input" placeholder="Type PyMOL visual commands..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
                     <button class="premium-btn" onclick="triggerChatSend()">Send</button>
                 </div>
             </div>
@@ -1060,10 +1044,7 @@
                     </div>
                 </div>
                 <div class="predictions-body">
-                    <div id="taipy_predictions_html" style="display: none;">
-                        <taipy:text value="{predictions_html}" mode="raw" />
-                    </div>
-                    <div id="dynamicPredictions"></div>
+                    <div id="dynamicPredictions"><div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div></div>
                 </div>
             </div>
 
@@ -1076,10 +1057,7 @@
                     </div>
                 </div>
                 <div class="repurposing-body">
-                    <div id="taipy_repurposing_html" style="display: none;">
-                        <taipy:text value="{repurposing_html}" mode="raw" />
-                    </div>
-                    <div id="dynamicRepurposing"></div>
+                    <div id="dynamicRepurposing"><div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Sketched drug target repurposing matches will populate here.</div></div>
                 </div>
             </div>
 
@@ -1092,22 +1070,14 @@
                     </div>
                 </div>
                 <div class="checkpoint-body" id="checkpointBody">
-                    <div id="taipy_checkpoint_logs" style="display: none;">
-                        <taipy:text value="{checkpoint_logs_html}" mode="raw" />
-                    </div>
-                    <div id="dynamicCheckpointLogs" style="display: flex; flex-direction: column; gap: 0.25rem;"></div>
+                    <div id="dynamicCheckpointLogs" style="display: flex; flex-direction: column; gap: 0.25rem;"><div class='checkpoint-log-line'><span class='checkpoint-time'>[READY]</span> Workspace ready for analysis.</div></div>
                 </div>
             </div>
 
         </div>
     </div>
 
-    <!-- Hidden element that updates whenever canvas_payload is modified on backend -->
-    <div id="canvas_payload_watcher" style="display: none;">
-        <taipy:text value="{canvas_payload}" mode="raw" />
-    </div>
-
     <!-- Script section for Canvas 2D Interaction -->
-    <script src="/static/sketch.js?v=2"></script>
+    <script src="/static/sketch.js?v=6"></script>
 </body>
 </html>
