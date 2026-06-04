@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KineticSketch AI - Molecular Dynamics Workspace
+KineticSketch - Molecular Dynamics Workspace
 Main Entrypoint & GUI Orchestration Server
 Clean Modular Multi-File Architecture
 """
@@ -551,7 +551,7 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
 # SERVER RUN ENTRYPOINT
 # =====================================================================
 if __name__ == "__main__":
-    logger.info("Starting modular KineticSketch AI Workspace Server...")
+    logger.info("Starting modular KineticSketch Workspace Server...")
     is_valid, config_errors = config.validate()
     if not is_valid:
         for error in config_errors:
@@ -585,7 +585,7 @@ if __name__ == "__main__":
     # Run Taipy GUI web server
     gui = Gui(page=html_page, flask=flask_app)
     gui.run(
-        title="KineticSketch AI - Molecular Dynamics Workspace",
+        title="KineticSketch - Molecular Dynamics Workspace",
         use_reloader=False,
         host=config.HOST,
         port=config.PORT,
