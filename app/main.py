@@ -369,15 +369,16 @@ def process_smiles_submission(state: State, smiles: str, submission_key: Optiona
         rdDepictor.Compute2DCoords(mol)
         conf = mol.GetConformer()
 
-        # Format canvas rendering coordinate payload
+        # Format canvas rendering coordinate payload — send raw RDKit coords (Angstroms).
+        # The JS loadCanvasData handles all fitting/scaling to the canvas viewport.
         canvas_atoms = []
         for i in range(mol.GetNumAtoms()):
             atom = mol.GetAtomWithIdx(i)
             pos = conf.GetAtomPosition(i)
             canvas_atoms.append({
                 "id": i + 1,
-                "x": pos.x * 50.0,
-                "y": pos.y * 50.0,
+                "x": round(pos.x, 4),
+                "y": round(pos.y, 4),
                 "element": atom.GetSymbol()
             })
 

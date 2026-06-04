@@ -493,10 +493,28 @@
             min-width: 390px;
             border-left: 1px solid var(--border-primary);
             background: var(--bg-sidebar);
-            display: grid;
-            grid-template-rows: 1.1fr 0.95fr 0.95fr 140px;
+            display: flex;
+            flex-direction: column;
             height: 100%;
             min-height: 0;
+            overflow: hidden;
+        }
+
+        /* ---- Premium Scrollbar Style ---- */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.25);
+            border-radius: 99px;
+            transition: background 0.2s;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.5);
         }
 
         .panel {
@@ -567,7 +585,7 @@
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 100%;
+            flex: 1.2;
             min-height: 0;
         }
 
@@ -632,9 +650,9 @@
         .predictions-container {
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-            height: 100%;
+            flex: 1;
             min-height: 0;
+            overflow: hidden;
         }
 
         .predictions-body {
@@ -685,9 +703,9 @@
         .repurposing-container {
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-            height: 100%;
+            flex: 1;
             min-height: 0;
+            overflow: hidden;
         }
 
         .repurposing-body {
@@ -746,7 +764,7 @@
         .checkpoint-container {
             display: flex;
             flex-direction: column;
-            height: 100%;
+            flex: 0 0 150px;
             min-height: 0;
         }
 
@@ -993,7 +1011,12 @@
                     <i class="fa-solid fa-circle-nodes" style="font-size: 14px;"></i>
                     2D Molecular Sketchpad
                 </div>
-
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span id="zoomIndicator" style="font-size:0.68rem; color:var(--text-tertiary); font-family:'JetBrains Mono',monospace; min-width:36px; text-align:right;">100%</span>
+                    <button class="rail-btn" data-tooltip="Fit to View" onclick="fitToView()" style="width:24px;height:24px;padding:0;">
+                        <i class="fa-solid fa-expand" style="font-size:11px;"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Canvas Container -->
@@ -1078,6 +1101,6 @@
     </div>
 
     <!-- Script section for Canvas 2D Interaction -->
-    <script src="/static/sketch.js?v=6"></script>
+    <script src="/static/sketch.js?v=7"></script>
 </body>
 </html>

@@ -168,6 +168,9 @@
             if (canvas) {
                 ctx = canvas.getContext("2d");
                 resizeCanvas();
+                // Start pan centered
+                panX = canvas.width / 2;
+                panY = canvas.height / 2;
                 drawGrid();
             }
         });
@@ -185,6 +188,14 @@
         let nextAtomId = 1;
         
         let lastSentPayload = "";
+
+        // Zoom & Pan state
+        let zoomLevel = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let isPanning = false;
+        let panStartX = 0;
+        let panStartY = 0;
 
         // Dragging & Interaction variables
         let selectedAtom = null;
@@ -207,6 +218,14 @@
 
         const atomRadius = 14;
 
+        // Convert screen coords to world coords (accounting for zoom/pan)
+        function screenToWorld(sx, sy) {
+            return {
+                x: (sx - panX) / zoomLevel,
+                y: (sy - panY) / zoomLevel
+            };
+        }
+
         function resizeCanvas() {
             const container = document.getElementById("canvasContainer");
             if (!container || !canvas) return;
@@ -216,6 +235,12 @@
         }
 
         window.addEventListener('resize', resizeCanvas);
+
+        // Zoom indicator update
+        function updateZoomIndicator() {
+            const el = document.getElementById("zoomIndicator");
+            if (el) el.textContent = Math.round(zoomLevel * 100) + "%";
+        }
 
         function setMode(mode) {
             activeMode = mode;
@@ -257,31 +282,33 @@
             }) || null;
         }
 
-        // Draw coordinate grid (subtle, softer opacity)
+        // Draw coordinate grid (in screen space, independent of zoom)
         function drawGrid() {
             if (!ctx || !canvas) return;
+            ctx.save();
             ctx.strokeStyle = "rgba(0, 0, 0, 0.04)";
             ctx.lineWidth = 1;
             const gridSz = 40;
-            for (let x = 0; x < canvas.width; x += gridSz) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, canvas.height);
-                ctx.stroke();
+            // Draw grid across full canvas (screen space)
+            for (let x = (panX % gridSz + gridSz) % gridSz; x < canvas.width; x += gridSz) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
             }
-            for (let y = 0; y < canvas.height; y += gridSz) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(canvas.width, y);
-                ctx.stroke();
+            for (let y = (panY % gridSz + gridSz) % gridSz; y < canvas.height; y += gridSz) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
             }
+            ctx.restore();
         }
 
-        // Main redraw function
+        // Main redraw function — applies zoom/pan transform for molecule rendering
         function redraw() {
             if (!ctx || !canvas) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawGrid();
+
+            // Apply zoom & pan transform for the molecule
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(zoomLevel, zoomLevel);
 
             // 1. Draw Bonds
             bonds.forEach(bond => {
@@ -290,18 +317,14 @@
                 if (!a1 || !a2) return;
 
                 ctx.strokeStyle = "#94A3B8";
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 2.5 / zoomLevel;
 
-                // Single, Double, Triple lines
                 const angle = Math.atan2(a2.y - a1.y, a2.x - a1.x);
                 const offset_x = Math.sin(angle) * 5;
                 const offset_y = Math.cos(angle) * 5;
 
                 if (bond.type === 1) {
-                    ctx.beginPath();
-                    ctx.moveTo(a1.x, a1.y);
-                    ctx.lineTo(a2.x, a2.y);
-                    ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.stroke();
                 } else if (bond.type === 2) {
                     ctx.beginPath();
                     ctx.moveTo(a1.x - offset_x, a1.y + offset_y);
@@ -311,8 +334,7 @@
                     ctx.stroke();
                 } else if (bond.type === 3) {
                     ctx.beginPath();
-                    ctx.moveTo(a1.x, a1.y);
-                    ctx.lineTo(a2.x, a2.y);
+                    ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y);
                     ctx.moveTo(a1.x - offset_x * 1.5, a1.y + offset_y * 1.5);
                     ctx.lineTo(a2.x - offset_x * 1.5, a2.y + offset_y * 1.5);
                     ctx.moveTo(a1.x + offset_x * 1.5, a1.y - offset_y * 1.5);
@@ -321,172 +343,161 @@
                 }
             });
 
-            // Draw active bond line while drawing
+            // Draw active bond preview while dragging
             if (activeMode === "draw" && isDragging && dragStartAtom) {
+                const worldDrag = screenToWorld(dragX, dragY);
                 ctx.strokeStyle = "rgba(37, 99, 235, 0.5)";
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2 / zoomLevel;
+                ctx.setLineDash([5 / zoomLevel, 5 / zoomLevel]);
                 ctx.beginPath();
                 ctx.moveTo(dragStartAtom.x, dragStartAtom.y);
-                ctx.lineTo(dragX, dragY);
+                ctx.lineTo(worldDrag.x, worldDrag.y);
                 ctx.stroke();
                 ctx.setLineDash([]);
             }
 
             // 2. Draw Atoms
+            const scaledRadius = atomRadius;
             atoms.forEach(atom => {
                 const color = elementColors[atom.element] || '#ffffff';
                 const isHovered = hoveredAtom && hoveredAtom.id === atom.id;
 
-                // Outer circle background
                 ctx.fillStyle = "#FFFFFF";
-                ctx.strokeStyle = isHovered ? "var(--accent-blue)" : "#D1D5DB";
-                ctx.lineWidth = isHovered ? 2 : 1;
+                ctx.strokeStyle = isHovered ? "#2563EB" : "#D1D5DB";
+                ctx.lineWidth = (isHovered ? 2 : 1) / zoomLevel;
                 ctx.beginPath();
-                ctx.arc(atom.x, atom.y, atomRadius, 0, Math.PI * 2);
+                ctx.arc(atom.x, atom.y, scaledRadius, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.stroke();
 
-                // Hover glow
-                if (isHovered) {
-                    ctx.shadowColor = "rgba(37, 99, 235, 0.35)";
-                    ctx.shadowBlur = 8;
-                }
+                if (isHovered) { ctx.shadowColor = "rgba(37,99,235,0.35)"; ctx.shadowBlur = 8; }
 
-                // Element text
                 ctx.fillStyle = color;
-                ctx.font = "bold 13px 'Inter', sans-serif";
+                ctx.font = `bold ${13}px 'Inter', sans-serif`;
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText(atom.element, atom.x, atom.y);
-
-                // Clear shadow
                 ctx.shadowBlur = 0;
             });
+
+            ctx.restore();
+            updateZoomIndicator();
         }
 
-        // Handle mouse canvas actions
+        // Handle mouse canvas actions — all coordinates converted to world space
         if (canvas) {
+            // Wheel zoom — zoom toward cursor position
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                const delta = e.deltaY < 0 ? 1.1 : 0.9;
+                const newZoom = Math.max(0.2, Math.min(5.0, zoomLevel * delta));
+                // Adjust pan so zoom is centered on cursor
+                panX = mx - (mx - panX) * (newZoom / zoomLevel);
+                panY = my - (my - panY) * (newZoom / zoomLevel);
+                zoomLevel = newZoom;
+                redraw();
+            }, { passive: false });
+
             canvas.addEventListener('mousedown', (e) => {
                 const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const sx = e.clientX - rect.left;
+                const sy = e.clientY - rect.top;
+                const { x, y } = screenToWorld(sx, sy);
+
+                // Middle-mouse panning
+                if (e.button === 1) { e.preventDefault(); isPanning = true; panStartX = sx - panX; panStartY = sy - panY; return; }
+
                 const clickedAtom = getAtomAt(x, y);
 
                 if (activeMode === "draw") {
                     if (clickedAtom) {
-                        // Start drawing bond
-                        dragStartAtom = clickedAtom;
-                        isDragging = true;
-                        dragX = x;
-                        dragY = y;
+                        dragStartAtom = clickedAtom; isDragging = true; dragX = sx; dragY = sy;
                     } else {
-                        // Create new atom
-                        const newAtom = {
-                            id: nextAtomId++,
-                            x: Math.round(x / snapGrid) * snapGrid,
-                            y: Math.round(y / snapGrid) * snapGrid,
-                            element: activeElement
-                        };
-                        atoms.push(newAtom);
-                        redraw();
-                        pushPayload();
+                        const snap = snapGrid;
+                        atoms.push({ id: nextAtomId++, x: Math.round(x / snap) * snap, y: Math.round(y / snap) * snap, element: activeElement });
+                        redraw(); pushPayload();
                     }
                 } else if (activeMode === "move") {
-                    if (clickedAtom) {
-                        selectedAtom = clickedAtom;
-                        isDragging = true;
-                    }
+                    if (clickedAtom) { selectedAtom = clickedAtom; isDragging = true; }
+                    else { isPanning = true; panStartX = sx - panX; panStartY = sy - panY; }
                 } else if (activeMode === "erase") {
                     if (clickedAtom) {
-                        // Delete atom and connected bonds
                         atoms = atoms.filter(a => a.id !== clickedAtom.id);
                         bonds = bonds.filter(b => b.source !== clickedAtom.id && b.target !== clickedAtom.id);
-                        redraw();
-                        pushPayload();
+                        redraw(); pushPayload();
                     } else {
-                        // Check if clicked a bond
                         bonds = bonds.filter(bond => {
                             const a1 = atoms.find(a => a.id === bond.source);
                             const a2 = atoms.find(a => a.id === bond.target);
                             if (!a1 || !a2) return true;
-                            
-                            // Distance from point to line segment
-                            const d = distToSegment({x, y}, a1, a2);
-                            return d > 8; // If within 8px, delete it
+                            return distToSegment({x, y}, a1, a2) > 8;
                         });
-                        redraw();
-                        pushPayload();
+                        redraw(); pushPayload();
                     }
                 }
             });
 
             canvas.addEventListener('mousemove', (e) => {
                 const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const sx = e.clientX - rect.left;
+                const sy = e.clientY - rect.top;
+                const { x, y } = screenToWorld(sx, sy);
+
+                if (isPanning) {
+                    panX = sx - panStartX;
+                    panY = sy - panStartY;
+                    redraw(); return;
+                }
 
                 const oldHover = hoveredAtom;
                 hoveredAtom = getAtomAt(x, y);
-
-                if (oldHover !== hoveredAtom) {
-                    redraw();
-                }
+                if (oldHover !== hoveredAtom) redraw();
 
                 if (isDragging) {
                     if (activeMode === "draw") {
-                        dragX = x;
-                        dragY = y;
-                        redraw();
+                        dragX = sx; dragY = sy; redraw();
                     } else if (activeMode === "move" && selectedAtom) {
-                        selectedAtom.x = Math.round(x / snapGrid) * snapGrid;
-                        selectedAtom.y = Math.round(y / snapGrid) * snapGrid;
+                        const snap = snapGrid;
+                        selectedAtom.x = Math.round(x / snap) * snap;
+                        selectedAtom.y = Math.round(y / snap) * snap;
                         redraw();
                     }
                 }
             });
 
             canvas.addEventListener('mouseup', (e) => {
+                if (isPanning) { isPanning = false; return; }
                 if (!isDragging) return;
                 isDragging = false;
 
                 const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                
+                const sx = e.clientX - rect.left;
+                const sy = e.clientY - rect.top;
+                const { x, y } = screenToWorld(sx, sy);
+
                 if (activeMode === "draw" && dragStartAtom) {
                     const targetAtom = getAtomAt(x, y);
                     if (targetAtom && targetAtom.id !== dragStartAtom.id) {
-                        // Check if bond already exists
-                        const existingBond = bonds.find(b => 
+                        const existingBond = bonds.find(b =>
                             (b.source === dragStartAtom.id && b.target === targetAtom.id) ||
                             (b.source === targetAtom.id && b.target === dragStartAtom.id)
                         );
-
-                        if (existingBond) {
-                            // Toggle bond type or update it
-                            existingBond.type = activeBondType;
-                        } else {
-                            // Create a new bond
-                            bonds.push({
-                                source: dragStartAtom.id,
-                                target: targetAtom.id,
-                                type: activeBondType
-                            });
-                        }
+                        if (existingBond) { existingBond.type = activeBondType; }
+                        else { bonds.push({ source: dragStartAtom.id, target: targetAtom.id, type: activeBondType }); }
                         pushPayload();
                     }
                     dragStartAtom = null;
                 }
-
-                if (activeMode === "move" && selectedAtom) {
-                    selectedAtom = null;
-                    pushPayload();
-                }
-
+                if (activeMode === "move" && selectedAtom) { selectedAtom = null; pushPayload(); }
                 redraw();
             });
+
+            canvas.addEventListener('mouseleave', () => { isPanning = false; });
         }
+
 
         // Math utilities for bond click-erasure
         function dist2(v, w) { return (v.x - w.x)**2 + (v.y - w.y)**2; }
@@ -499,83 +510,66 @@
         }
         function distToSegment(p, v, w) { return Math.sqrt(distToSegmentSquared(p, v, w)); }
 
-        // PUSH payload from Canvas to Taipy Backend
+        // PUSH payload - stores locally (no longer sent to Taipy)
         function pushPayload() {
             const payload = {
                 atoms: atoms.map(a => ({ id: a.id, x: a.x, y: a.y, element: a.element })),
                 bonds: bonds.map(b => ({ source: b.source, target: b.target, type: b.type }))
             };
-            const payloadStr = JSON.stringify(payload);
-            lastSentPayload = payloadStr;
-            setReactInputValue("taipy_canvas_payload", payloadStr);
-            console.log("Drawn canvas payload pushed:", payloadStr);
+            lastSentPayload = JSON.stringify(payload);
         }
 
-        // LOAD canvas data from Backend (e.g. from pasted SMILES)
+        // Fit all atoms into view with nice padding
+        function fitToView() {
+            if (!canvas || atoms.length === 0) {
+                zoomLevel = 1.0; panX = 0; panY = 0; redraw(); return;
+            }
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            atoms.forEach(a => {
+                if (a.x < minX) minX = a.x; if (a.x > maxX) maxX = a.x;
+                if (a.y < minY) minY = a.y; if (a.y > maxY) maxY = a.y;
+            });
+            const pad = 80;
+            const molW = maxX - minX || 1;
+            const molH = maxY - minY || 1;
+            const scaleX = (canvas.width - pad * 2) / molW;
+            const scaleY = (canvas.height - pad * 2) / molH;
+            zoomLevel = Math.max(0.3, Math.min(4.0, Math.min(scaleX, scaleY)));
+            const molCX = (minX + maxX) / 2;
+            const molCY = (minY + maxY) / 2;
+            panX = canvas.width / 2 - molCX * zoomLevel;
+            panY = canvas.height / 2 - molCY * zoomLevel;
+            redraw();
+        }
+
+        // LOAD canvas data from Backend (from pasted SMILES — raw RDKit Angstrom coords)
         function loadCanvasData(data) {
             if (!data || !data.atoms) return;
-            
-            // Re-scale coordinates to fit canvas nicely
             atoms = [];
             bonds = [];
-            
-            if (data.atoms.length === 0) {
-                redraw();
-                return;
-            }
 
-            // Find bounds of loaded data
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            data.atoms.forEach(a => {
-                if (a.x < minX) minX = a.x;
-                if (a.x > maxX) maxX = a.x;
-                if (a.y < minY) minY = a.y;
-                if (a.y > maxY) maxY = a.y;
-            });
+            if (data.atoms.length === 0) { redraw(); return; }
 
-            // Center of loaded structure
-            const dataCenterX = (minX + maxX) / 2;
-            const dataCenterY = (minY + maxY) / 2;
-
-            // Center of canvas
-            const canvasCenterX = canvas.width / 2;
-            const canvasCenterY = canvas.height / 2;
-
-            // Determine scaling factor
-            let scale = 50; // default scaling factor for RDKit raw 2D coords
-            if (maxX - minX > 0.1 || maxY - minY > 0.1) {
-                const scaleX = (canvas.width - 200) / (maxX - minX);
-                const scaleY = (canvas.height - 200) / (maxY - minY);
-                scale = Math.min(scaleX, scaleY);
-                // Limit scale to a reasonable size
-                scale = Math.max(20, Math.min(scale, 100));
-            }
-
-            // Load atoms with scaled/centered coords
+            // Store raw RDKit coords directly (in Angstroms, ~1.5Å bond length)
+            // fitToView() will handle scaling/centering
             data.atoms.forEach(a => {
                 atoms.push({
                     id: a.id,
-                    x: Math.round((canvasCenterX + (a.x - dataCenterX) * scale) / snapGrid) * snapGrid,
-                    y: Math.round((canvasCenterY + (a.y - dataCenterY) * scale) / snapGrid) * snapGrid,
+                    x: a.x,
+                    y: -a.y,  // Flip Y axis: RDKit Y+ is up, canvas Y+ is down
                     element: a.element
                 });
             });
 
-            // Load bonds
             if (data.bonds) {
                 data.bonds.forEach(b => {
-                    bonds.push({
-                        source: b.source,
-                        target: b.target,
-                        type: b.type
-                    });
+                    bonds.push({ source: b.source, target: b.target, type: b.type });
                 });
             }
 
-            // Find highest atom ID to keep nextAtomId sequential
             nextAtomId = Math.max(...atoms.map(a => a.id), 0) + 1;
 
-            redraw();
-            console.log("Canvas loaded structures from RDKit backend!");
+            // Auto-fit to view after loading
+            fitToView();
+            console.log("Canvas loaded from RDKit backend:", atoms.length, "atoms,", bonds.length, "bonds");
         }
-    
