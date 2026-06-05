@@ -949,6 +949,39 @@
                 font-size: 16px; /* prevent iOS zoom */
             }
         }
+
+        /* Tab Button Styles (Phase 3) */
+        .tab-btn {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 0.4rem 0.6rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all 0.15s ease;
+        }
+        
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+        
+        .tab-btn.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        .rail-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            color: var(--text-tertiary) !important;
+            background: transparent !important;
+            border-color: transparent !important;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
@@ -998,6 +1031,32 @@
             </button>
 
             <div class="rail-divider"></div>
+            <span class="rail-section-label">Rings</span>
+
+            <button class="rail-btn" data-tooltip="Benzene Ring" onclick="injectRingTemplate('benzene')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <circle cx="50" cy="50" r="22" stroke-dasharray="8,6" />
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                </svg>
+            </button>
+            <button class="rail-btn" data-tooltip="Cyclohexane" onclick="injectRingTemplate('cyclohexane')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                </svg>
+            </button>
+            <button class="rail-btn" data-tooltip="Cyclopentane" onclick="injectRingTemplate('cyclopentane')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                </svg>
+            </button>
+            <button class="rail-btn" data-tooltip="Pyridine" onclick="injectRingTemplate('pyridine')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                    <text x="50" y="82" font-size="28" font-family="'Inter', sans-serif" font-weight="900" fill="currentColor" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+
+            <div class="rail-divider"></div>
 
             <button class="rail-btn" data-tooltip="Clear Canvas" onclick="clearCanvas()" style="color: var(--accent-red);">
                 <i class="fa-solid fa-trash-can" style="font-size: 14px;"></i>
@@ -1007,11 +1066,27 @@
         <!-- Central Work Area -->
         <div class="canvas-area">
             <div class="canvas-header">
-                <div class="canvas-title">
-                    <i class="fa-solid fa-circle-nodes" style="font-size: 14px;"></i>
-                    2D Molecular Sketchpad
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <button id="tabSketcher" class="tab-btn active" onclick="switchMainTab('sketcher')">
+                        <i class="fa-solid fa-circle-nodes"></i> 2D Sketcher
+                    </button>
+                    <button id="tabInteractions" class="tab-btn" onclick="switchMainTab('interactions')">
+                        <i class="fa-solid fa-diagram-project"></i> Interaction Profile
+                    </button>
                 </div>
                 <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <!-- Undo / Redo -->
+                    <button id="btnUndo" class="rail-btn" data-tooltip="Undo (Ctrl+Z)" onclick="undo()" style="width:24px;height:24px;padding:0;" disabled>
+                        <i class="fa-solid fa-arrow-rotate-left" style="font-size:11px;"></i>
+                    </button>
+                    <button id="btnRedo" class="rail-btn" data-tooltip="Redo (Ctrl+Y)" onclick="redo()" style="width:24px;height:24px;padding:0;" disabled>
+                        <i class="fa-solid fa-arrow-rotate-right" style="font-size:11px;"></i>
+                    </button>
+                    <!-- Optimize Layout (2D Clean) -->
+                    <button id="btnOptimize" class="rail-btn" data-tooltip="Optimize Layout Layout (2D Clean)" onclick="triggerOptimize2D()" style="width:24px;height:24px;padding:0;">
+                        <i class="fa-solid fa-wand-magic-sparkles" style="font-size:11px;"></i>
+                    </button>
+                    
                     <span id="zoomIndicator" style="font-size:0.68rem; color:var(--text-tertiary); font-family:'JetBrains Mono',monospace; min-width:36px; text-align:right;">100%</span>
                     <button class="rail-btn" data-tooltip="Fit to View" onclick="fitToView()" style="width:24px;height:24px;padding:0;">
                         <i class="fa-solid fa-expand" style="font-size:11px;"></i>
@@ -1022,6 +1097,54 @@
             <!-- Canvas Container -->
             <div class="canvas-container" id="canvasContainer">
                 <canvas id="molCanvas"></canvas>
+            </div>
+
+            <!-- Interaction Viewer Container (Phase 3) -->
+            <div id="interactionViewContainer" style="display:none; flex:1; flex-direction:column; background:var(--bg-panel); border-radius:0 0 var(--radius-lg) var(--radius-lg); overflow:hidden;">
+                <!-- PDB Target Selector Bar -->
+                <div class="pdb-bar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; padding:0.75rem; background:var(--bg-card); border-bottom:1px solid var(--border-primary);">
+                    <div style="display:flex; align-items:center; gap:0.4rem;">
+                        <label for="pdbIdInput" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">PDB ID:</label>
+                        <input type="text" id="pdbIdInput" class="premium-input" placeholder="e.g. 1OPJ" style="width:70px; padding:0.25rem 0.5rem; font-size:0.75rem;" />
+                        <button class="premium-btn" onclick="fetchPdbTarget()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Fetch</button>
+                    </div>
+                    
+                    <span style="font-size:0.75rem; color:var(--text-tertiary);">or</span>
+                    
+                    <div style="display:flex; align-items:center; gap:0.4rem;">
+                        <input type="file" id="pdbFileInput" style="display:none;" onchange="uploadPdbFile(event)" />
+                        <button class="premium-btn-secondary" onclick="document.getElementById('pdbFileInput').click()" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); color:var(--text-secondary);">
+                            <i class="fa-solid fa-upload"></i> Upload PDB
+                        </button>
+                    </div>
+
+                    <!-- Target Ligands Dropdown -->
+                    <div id="ligandSelectWrapper" style="display:none; align-items:center; gap:0.4rem; margin-left:auto;">
+                        <label for="ligandSelect" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">Select Ligand:</label>
+                        <select id="ligandSelect" class="premium-input" style="padding:0.2rem 0.5rem; font-size:0.75rem; width:130px;">
+                            <option value="">-- Choose --</option>
+                        </select>
+                        <button class="premium-btn" onclick="computeInteractions()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Profile</button>
+                    </div>
+                </div>
+
+                <!-- Interaction Diagram Workspace -->
+                <div style="display:flex; flex:1; position:relative; min-height:400px; background:#FFFFFF;">
+                    <!-- SVG render area -->
+                    <div id="interactionDiagramContainer" style="flex:1; height:100%; min-height:400px; overflow:auto;">
+                        <!-- Initial state -->
+                        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-tertiary); padding:2rem; text-align:center;">
+                            <i class="fa-solid fa-diagram-project" style="font-size:32px; margin-bottom:1rem; opacity:0.5;"></i>
+                            <div style="font-weight:600; margin-bottom:0.25rem;">Ligand-Protein Interaction view</div>
+                            <div style="font-size:0.75rem; max-width:320px;">Fetch a target structure from RCSB by ID or upload a local PDB file to classify binding pocket interactions.</div>
+                        </div>
+                    </div>
+                    
+                    <!-- SVG export floating button -->
+                    <button id="btnDownloadSVG" class="rail-btn" data-tooltip="Download Vector SVG" onclick="downloadInteractionSVG()" style="position:absolute; right:15px; bottom:15px; width:32px; height:32px; background:rgba(255,255,255,0.9); border:1px solid var(--border-primary); border-radius:50%; box-shadow:var(--shadow-sm); display:none; align-items:center; justify-content:center;">
+                        <i class="fa-solid fa-download" style="color:var(--text-secondary);"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- SMILES bottom input integration -->
@@ -1084,6 +1207,21 @@
                 </div>
             </div>
 
+            <!-- Panel 3.5: Real-Time ADME Profile (Phase 4) -->
+            <div class="panel adme-container">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <i class="fa-solid fa-gauge-high icon-blue" style="color: #2563EB;"></i>
+                        ADME & Lipinski Profile
+                    </div>
+                </div>
+                <div class="adme-body" style="padding: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div id="dynamicADME">
+                        <div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Draw a molecule to live-calculate ADME descriptors.</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Panel 4: Checkpoint Logs -->
             <div class="panel checkpoint-container">
                 <div class="panel-header">
@@ -1101,6 +1239,7 @@
     </div>
 
     <!-- Script section for Canvas 2D Interaction -->
+    <script src="/static/interaction_viewer.js"></script>
     <script src="/static/sketch.js?v=7"></script>
 </body>
 </html>

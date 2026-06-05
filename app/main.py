@@ -600,6 +600,419 @@ def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
 # =====================================================================
 # SERVER RUN ENTRYPOINT
 # =====================================================================
+# Pure Flask app — serves our index.html directly without Taipy's React shell
+from flask import Flask, jsonify, request, send_from_directory
+flask_app = Flask(__name__, static_folder=os.path.join(current_dir, "static"))
+
+gui_dir = os.path.join(current_dir, "gui")
+
+# Serve index.html at root
+@flask_app.get("/")
+def index():
+    return send_from_directory(gui_dir, "index.html")
+
+# Serve any file from gui/ directory (CSS, fonts, etc.)
+@flask_app.get("/gui/<path:filename>")
+def gui_file(filename):
+    return send_from_directory(gui_dir, filename)
+
+@flask_app.get("/health")
+def health():
+    return jsonify({
+        "status": "healthy",
+        "environment": config.ENVIRONMENT,
+        "services": {
+            "rdkit": "available" if Chem is not None else "unavailable",
+            "torch": "available" if torch is not None else "unavailable",
+            "pymol": "enabled" if config.PYMOL_ENABLED else "disabled",
+            "ollama": "enabled" if config.OLLAMA_ENABLED else "disabled",
+        },
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    })
+
+@flask_app.post("/api/analyze_smiles")
+def analyze_smiles():
+    payload = request.get_json(silent=True) or {}
+    smiles = str(payload.get("smiles", "")).strip()
+    if not smiles:
+        return jsonify({"ok": False, "error": "SMILES is required."}), 400
+    response = build_smiles_response(None, smiles)
+    status_code = 200 if response.get("ok") else 422
+    return jsonify(response), status_code
+
+@flask_app.post("/api/chat")
+def chat():
+    payload = request.get_json(silent=True) or {}
+    prompt = str(payload.get("prompt", "")).strip()
+    if not prompt:
+        return jsonify({"ok": False, "error": "Prompt is required."}), 400
+    try:
+        cmd, source = query_ollama_for_pymol(prompt)
+        result = execute_pymol_commands([cmd]) if cmd else "No command generated."
+        return jsonify({"ok": True, "command": cmd, "result": result, "source": source})
+    except Exception as e:
+        logger.error(f"Chat API error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/optimize_2d")
+def optimize_2d():
+    from app.services import canvas_json_to_2d_optimized
+    payload = request.get_json(silent=True) or {}
+    try:
+        res = canvas_json_to_2d_optimized(payload)
+        return jsonify({"ok": True, "canvas_payload": res})
+    except Exception as e:
+        logger.error(f"Optimize 2D error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 422
+
+@flask_app.post("/api/canvas_to_smiles")
+def canvas_to_smiles():
+    from app.services import canvas_json_to_smiles
+    payload = request.get_json(silent=True) or {}
+    try:
+        smiles = canvas_json_to_smiles(payload)
+        if not smiles:
+            return jsonify({"ok": False, "error": "Invalid structure"}), 400
+        return jsonify({"ok": True, "smiles": smiles})
+    except Exception as e:
+        logger.error(f"Canvas to SMILES error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 422
+
+@flask_app.post("/api/descriptors")
+def descriptors():
+    from app.services import smiles_to_rdkit_mol, calculate_adme_descriptors
+    payload = request.get_json(silent=True) or {}
+    smiles = str(payload.get("smiles", "")).strip()
+    if not smiles:
+        return jsonify({"ok": False, "error": "SMILES is required"}), 400
+    try:
+        mol = smiles_to_rdkit_mol(smiles)
+        if mol is None:
+            return jsonify({"ok": False, "error": f"Invalid SMILES: {smiles}"}), 400
+        desc = calculate_adme_descriptors(mol)
+        return jsonify(desc)
+    except Exception as e:
+        logger.error(f"Descriptors error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/pdb/upload")
+def pdb_upload():
+    from app.services import parse_pdb_structure, get_ligands_in_structure
+    import tempfile
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "No file uploaded"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"ok": False, "error": "No file selected"}), 400
+        
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
+            file.save(tmp.name)
+            tmp_path = tmp.name
+            
+        struct = parse_pdb_structure(tmp_path)
+        ligands = get_ligands_in_structure(struct)
+        os.remove(tmp_path)
+        
+        return jsonify({
+            "ok": True,
+            "filename": file.filename,
+            "ligands": [{"resname": name, "chain": chain, "seq": seq} for name, chain, seq in ligands]
+        })
+    except Exception as e:
+        logger.error(f"PDB upload error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.get("/api/pdb/fetch")
+def pdb_fetch():
+    from app.services import fetch_pdb_file, parse_pdb_structure, get_ligands_in_structure
+    pdb_id = request.args.get("pdb_id", "").strip().upper()
+    if not pdb_id or len(pdb_id) != 4 or not pdb_id.isalnum():
+        return jsonify({"ok": False, "error": "Valid 4-character PDB ID is required."}), 400
+        
+    try:
+        filepath = fetch_pdb_file(pdb_id)
+        struct = parse_pdb_structure(filepath)
+        ligands = get_ligands_in_structure(struct)
+        return jsonify({
+            "ok": True,
+            "pdb_id": pdb_id,
+            "ligands": [{"resname": name, "chain": chain, "seq": seq} for name, chain, seq in ligands]
+        })
+    except Exception as e:
+        logger.error(f"PDB fetch error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/interactions")
+def interactions():
+    from app.services import (
+        fetch_pdb_file, 
+        parse_pdb_structure, 
+        extract_pocket_residues, 
+        detect_interactions,
+        smiles_to_rdkit_mol,
+        generate_2d_coords
+    )
+    payload = request.get_json(silent=True) or {}
+    smiles = str(payload.get("smiles", "")).strip()
+    pdb_id = str(payload.get("pdb_id", "")).strip().upper()
+    ligand_resname = str(payload.get("ligand_resname", "")).strip().upper()
+    ligand_chain = payload.get("ligand_chain")
+    ligand_seq = payload.get("ligand_seq")
+    if ligand_seq is not None:
+        try:
+            ligand_seq = int(ligand_seq)
+        except ValueError:
+            ligand_seq = None
+            
+    if not smiles or not pdb_id or not ligand_resname:
+        return jsonify({"ok": False, "error": "SMILES, pdb_id, and ligand_resname are required."}), 400
+        
+    try:
+        filepath = fetch_pdb_file(pdb_id)
+        struct = parse_pdb_structure(filepath)
+        
+        # Extract pocket around ligand
+        ligand_atoms, pocket_residues = extract_pocket_residues(
+            struct, ligand_resname, ligand_chain, ligand_seq
+        )
+        
+        # Detect interactions
+        profile = detect_interactions(ligand_atoms, pocket_residues)
+        
+        # Generate 2D coordinates for the ligand smiles to layout the diagram
+        mol = smiles_to_rdkit_mol(smiles)
+        if mol:
+            mol = generate_2d_coords(mol)
+            conf = mol.GetConformer(0)
+            coords = []
+            for i, atom in enumerate(mol.GetAtoms()):
+                pos = conf.GetAtomPosition(i)
+                coords.append({
+                    "id": i + 1,
+                    "x": round(pos.x, 4),
+                    "y": round(pos.y, 4),
+                    "element": atom.GetSymbol()
+                })
+            bonds = []
+            for bond in mol.GetBonds():
+                bt = bond.GetBondType()
+                b_type = 1
+                if bt == Chem.BondType.DOUBLE: b_type = 2
+                elif bt == Chem.BondType.TRIPLE: b_type = 3
+                bonds.append({
+                    "source": bond.GetBeginAtomIdx() + 1,
+                    "target": bond.GetEndAtomIdx() + 1,
+                    "type": b_type
+                })
+                
+            # Format interactions for front-end diagram
+            serializable_profile = []
+            for item in profile:
+                serializable_profile.append({
+                    "type": item["type"],
+                    "ligand_atom": {
+                        "name": item["ligand_atom"]["name"],
+                        "element": item["ligand_atom"]["element"],
+                        "coord": item["ligand_atom"]["coord"]
+                    },
+                    "residue": item["residue"],
+                    "protein_atom": {
+                        "name": item["protein_atom"]["name"],
+                        "element": item["protein_atom"]["element"],
+                        "coord": item["protein_atom"]["coord"]
+                    },
+                    "distance_angstrom": item["distance_angstrom"],
+                    "angle_deg": item.get("angle_deg")
+                })
+            
+            ligand_2d = {"atoms": coords, "bonds": bonds}
+        else:
+            ligand_2d = None
+            serializable_profile = []
+            
+        return jsonify({
+            "ok": True,
+            "interactions": serializable_profile,
+            "ligand_2d_coords": ligand_2d
+        })
+    except Exception as e:
+        logger.error(f"Interactions profiling error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/mcs_align")
+def mcs_align():
+    from rdkit.Chem import rdFMCS
+    from app.services import smiles_to_rdkit_mol
+    payload = request.get_json(silent=True) or {}
+    smiles_list = payload.get("smiles_list", [])
+    if not smiles_list or len(smiles_list) < 2:
+        return jsonify({"ok": False, "error": "At least 2 SMILES are required for alignment."}), 400
+        
+    try:
+        mols = []
+        for s in smiles_list:
+            mol = smiles_to_rdkit_mol(s)
+            if mol is None:
+                return jsonify({"ok": False, "error": f"Invalid SMILES in list: {s}"}), 400
+            mols.append(mol)
+            
+        from rdkit.Chem import rdDepictor
+        for mol in mols:
+            rdDepictor.Compute2DCoords(mol)
+            
+        res = rdFMCS.FindMCS(mols)
+        if res.numAtoms == 0:
+            aligned_coords = []
+            for mol in mols:
+                conf = mol.GetConformer(0)
+                atoms = [{"id": i+1, "x": conf.GetAtomPosition(i).x, "y": conf.GetAtomPosition(i).y, "element": mol.GetAtomWithIdx(i).GetSymbol()} for i in range(mol.GetNumAtoms())]
+                bonds = [{"source": b.GetBeginAtomIdx()+1, "target": b.GetEndAtomIdx()+1, "type": 1 if b.GetBondType() == Chem.BondType.SINGLE else 2} for b in mol.GetBonds()]
+                aligned_coords.append({"atoms": atoms, "bonds": bonds})
+            return jsonify({"ok": True, "aligned": aligned_coords})
+            
+        mcs_query = Chem.MolFromSmarts(res.smartsString)
+        ref_mol = mols[0]
+        ref_match = ref_mol.GetSubstructMatch(mcs_query)
+        
+        aligned_coords = []
+        for i, mol in enumerate(mols):
+            conf = mol.GetConformer(0)
+            if i > 0:
+                match = mol.GetSubstructMatch(mcs_query)
+                if match and ref_match:
+                    try:
+                        rdDepictor.GenerateDepictionMatching2DStructure(mol, ref_mol, acceptFailure=True)
+                        conf = mol.GetConformer(0)
+                    except Exception as align_err:
+                        logger.warning(f"Matching 2D alignment failed: {align_err}")
+                        
+            atoms = [{"id": j+1, "x": conf.GetAtomPosition(j).x, "y": conf.GetAtomPosition(j).y, "element": mol.GetAtomWithIdx(j).GetSymbol()} for j in range(mol.GetNumAtoms())]
+            bonds = []
+            for b in mol.GetBonds():
+                bt = b.GetBondType()
+                b_type = 1
+                if bt == Chem.BondType.DOUBLE: b_type = 2
+                elif bt == Chem.BondType.TRIPLE: b_type = 3
+                bonds.append({
+                    "source": b.GetBeginAtomIdx() + 1,
+                    "target": b.GetEndAtomIdx() + 1,
+                    "type": b_type
+                })
+            aligned_coords.append({"atoms": atoms, "bonds": bonds})
+            
+        return jsonify({"ok": True, "aligned": aligned_coords})
+    except Exception as e:
+        logger.error(f"MCS align error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/tasks/submit")
+def tasks_submit():
+    from app.tasks.task_schemas import TaskSubmitSchema
+    from marshmallow import ValidationError
+    
+    payload = request.get_json(silent=True) or {}
+    schema = TaskSubmitSchema()
+    try:
+        validated_data = schema.load(payload)
+        schema.validate_params(validated_data)
+    except ValidationError as err:
+        return jsonify({"ok": False, "error": err.messages}), 400
+        
+    task_type = validated_data["task_type"]
+    params = validated_data["params"]
+    
+    task_id = None
+    estimated_time = "~30s"
+    
+    try:
+        if task_type == "optimize_3d":
+            from app.tasks import run_3d_optimization_task
+            result = run_3d_optimization_task.delay(
+                smiles=params["smiles"]
+            )
+            task_id = result.id
+            estimated_time = "~10s"
+            
+        elif task_type == "interaction_profile":
+            from app.tasks import run_interaction_profiling_task
+            result = run_interaction_profiling_task.delay(
+                smiles=params["smiles"],
+                pdb_id=params["pdb_id"],
+                ligand_resname=params["ligand_resname"],
+                ligand_chain=params.get("ligand_chain"),
+                ligand_seq=params.get("ligand_seq")
+            )
+            task_id = result.id
+            estimated_time = "~15s"
+            
+        elif task_type == "md_simulation":
+            from app.tasks import run_openmm_md_task
+            structure_path = params.get("sdf_path")
+            if not structure_path and params.get("smiles"):
+                structure_path = "molecule.sdf"
+            elif not structure_path:
+                structure_path = "molecule.sdf"
+                
+            result = run_openmm_md_task.delay(
+                structure_path=structure_path,
+                n_steps=params["n_steps"]
+            )
+            task_id = result.id
+            estimated_time = "~1m"
+            
+        return jsonify({
+            "ok": True,
+            "task_id": task_id,
+            "estimated_time": estimated_time
+        })
+    except Exception as e:
+        logger.error(f"Task submission error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.get("/api/tasks/status/<task_id>")
+def tasks_status(task_id):
+    from celery.result import AsyncResult
+    from app.tasks import celery_app
+    
+    try:
+        res = AsyncResult(task_id, app=celery_app)
+        state = res.state
+        
+        response_data = {
+            "task_id": task_id,
+            "status": state,
+            "result": None,
+            "error": None
+        }
+        
+        if state == "SUCCESS":
+            response_data["result"] = res.result
+        elif state == "FAILURE":
+            response_data["error"] = str(res.result)
+        elif state == "PROGRESS":
+            meta = res.info or {}
+            response_data["percent"] = meta.get("percent", 0)
+            response_data["message"] = meta.get("message", "Processing...")
+            
+        return jsonify(response_data)
+    except Exception as e:
+        logger.error(f"Task status retrieval error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.delete("/api/tasks/cancel/<task_id>")
+def tasks_cancel(task_id):
+    from celery.result import AsyncResult
+    from app.tasks import celery_app
+    
+    try:
+        res = AsyncResult(task_id, app=celery_app)
+        res.revoke(terminate=True)
+        return jsonify({"ok": True, "message": f"Task {task_id} successfully revoked."})
+    except Exception as e:
+        logger.error(f"Task cancel error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 if __name__ == "__main__":
     logger.info("Starting modular KineticSketch Workspace Server...")
     is_valid, config_errors = config.validate()
@@ -609,65 +1022,13 @@ if __name__ == "__main__":
     
     if config.PYMOL_ENABLED:
         get_pymol_process()
-    
-    # Pure Flask app — serves our index.html directly without Taipy's React shell
-    from flask import Flask, jsonify, request, send_from_directory
-    flask_app = Flask(__name__, static_folder=os.path.join(current_dir, "static"))
-
-    gui_dir = os.path.join(current_dir, "gui")
-
-    # Serve index.html at root
-    @flask_app.get("/")
-    def index():
-        return send_from_directory(gui_dir, "index.html")
-
-    # Serve any file from gui/ directory (CSS, fonts, etc.)
-    @flask_app.get("/gui/<path:filename>")
-    def gui_file(filename):
-        return send_from_directory(gui_dir, filename)
-
-    @flask_app.get("/health")
-    def health():
-        return jsonify({
-            "status": "healthy",
-            "environment": config.ENVIRONMENT,
-            "services": {
-                "rdkit": "available" if Chem is not None else "unavailable",
-                "torch": "available" if torch is not None else "unavailable",
-                "pymol": "enabled" if config.PYMOL_ENABLED else "disabled",
-                "ollama": "enabled" if config.OLLAMA_ENABLED else "disabled",
-            },
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-        })
-
-    @flask_app.post("/api/analyze_smiles")
-    def analyze_smiles():
-        payload = request.get_json(silent=True) or {}
-        smiles = str(payload.get("smiles", "")).strip()
-        if not smiles:
-            return jsonify({"ok": False, "error": "SMILES is required."}), 400
-        response = build_smiles_response(None, smiles)
-        status_code = 200 if response.get("ok") else 422
-        return jsonify(response), status_code
-
-    @flask_app.post("/api/chat")
-    def chat():
-        payload = request.get_json(silent=True) or {}
-        prompt = str(payload.get("prompt", "")).strip()
-        if not prompt:
-            return jsonify({"ok": False, "error": "Prompt is required."}), 400
-        try:
-            cmd, source = query_ollama_for_pymol(prompt)
-            result = execute_pymol_commands([cmd]) if cmd else "No command generated."
-            return jsonify({"ok": True, "command": cmd, "result": result, "source": source})
-        except Exception as e:
-            logger.error(f"Chat API error: {e}")
-            return jsonify({"ok": False, "error": str(e)}), 500
-
+        
     logger.info(f" * Server starting on http://{config.HOST}:{config.PORT}")
+
     flask_app.run(
         host=config.HOST,
         port=config.PORT,
         debug=config.DEBUG,
         use_reloader=False,
     )
+

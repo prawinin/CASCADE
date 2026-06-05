@@ -248,3 +248,107 @@ def write_conformers_to_mol2(mol: Chem.Mol, filepath: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to write MOL2: {e}")
         return False
+
+
+def canvas_json_to_rdkit_mol(canvas_json: dict) -> Chem.Mol:
+    """
+    Constructs an RDKit Mol object from the canvas JSON structure:
+    {
+        "atoms": [{"id": 1, "x": 100, "y": 200, "element": "C"}],
+        "bonds": [{"source": 1, "target": 2, "type": 1}]
+    }
+    """
+    rw_mol = Chem.RWMol()
+    atom_id_to_idx = {}
+    
+    # Add atoms
+    for atom in canvas_json.get("atoms", []):
+        el = atom.get("element", "C")
+        rd_atom = Chem.Atom(el)
+        idx = rw_mol.AddAtom(rd_atom)
+        atom_id_to_idx[atom["id"]] = idx
+        
+    # Add bonds
+    for bond in canvas_json.get("bonds", []):
+        src_id = bond["source"]
+        tgt_id = bond["target"]
+        b_type_num = bond.get("type", 1)
+        
+        if src_id not in atom_id_to_idx or tgt_id not in atom_id_to_idx:
+            continue
+            
+        src_idx = atom_id_to_idx[src_id]
+        tgt_idx = atom_id_to_idx[tgt_id]
+        
+        # Map bond type
+        if b_type_num == 1:
+            bt = Chem.BondType.SINGLE
+        elif b_type_num == 2:
+            bt = Chem.BondType.DOUBLE
+        elif b_type_num == 3:
+            bt = Chem.BondType.TRIPLE
+        else:
+            bt = Chem.BondType.SINGLE
+            
+        if rw_mol.GetBondBetweenAtoms(src_idx, tgt_idx) is None:
+            rw_mol.AddBond(src_idx, tgt_idx, bt)
+            
+    mol = rw_mol.GetMol()
+    try:
+        Chem.SanitizeMol(mol)
+    except Exception as e:
+        logger.warning(f"Sanitization failed: {e}. Attempting basic sanitization.")
+        try:
+            mol.UpdatePropertyCache(strict=False)
+            Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
+        except Exception as e2:
+            logger.error(f"Failed second-level sanitization: {e2}")
+            
+    return mol
+
+
+def canvas_json_to_2d_optimized(canvas_json: dict) -> dict:
+    """
+    Takes canvas JSON, builds RDKit Mol, computes clean 2D coordinates,
+    and returns a canvas-compatible JSON payload with updated coordinates.
+    """
+    mol = canvas_json_to_rdkit_mol(canvas_json)
+    if mol is None or mol.GetNumAtoms() == 0:
+        return {"atoms": [], "bonds": []}
+    
+    from rdkit.Chem import rdDepictor
+    try:
+        rdDepictor.Compute2DCoords(mol)
+    except Exception as e:
+        logger.error(f"Compute2DCoords failed: {e}")
+        return canvas_json
+        
+    conf = mol.GetConformer(0)
+    canvas_atoms = []
+    
+    original_atoms = canvas_json.get("atoms", [])
+    for idx, atom_data in enumerate(original_atoms):
+        if idx < mol.GetNumAtoms():
+            pos = conf.GetAtomPosition(idx)
+            canvas_atoms.append({
+                "id": atom_data["id"],
+                "x": round(pos.x, 4),
+                "y": round(pos.y, 4),
+                "element": atom_data.get("element", "C")
+            })
+            
+    canvas_bonds = canvas_json.get("bonds", [])
+    return {"atoms": canvas_atoms, "bonds": canvas_bonds}
+
+
+def canvas_json_to_smiles(canvas_json: dict) -> str:
+    """Converts a canvas JSON payload directly to canonical SMILES string."""
+    mol = canvas_json_to_rdkit_mol(canvas_json)
+    if mol is None:
+        return ""
+    try:
+        return Chem.MolToSmiles(mol)
+    except Exception as e:
+        logger.error(f"Failed to generate SMILES from canvas JSON: {e}")
+        return ""
+

@@ -11,3 +11,7 @@ openpyxl
 tzlocal
 deepdiff
 toml
+biopython
+numpy
+celery[redis]
+redis

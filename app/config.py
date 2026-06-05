@@ -47,6 +47,9 @@ class Config:
     MOLECULE_SIZE_LIMIT = int(os.getenv("MOLECULE_SIZE_LIMIT", 200))
     SMILES_LENGTH_LIMIT = int(os.getenv("SMILES_LENGTH_LIMIT", 2000))
 
+    # Async Queue (Celery/Redis)
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
     # Caching
     PDB_CACHE_TTL = int(os.getenv("PDB_CACHE_TTL", 3600))  # 1 hour in seconds
     PDB_CACHE_DIR = os.getenv("PDB_CACHE_DIR", "/tmp/kinetic_sketch_pdb_cache")
