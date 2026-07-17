@@ -1,4 +1,17 @@
+---
+title: KineticSketch
+emoji: 🧬
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+app_file: app.py
+pinned: false
+license: cc-by-nc-4.0
+short_description: A browser-native molecular dynamics GNN prediction workspace
+---
+
 <div align="center">
+
 
 # 🧬 KineticSketch AI
 
