@@ -1,0 +1,81 @@
+# =====================================================================
+# KINETICKSKETCH AI - GITIGNORE CONFIGURATION
+# =====================================================================
+
+# Python Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments & Packages
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# Local Environment Configurations
+.env
+.env*.local
+.flaskenv
+
+# Jupyter Notebook & Caches
+.ipynb_checkpoints
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache
+
+# IDEs, Editors, & Metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# OS-specific Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Dynamic Conformation Conformer Coordinate Exports
+molecule.sdf
+molecule.xyz
+molecule.mol2
+test_molecule.sdf
+test_molecule.xyz
+test_molecule.mol2
+
+# Dynamic Runtime Checkpoint Databases & Logs
+workspace_progress.json
+*.log
+pip-log.txt
+.opencode
+
+# Non-production Developer Documentation (Keep Local Only)
+DEPLOYMENT.md
+TESTING.md
+COMPLETION_SUMMARY.md
+
+# Data folder — all files are large and should never be committed (3.7 GB+)
+data/
+
+# Runtime scratch files (PDB cache, temp outputs)
+scratch/
+
+# Model Weights & Training History
+app/models/*.pt
+app/models/*.json
+
+# Local cloudflared binaries/downloads
+cloudflared
+cloudflared.deb

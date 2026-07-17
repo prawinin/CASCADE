@@ -1,0 +1,1862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KineticSketch - Molecular Dynamics Workspace</title>
+    <!-- Google Fonts: Inter and JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CSS CDN with corePlugins.preflight disabled to prevent styling resets -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        corePlugins: {
+          preflight: false
+        }
+      }
+    </script>
+    <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+
+    <style>
+        /* ============================================================
+           DESIGN SYSTEM — White/Light Premium Theme
+           Inspired by Benchling + Ketcher + ChemDraw + Linear
+           ============================================================ */
+        :root {
+            /* Surface Colors */
+            --bg-base: #F8F9FB;
+            --bg-panel: #FFFFFF;
+            --bg-sidebar: #F1F3F5;
+            --bg-hover: #EDF0F4;
+            --bg-active: #E8EBF0;
+            --bg-canvas: #FAFBFC;
+            --bg-header: #FFFFFF;
+            --bg-input: #FFFFFF;
+
+            /* Text Colors */
+            --text-primary: #1A1D23;
+            --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF;
+            --text-inverse: #FFFFFF;
+
+            /* Border Colors */
+            --border-primary: #E5E7EB;
+            --border-subtle: #F0F1F3;
+            --border-focus: #2563EB;
+
+            /* Accent Colors */
+            --accent-blue: #2563EB;
+            --accent-blue-light: #EFF6FF;
+            --accent-blue-mid: #DBEAFE;
+            --accent-blue-hover: #1D4ED8;
+
+            --accent-purple: #7C3AED;
+            --accent-purple-light: #F5F3FF;
+            --accent-purple-mid: #EDE9FE;
+
+            --accent-green: #059669;
+            --accent-green-light: #ECFDF5;
+
+            --accent-amber: #D97706;
+            --accent-amber-light: #FFFBEB;
+
+            --accent-red: #DC2626;
+            --accent-red-light: #FEF2F2;
+
+            /* Element CPK Colors (for light bg) */
+            --element-C: #6B7280;
+            --element-O: #DC2626;
+            --element-N: #2563EB;
+            --element-H: #9CA3AF;
+            --element-P: #EA580C;
+            --element-S: #CA8A04;
+            --element-F: #16A34A;
+            --element-Cl: #15803D;
+            --element-Br: #92400E;
+            --element-I: #6D28D9;
+            --element-B: #BE185D;
+            --element-Si: #0E7490;
+            --element-Se: #FF7F50;
+            --element-Zn: #7F8C8D;
+            --element-Fe: #D2691E;
+            --element-Mg: #20B2AA;
+            --element-Na: #9370DB;
+            --element-K: #BA55D3;
+            --element-Pt: #AFEEEE;
+            --element-Au: #FFD700;
+            --element-Li: #FF69B4;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+            --shadow-focus: 0 0 0 3px rgba(37, 99, 235, 0.15);
+
+            /* Radius */
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-pill: 100px;
+        }
+
+        /* ============================================================
+           BASE RESET & TYPOGRAPHY
+           ============================================================ */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        button, input, select, textarea {
+            font-family: inherit;
+            font-size: inherit;
+            color: inherit;
+            outline: none;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            font-feature-settings: 'tnum' 1;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ============================================================
+           TOP HEADER BAR
+           ============================================================ */
+        header {
+            height: 52px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-primary);
+            background: var(--bg-header);
+            padding: 0 1.25rem;
+            z-index: 10;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .logo-glow {
+            width: 10px;
+            height: 10px;
+            background: linear-gradient(135deg, var(--accent-blue) 0%, #3B82F6 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 8px 2px rgba(37, 99, 235, 0.3);
+            animation: pulse 3s infinite ease-in-out;
+        }
+
+        h1 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            color: var(--text-primary);
+        }
+
+        h1 span {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-purple) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .top-badge {
+            background: var(--accent-blue-light);
+            border: 1px solid var(--accent-blue-mid);
+            color: var(--accent-blue);
+            padding: 0.15rem 0.55rem;
+            border-radius: var(--radius-pill);
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .status-indicator {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(5, 150, 105, 0.4);
+        }
+
+        /* ============================================================
+           WORKSPACE MAIN LAYOUT
+           ============================================================ */
+        .workspace {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+
+        /* ============================================================
+           LEFT TOOLBAR RAIL (Ketcher-inspired)
+           ============================================================ */
+        .left-rail {
+            width: 56px;
+            min-width: 56px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0.75rem 0;
+            gap: 0.5rem;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-primary) transparent;
+        }
+
+        .left-rail::-webkit-scrollbar {
+            width: 3px;
+        }
+        .left-rail::-webkit-scrollbar-thumb {
+            background-color: var(--border-primary);
+            border-radius: 3px;
+        }
+
+        .rail-divider {
+            width: 24px;
+            height: 1px;
+            background: var(--border-primary);
+            margin: 0.25rem 0;
+        }
+
+        .rail-section-label {
+            font-size: 0.55rem;
+            font-weight: 700;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+
+        .rail-btn {
+            width: 36px;
+            height: 36px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+        }
+
+        .rail-btn:hover:not(:disabled) {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .rail-btn.active {
+            color: var(--accent-blue);
+            background: var(--accent-blue-light);
+            border-color: var(--accent-blue-mid);
+        }
+
+        .rail-btn.active::before {
+            content: '';
+            position: absolute;
+            left: -1px;
+            top: 25%;
+            height: 50%;
+            width: 3px;
+            background: var(--accent-blue);
+            border-radius: 0 3px 3px 0;
+            animation: borderSlideIn 0.2s ease;
+        }
+
+        /* Tooltip */
+        .rail-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 52px;
+            background: var(--text-primary);
+            color: var(--text-inverse);
+            padding: 0.25rem 0.55rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            box-shadow: var(--shadow-md);
+            z-index: 100;
+        }
+
+        .rail-btn:hover::after {
+            opacity: 1;
+        }
+
+        /* Element tooltip (same positioning) */
+        .rail-btn-element::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 46px;
+            background: var(--text-primary);
+            color: var(--text-inverse);
+            padding: 0.25rem 0.55rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            box-shadow: var(--shadow-md);
+            z-index: 100;
+        }
+
+        .rail-btn-element:hover::after {
+            opacity: 1;
+        }
+
+        /* Atom element buttons — CPK circular nodes */
+        .rail-btn-element {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--border-primary);
+            font-weight: 700;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            background: var(--bg-panel);
+            position: relative;
+        }
+
+        .rail-btn-element:hover {
+            transform: scale(1.08);
+            border-color: currentColor;
+            box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 15%, transparent);
+        }
+
+        .rail-btn-element.active-element {
+            background: currentColor !important;
+            color: var(--text-inverse) !important;
+            border-color: transparent !important;
+            box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 20%, transparent) !important;
+        }
+
+        /* ============================================================
+           CENTRAL CANVAS AREA
+           ============================================================ */
+        .canvas-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-canvas);
+            min-width: 0;
+            min-height: 0;
+            position: relative;
+        }
+
+        .canvas-header {
+            padding: 0.55rem 1.25rem;
+            border-bottom: 1px solid var(--border-primary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-panel);
+        }
+
+        .canvas-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .canvas-title i {
+            color: var(--accent-blue);
+        }
+
+        .canvas-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-tertiary);
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        #molCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ============================================================
+           UNIFIED SMART INPUT BAR (bottom of canvas)
+           ============================================================ */
+        .smiles-bar {
+            padding: 0.65rem 1.25rem;
+            background: var(--bg-panel);
+            border-top: 1px solid var(--border-primary);
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+        }
+
+        .smiles-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        /* Autocomplete dropdown */
+        #unified_autocomplete {
+            position: absolute;
+            bottom: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-primary);
+            border-radius: 8px;
+            box-shadow: 0 -4px 24px rgba(0,0,0,0.18);
+            z-index: 999;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        #unified_autocomplete .ac-item {
+            padding: 0.45rem 0.85rem;
+            font-size: 0.82rem;
+            cursor: pointer;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-primary);
+            transition: background 0.12s;
+        }
+        #unified_autocomplete .ac-item:last-child { border-bottom: none; }
+        #unified_autocomplete .ac-item:hover { background: var(--bg-hover, rgba(99,102,241,0.08)); }
+        #unified_autocomplete .ac-item .ac-name { font-weight: 600; }
+        #unified_autocomplete .ac-item .ac-badge {
+            float: right;
+            font-size: 0.68rem;
+            background: rgba(99,102,241,0.12);
+            color: #6366f1;
+            padding: 1px 6px;
+            border-radius: 10px;
+        }
+
+        /* Source badge inside input */
+        #unified_source_badge {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.68rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        #unified_source_badge.smiles-mode {
+            background: rgba(16,185,129,0.15);
+            color: #10B981;
+            opacity: 1;
+        }
+        #unified_source_badge.name-mode {
+            background: rgba(99,102,241,0.15);
+            color: #6366f1;
+            opacity: 1;
+        }
+        #unified_source_badge.loading-mode {
+            background: rgba(245,158,11,0.15);
+            color: #F59E0B;
+            opacity: 1;
+        }
+
+        /* Hidden bridge inputs */
+        .taipy-bridge-hidden {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .premium-input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-md);
+            padding: 0.5rem 0.85rem;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            transition: all 0.15s ease;
+        }
+
+        .premium-input::placeholder {
+            color: var(--text-tertiary);
+        }
+
+        .premium-input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: var(--shadow-focus);
+        }
+
+        .premium-btn {
+            background: var(--accent-blue);
+            border: none;
+            color: var(--text-inverse);
+            padding: 0.5rem 1.1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .premium-btn:hover:not(:disabled) {
+            background: var(--accent-blue-hover);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .premium-btn:active {
+            transform: scale(0.98);
+        }
+
+        .premium-btn-secondary {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-primary);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            font-size: 0.78rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .premium-btn-secondary:hover:not(:disabled) {
+            background: var(--bg-hover);
+            border-color: var(--border-primary);
+        }
+
+        /* ============================================================
+           RIGHT SIDEBAR — Panel Stack
+           ============================================================ */
+        .right-sidebar {
+            width: 390px;
+            min-width: 390px;
+            border-left: 1px solid var(--border-primary);
+            background: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        /* ---- Premium Scrollbar Style ---- */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.25);
+            border-radius: 99px;
+            transition: background 0.2s;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.5);
+        }
+
+        .panel {
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-primary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.15s ease;
+        }
+
+        .panel:last-child {
+            border-bottom: none;
+        }
+
+        .panel-header {
+            padding: 0.6rem 1rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-base);
+        }
+
+        .panel-title {
+            font-size: 0.78rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: var(--text-primary);
+        }
+
+        .panel-title i {
+            font-size: 13px;
+        }
+
+        .panel-title .icon-blue { color: var(--accent-blue); }
+        .panel-title .icon-green { color: var(--accent-green); }
+        .panel-title .icon-purple { color: var(--accent-purple); }
+        .panel-title .icon-gray { color: var(--text-tertiary); }
+
+        .panel-badge {
+            background: var(--accent-blue-light);
+            border: 1px solid var(--accent-blue-mid);
+            color: var(--accent-blue);
+            padding: 0.1rem 0.45rem;
+            border-radius: var(--radius-pill);
+            font-size: 0.62rem;
+            font-weight: 600;
+        }
+
+        .panel-badge-green {
+            background: var(--accent-green-light);
+            border: 1px solid rgba(5, 150, 105, 0.15);
+            color: var(--accent-green);
+        }
+
+        .panel-badge-purple {
+            background: var(--accent-purple-light);
+            border: 1px solid rgba(124, 58, 237, 0.15);
+            color: var(--accent-purple);
+        }
+
+        /* ============================================================
+           CHAT PANEL
+           ============================================================ */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1.2;
+            min-height: 0;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 0.75rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            background: var(--bg-panel);
+            font-size: 0.76rem;
+        }
+
+        .chat-message {
+            max-width: 88%;
+            padding: 0.5rem 0.75rem;
+            border-radius: var(--radius-md);
+            line-height: 1.5;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .message-user {
+            background: var(--accent-blue-light);
+            border: 1px solid var(--accent-blue-mid);
+            color: var(--text-primary);
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .message-system {
+            background: var(--bg-base);
+            border: 1px solid var(--border-primary);
+            color: var(--text-secondary);
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        .pymol-code-block {
+            font-family: 'JetBrains Mono', monospace;
+            background: #1E293B !important;
+            color: #86EFAC !important;
+            border-left: 3px solid var(--accent-purple);
+            padding: 0.5rem 0.65rem;
+            margin-top: 0.4rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            overflow-x: auto;
+        }
+
+        .chat-input-bar {
+            padding: 0.5rem;
+            background: var(--bg-base);
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        /* ============================================================
+           PREDICTIONS PANEL
+           ============================================================ */
+        .predictions-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .predictions-body {
+            flex: 1;
+            padding: 0.5rem;
+            overflow-y: auto;
+        }
+
+        .predictions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.7rem;
+            text-align: left;
+        }
+
+        .predictions-table th {
+            padding: 0.4rem 0.5rem;
+            border-bottom: 2px solid var(--border-primary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            background: var(--bg-base);
+            position: sticky;
+            top: 0;
+        }
+
+        .predictions-table td {
+            padding: 0.4rem 0.5rem;
+            border-bottom: 1px solid var(--border-subtle);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+        }
+
+        .predictions-table tr {
+            transition: background-color 0.12s ease;
+        }
+
+        .predictions-table tbody tr:nth-child(even) {
+            background: var(--bg-base);
+        }
+
+        .predictions-table tbody tr:hover {
+            background: var(--bg-hover) !important;
+        }
+
+        /* ============================================================
+           REPURPOSING PANEL
+           ============================================================ */
+        .repurposing-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .repurposing-body {
+            flex: 1;
+            padding: 0.5rem;
+            overflow-y: auto;
+        }
+
+        .repurposing-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.7rem;
+            text-align: left;
+        }
+
+        .repurposing-table th {
+            padding: 0.4rem 0.5rem;
+            border-bottom: 2px solid var(--border-primary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            background: var(--bg-base);
+            position: sticky;
+            top: 0;
+        }
+
+        .repurposing-table td {
+            padding: 0.4rem 0.5rem;
+            border-bottom: 1px solid var(--border-subtle);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+        }
+
+        .repurposing-table tr {
+            transition: background-color 0.12s ease;
+        }
+
+        .repurposing-table tbody tr:nth-child(even) {
+            background: var(--bg-base);
+        }
+
+        .repurposing-table tbody tr:hover {
+            background: var(--bg-hover) !important;
+        }
+
+        .variance-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        /* ============================================================
+           CHECKPOINT PANEL
+           ============================================================ */
+        .checkpoint-container {
+            display: flex;
+            flex-direction: column;
+            flex: 0 0 150px;
+            min-height: 0;
+        }
+
+        .checkpoint-body {
+            flex: 1;
+            padding: 0.55rem 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.66rem;
+            overflow-y: auto;
+            background: #1E293B;
+            color: #94A3B8;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .checkpoint-log-line {
+            display: flex;
+            gap: 0.4rem;
+            line-height: 1.4;
+        }
+
+        .checkpoint-time {
+            color: #64748B;
+            min-width: 54px;
+        }
+
+        .checkpoint-success {
+            color: #4ADE80;
+        }
+
+        .checkpoint-warning {
+            color: #FBBF24;
+        }
+
+        .checkpoint-error {
+            color: #F87171;
+        }
+
+        /* ============================================================
+           ELEMENT STYLING
+           ============================================================ */
+        .element-C  { color: var(--element-C);  }
+        .element-O  { color: var(--element-O);  }
+        .element-N  { color: var(--element-N);  }
+        .element-H  { color: var(--element-H);  }
+        .element-P  { color: var(--element-P);  }
+        .element-S  { color: var(--element-S);  }
+        .element-F  { color: var(--element-F);  }
+        .element-Cl { color: var(--element-Cl); }
+        .element-Br { color: var(--element-Br); }
+        .element-I  { color: var(--element-I);  }
+        .element-B  { color: var(--element-B);  }
+        .element-Si { color: var(--element-Si); }
+        .element-Se { color: var(--element-Se); }
+        .element-Zn { color: var(--element-Zn); }
+        .element-Fe { color: var(--element-Fe); }
+        .element-Mg { color: var(--element-Mg); }
+        .element-Na { color: var(--element-Na); }
+        .element-K  { color: var(--element-K);  }
+        .element-Pt { color: var(--element-Pt); }
+        .element-Au { color: var(--element-Au); }
+        .element-Li { color: var(--element-Li); }
+
+        .element-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+        .element-dot.element-C  { background-color: var(--element-C);  }
+        .element-dot.element-O  { background-color: var(--element-O);  }
+        .element-dot.element-N  { background-color: var(--element-N);  }
+        .element-dot.element-H  { background-color: var(--element-H);  }
+        .element-dot.element-P  { background-color: var(--element-P);  }
+        .element-dot.element-S  { background-color: var(--element-S);  }
+        .element-dot.element-F  { background-color: var(--element-F);  }
+        .element-dot.element-Cl { background-color: var(--element-Cl); }
+        .element-dot.element-Br { background-color: var(--element-Br); }
+        .element-dot.element-I  { background-color: var(--element-I);  }
+        .element-dot.element-B  { background-color: var(--element-B);  }
+        .element-dot.element-Si { background-color: var(--element-Si); }
+        .element-dot.element-Se { background-color: var(--element-Se); }
+        .element-dot.element-Zn { background-color: var(--element-Zn); }
+        .element-dot.element-Fe { background-color: var(--element-Fe); }
+        .element-dot.element-Mg { background-color: var(--element-Mg); }
+        .element-dot.element-Na { background-color: var(--element-Na); }
+        .element-dot.element-K  { background-color: var(--element-K);  }
+        .element-dot.element-Pt { background-color: var(--element-Pt); }
+        .element-dot.element-Au { background-color: var(--element-Au); }
+        .element-dot.element-Li { background-color: var(--element-Li); }
+
+        /* ============================================================
+           ANIMATIONS
+           ============================================================ */
+        @keyframes pulse {
+            0%   { transform: scale(1); opacity: 0.85; }
+            50%  { transform: scale(1.06); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.85; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes borderSlideIn {
+            from { transform: scaleY(0); opacity: 0; }
+            to   { transform: scaleY(1); opacity: 1; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* ============================================================
+           SCROLLBARS
+           ============================================================ */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.18);
+        }
+
+        /* ============================================================
+           RESPONSIVE DESIGN
+           ============================================================ */
+        @media (max-width: 1280px) {
+            .right-sidebar {
+                width: 320px;
+                min-width: 320px;
+            }
+            .panel-title {
+                font-size: 0.72rem;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .workspace {
+                flex-direction: column-reverse;
+            }
+            .right-sidebar {
+                width: 100%;
+                min-width: 100%;
+                height: auto;
+                border-left: none;
+                border-top: 1px solid var(--border-primary);
+                grid-template-rows: auto auto auto auto;
+                max-height: 40vh;
+                overflow-y: auto;
+            }
+            .panel {
+                min-height: 100px;
+            }
+            .canvas-area {
+                min-height: 50vh;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .left-rail {
+                width: 44px;
+                min-width: 44px;
+                padding: 0.5rem 0;
+                gap: 0.4rem;
+            }
+            .rail-btn {
+                width: 32px;
+                height: 32px;
+            }
+            .rail-btn-element {
+                width: 28px;
+                height: 28px;
+                font-size: 0.65rem;
+            }
+            header {
+                padding: 0 0.75rem;
+            }
+            h1 {
+                font-size: 0.95rem;
+            }
+            .top-badge {
+                display: none;
+            }
+            .right-sidebar {
+                max-height: 35vh;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .left-rail {
+                width: 40px;
+                min-width: 40px;
+                gap: 0.3rem;
+            }
+            .rail-btn {
+                width: 28px;
+                height: 28px;
+            }
+            .panel-title {
+                font-size: 0.65rem;
+            }
+            input, textarea {
+                font-size: 16px; /* prevent iOS zoom */
+            }
+        }
+
+        /* Tab Button Styles (Phase 3) */
+        .tab-btn {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 0.4rem 0.6rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all 0.15s ease;
+        }
+        
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+        
+        .tab-btn.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        .rail-btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            color: var(--text-tertiary) !important;
+            background: transparent !important;
+            border-color: transparent !important;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body>
+
+    <header>
+        <div class="logo-container">
+            <h1>Kinetic<span>Sketch</span></h1>
+        </div>
+    </header>
+
+    <div class="workspace">
+        <!-- Left Navigation Rail (Ketcher-Style Toolbar) -->
+        <div class="left-rail">
+            <span class="rail-section-label">Mode</span>
+            <button id="btnDraw" class="rail-btn active" data-tooltip="Draw Tool" onclick="setMode('draw')">
+                <i class="fa-solid fa-pen" style="font-size: 14px;"></i>
+            </button>
+            <button id="btnMove" class="rail-btn" data-tooltip="Move / Reposition" onclick="setMode('move')">
+                <i class="fa-solid fa-arrows-up-down-left-right" style="font-size: 14px;"></i>
+            </button>
+            <button id="btnErase" class="rail-btn" data-tooltip="Erase Atom/Bond" onclick="setMode('erase')">
+                <i class="fa-solid fa-eraser" style="font-size: 14px;"></i>
+            </button>
+
+            <div class="rail-divider"></div>
+            <span class="rail-section-label">Atom</span>
+
+            <button class="rail-btn-element active-element" data-tooltip="Carbon (C)" onclick="setActiveElement('C', this)" style="color: var(--element-C);">C</button>
+            <button class="rail-btn-element" data-tooltip="Nitrogen (N)" onclick="setActiveElement('N', this)" style="color: var(--element-N);">N</button>
+            <button class="rail-btn-element" data-tooltip="Oxygen (O)" onclick="setActiveElement('O', this)" style="color: var(--element-O);">O</button>
+            <button class="rail-btn-element" data-tooltip="Hydrogen (H)" onclick="setActiveElement('H', this)" style="color: var(--element-H);">H</button>
+            <button class="rail-btn-element" data-tooltip="Phosphorus (P)" onclick="setActiveElement('P', this)" style="color: var(--element-P);">P</button>
+            <button class="rail-btn-element" data-tooltip="Sulfur (S)" onclick="setActiveElement('S', this)" style="color: var(--element-S);">S</button>
+            <button class="rail-btn-element" data-tooltip="Fluorine (F) — metabolic stability" onclick="setActiveElement('F', this)" style="color: var(--element-F);">F</button>
+            <button class="rail-btn-element" data-tooltip="Chlorine (Cl) — lipophilic halogen" onclick="setActiveElement('Cl', this)" style="color: var(--element-Cl); font-size:10px;">Cl</button>
+            <button class="rail-btn-element" data-tooltip="Bromine (Br) — heavy halogen" onclick="setActiveElement('Br', this)" style="color: var(--element-Br); font-size:10px;">Br</button>
+            <button class="rail-btn-element" data-tooltip="Iodine (I) — imaging &amp; thyroid" onclick="setActiveElement('I', this)" style="color: var(--element-I);">I</button>
+            <button class="rail-btn-element" data-tooltip="Boron (B) — boronic acid drugs" onclick="setActiveElement('B', this)" style="color: var(--element-B);">B</button>
+            <button class="rail-btn-element" data-tooltip="Silicon (Si) — bioisostere of C" onclick="setActiveElement('Si', this)" style="color: var(--element-Si); font-size:9px;">Si</button>
+            <button class="rail-btn-element" data-tooltip="Selenium (Se)" onclick="setActiveElement('Se', this)" style="color: var(--element-Se); font-size:9px;">Se</button>
+            <button class="rail-btn-element" data-tooltip="Zinc (Zn)" onclick="setActiveElement('Zn', this)" style="color: var(--element-Zn); font-size:9px;">Zn</button>
+            <button class="rail-btn-element" data-tooltip="Iron (Fe)" onclick="setActiveElement('Fe', this)" style="color: var(--element-Fe); font-size:9px;">Fe</button>
+            <button class="rail-btn-element" data-tooltip="Magnesium (Mg)" onclick="setActiveElement('Mg', this)" style="color: var(--element-Mg); font-size:9px;">Mg</button>
+            <button class="rail-btn-element" data-tooltip="Sodium (Na)" onclick="setActiveElement('Na', this)" style="color: var(--element-Na); font-size:9px;">Na</button>
+            <button class="rail-btn-element" data-tooltip="Potassium (K)" onclick="setActiveElement('K', this)" style="color: var(--element-K); font-size:9px;">K</button>
+            <button class="rail-btn-element" data-tooltip="Platinum (Pt)" onclick="setActiveElement('Pt', this)" style="color: var(--element-Pt); font-size:9px;">Pt</button>
+            <button class="rail-btn-element" data-tooltip="Gold (Au)" onclick="setActiveElement('Au', this)" style="color: var(--element-Au); font-size:9px;">Au</button>
+            <button class="rail-btn-element" data-tooltip="Lithium (Li)" onclick="setActiveElement('Li', this)" style="color: var(--element-Li); font-size:9px;">Li</button>
+
+            <div class="rail-divider"></div>
+            <span class="rail-section-label">Bond</span>
+
+            <button id="btnBond1" class="rail-btn active" data-tooltip="Single Bond" onclick="setBondType(1)">
+                <i class="fa-solid fa-minus" style="font-size: 14px;"></i>
+            </button>
+            <button id="btnBond2" class="rail-btn" data-tooltip="Double Bond" onclick="setBondType(2)">
+                <i class="fa-solid fa-equals" style="font-size: 14px;"></i>
+            </button>
+            <button id="btnBond3" class="rail-btn" data-tooltip="Triple Bond" onclick="setBondType(3)">
+                <i class="fa-solid fa-bars" style="font-size: 14px;"></i>
+            </button>
+
+            <div class="rail-divider"></div>
+            <span class="rail-section-label">Rings</span>
+
+            <!-- Benzene -->
+            <button class="rail-btn" data-tooltip="Benzene (aromatic 6-ring)" onclick="injectRingTemplate('benzene')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <circle cx="50" cy="50" r="22" stroke-dasharray="8,6" />
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                </svg>
+            </button>
+            <!-- Cyclohexane -->
+            <button class="rail-btn" data-tooltip="Cyclohexane (saturated 6-ring)" onclick="injectRingTemplate('cyclohexane')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                </svg>
+            </button>
+            <!-- Cyclopentane -->
+            <button class="rail-btn" data-tooltip="Cyclopentane (saturated 5-ring)" onclick="injectRingTemplate('cyclopentane')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                </svg>
+            </button>
+            <!-- Pyridine -->
+            <button class="rail-btn" data-tooltip="Pyridine (6-ring with N)" onclick="injectRingTemplate('pyridine')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                    <text x="50" y="82" font-size="28" font-family="'Inter', sans-serif" font-weight="900" fill="currentColor" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Imidazole -->
+            <button class="rail-btn" data-tooltip="Imidazole (5-ring, 2×N — histidine core)" onclick="injectRingTemplate('imidazole')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="22" y="84" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                    <text x="78" y="84" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Thiophene -->
+            <button class="rail-btn" data-tooltip="Thiophene (aromatic 5-ring with S)" onclick="injectRingTemplate('thiophene')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="50" y="96" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#CA8A04" stroke="none" text-anchor="middle">S</text>
+                </svg>
+            </button>
+            <!-- Furan -->
+            <button class="rail-btn" data-tooltip="Furan (aromatic 5-ring with O)" onclick="injectRingTemplate('furan')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="50" y="96" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#DC2626" stroke="none" text-anchor="middle">O</text>
+                </svg>
+            </button>
+            <!-- Piperidine -->
+            <button class="rail-btn" data-tooltip="Piperidine (saturated 6-ring with N — very common in drugs)" onclick="injectRingTemplate('piperidine')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                    <text x="50" y="20" font-size="26" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Morpholine -->
+            <button class="rail-btn" data-tooltip="Morpholine (6-ring with N and O — solubility booster)" onclick="injectRingTemplate('morpholine')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                    <text x="50" y="20" font-size="22" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                    <text x="50" y="98" font-size="22" font-family="'Inter', sans-serif" font-weight="900" fill="#DC2626" stroke="none" text-anchor="middle">O</text>
+                </svg>
+            </button>
+            <!-- Naphthalene -->
+            <button class="rail-btn" data-tooltip="Naphthalene (fused 6+6 aromatic rings)" onclick="injectRingTemplate('naphthalene')">
+                <svg width="18" height="18" viewBox="0 0 180 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="45,5 85,5 85,95 45,95 5,50" />
+                    <polygon points="95,5 135,5 175,50 135,95 95,95 95,5" />
+                </svg>
+            </button>
+            <!-- Pyrrole -->
+            <button class="rail-btn" data-tooltip="Pyrrole (aromatic 5-ring with N)" onclick="injectRingTemplate('pyrrole')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="50" y="96" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Pyrrolidine -->
+            <button class="rail-btn" data-tooltip="Pyrrolidine (saturated 5-ring with N)" onclick="injectRingTemplate('pyrrolidine')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="50" y="96" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">NH</text>
+                </svg>
+            </button>
+            <!-- Tetrahydrofuran -->
+            <button class="rail-btn" data-tooltip="Tetrahydrofuran (saturated 5-ring with O)" onclick="injectRingTemplate('tetrahydrofuran')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="50" y="96" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#DC2626" stroke="none" text-anchor="middle">O</text>
+                </svg>
+            </button>
+            <!-- Thiazole -->
+            <button class="rail-btn" data-tooltip="Thiazole (aromatic 5-ring, S1 N3)" onclick="injectRingTemplate('thiazole')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="22" y="84" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#CA8A04" stroke="none" text-anchor="middle">S</text>
+                    <text x="78" y="84" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Oxazole -->
+            <button class="rail-btn" data-tooltip="Oxazole (aromatic 5-ring, O1 N3)" onclick="injectRingTemplate('oxazole')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="22" y="84" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#DC2626" stroke="none" text-anchor="middle">O</text>
+                    <text x="78" y="84" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Pyrazole -->
+            <button class="rail-btn" data-tooltip="Pyrazole (aromatic 5-ring, 1,2-diazole)" onclick="injectRingTemplate('pyrazole')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 93,36 76,87 24,87 7,36" />
+                    <text x="50" y="24" font-size="20" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N-N</text>
+                </svg>
+            </button>
+            <!-- Pyrimidine -->
+            <button class="rail-btn" data-tooltip="Pyrimidine (aromatic 6-ring, 1,3-diazine)" onclick="injectRingTemplate('pyrimidine')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                    <text x="30" y="82" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                    <text x="90" y="40" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Piperazine -->
+            <button class="rail-btn" data-tooltip="Piperazine (saturated 6-ring, N1 N4)" onclick="injectRingTemplate('piperazine')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                    <text x="50" y="22" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                    <text x="50" y="98" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Dioxane -->
+            <button class="rail-btn" data-tooltip="Dioxane (saturated 6-ring, O1 O4)" onclick="injectRingTemplate('dioxane')">
+                <svg width="18" height="18" viewBox="0 0 100 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="50,5 90,28 90,72 50,95 10,72 10,28" />
+                    <text x="50" y="22" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#DC2626" stroke="none" text-anchor="middle">O</text>
+                    <text x="50" y="98" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#DC2626" stroke="none" text-anchor="middle">O</text>
+                </svg>
+            </button>
+            <!-- Indole -->
+            <button class="rail-btn" data-tooltip="Indole (fused benzene + pyrrole)" onclick="injectRingTemplate('indole')">
+                <svg width="18" height="18" viewBox="0 0 180 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="45,5 85,5 85,95 45,95 5,50" />
+                    <polygon points="95,5 135,35 115,85 95,95" />
+                    <text x="115" y="85" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Quinoline -->
+            <button class="rail-btn" data-tooltip="Quinoline (fused benzene + pyridine)" onclick="injectRingTemplate('quinoline')">
+                <svg width="18" height="18" viewBox="0 0 180 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="45,5 85,5 85,95 45,95 5,50" />
+                    <polygon points="95,5 135,5 175,50 135,95 95,95" />
+                    <text x="135" y="95" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Isoquinoline -->
+            <button class="rail-btn" data-tooltip="Isoquinoline (fused benzene + pyridine, N2)" onclick="injectRingTemplate('isoquinoline')">
+                <svg width="18" height="18" viewBox="0 0 180 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="45,5 85,5 85,95 45,95 5,50" />
+                    <polygon points="95,5 135,5 175,50 135,95 95,95" />
+                    <text x="175" y="50" font-size="24" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+            <!-- Purine -->
+            <button class="rail-btn" data-tooltip="Purine (imidazole + pyrimidine fused)" onclick="injectRingTemplate('purine')">
+                <svg width="18" height="18" viewBox="0 0 180 100" style="fill:none; stroke:currentColor; stroke-width:8;">
+                    <polygon points="45,5 85,5 85,95 45,95 5,50" />
+                    <polygon points="95,5 135,35 115,85 95,95" />
+                    <text x="45" y="24" font-size="20" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                    <text x="115" y="85" font-size="20" font-family="'Inter', sans-serif" font-weight="900" fill="#2563EB" stroke="none" text-anchor="middle">N</text>
+                </svg>
+            </button>
+
+            <div class="rail-divider"></div>
+
+            <button class="rail-btn" data-tooltip="Clear Canvas" onclick="clearCanvas()" style="color: var(--accent-red);">
+                <i class="fa-solid fa-trash-can" style="font-size: 14px;"></i>
+            </button>
+        </div>
+
+        <!-- Central Work Area -->
+        <div class="canvas-area">
+            <div class="canvas-header">
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <button id="tabSketcher" class="tab-btn active" onclick="switchMainTab('sketcher')">
+                        <i class="fa-solid fa-circle-nodes"></i> 2D Sketcher
+                    </button>
+                    <button id="tabInteractions" class="tab-btn" onclick="switchMainTab('interactions')">
+                        <i class="fa-solid fa-diagram-project"></i> 3D View
+                    </button>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <!-- Undo / Redo -->
+                    <button id="btnUndo" class="rail-btn" data-tooltip="Undo (Ctrl+Z)" onclick="undo()" style="width:24px;height:24px;padding:0;" disabled>
+                        <i class="fa-solid fa-arrow-rotate-left" style="font-size:11px;"></i>
+                    </button>
+                    <button id="btnRedo" class="rail-btn" data-tooltip="Redo (Ctrl+Y)" onclick="redo()" style="width:24px;height:24px;padding:0;" disabled>
+                        <i class="fa-solid fa-arrow-rotate-right" style="font-size:11px;"></i>
+                    </button>
+                    <!-- Clean 2D Structure (RDKit coordinate optimization — like ChemDraw 'Clean') -->
+                    <button id="btnOptimize" class="rail-btn" data-tooltip="Clean 2D Structure (re-draw with ideal bond angles)" onclick="triggerOptimize2D()" style="width:24px;height:24px;padding:0;">
+                        <i class="fa-solid fa-wand-magic-sparkles" style="font-size:11px;"></i>
+                    </button>
+                    
+                    <span id="zoomIndicator" style="font-size:0.68rem; color:var(--text-tertiary); font-family:'JetBrains Mono',monospace; min-width:36px; text-align:right;">100%</span>
+                    <button class="rail-btn" data-tooltip="Fit to View" onclick="fitToView()" style="width:24px;height:24px;padding:0;">
+                        <i class="fa-solid fa-expand" style="font-size:11px;"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Canvas Container -->
+            <div class="canvas-container" id="canvasContainer">
+                <canvas id="molCanvas"></canvas>
+            </div>
+
+            <!-- Interaction Viewer Container (Phase 3) -->
+            <div id="interactionViewContainer" style="display:none; flex:1; flex-direction:column; background:var(--bg-panel); border-radius:0 0 var(--radius-lg) var(--radius-lg); overflow:hidden;">
+                <!-- Interaction Diagram Workspace -->
+                <div style="display:flex; flex:1; position:relative; min-height:400px; background:#FFFFFF;">
+                    <!-- SVG render area -->
+                    <div id="interactionDiagramContainer" style="flex:1; height:100%; min-height:400px; overflow:auto; display:flex; flex-direction:column; gap:0.75rem; padding:0.75rem;">
+
+                        <!-- 3D viewer canvas -->
+                        <div style="position:relative; width:100%; height:550px;">
+                            <div id="kinetic-3d-viewer" class="w-full h-full bg-slate-950 rounded-lg relative border border-slate-800 shadow-inner"></div>
+                        </div>
+
+                        <div class="rounded-md bg-blue-50 p-3 border border-blue-100">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium text-blue-800">
+                                        <strong>Interactive Workspace:</strong> Use the <strong>PyMOL Assistant</strong> on the right to dynamically modify this 3D structure. Try typing conversational commands like <span class="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs text-blue-900">"show spheres"</span> or <span class="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs text-blue-900">"color cyan"</span>.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Conformer Download Toolbar -->
+                        <div class="download-bar" style="display:flex; gap:0.5rem; align-items:center; padding:0.5rem 0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:var(--radius-md);">
+                            <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-right:auto;">Download 3D Structure:</span>
+                            <button class="premium-btn-secondary" onclick="downloadStructure('sdf')" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-panel); border:1px solid var(--border-primary); color:var(--text-secondary); cursor:pointer;"><i class="fa-solid fa-download"></i> .SDF</button>
+                            <button class="premium-btn-secondary" onclick="downloadStructure('xyz')" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-panel); border:1px solid var(--border-primary); color:var(--text-secondary); cursor:pointer;"><i class="fa-solid fa-download"></i> .XYZ</button>
+                            <button class="premium-btn-secondary" onclick="downloadStructure('mol2')" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-panel); border:1px solid var(--border-primary); color:var(--text-secondary); cursor:pointer;"><i class="fa-solid fa-download"></i> .MOL2</button>
+                        </div>
+
+                        <!-- PDB Target Selector Bar -->
+                        <div class="pdb-bar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; padding:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:var(--radius-md);">
+                            <div style="display:flex; align-items:center; gap:0.4rem;">
+                                <label for="pdbIdInput" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">PDB ID:</label>
+                                <input type="text" id="pdbIdInput" class="premium-input" placeholder="e.g. 1OPJ" style="width:70px; padding:0.25rem 0.5rem; font-size:0.75rem;" />
+                                <button class="premium-btn" onclick="fetchPdbTarget()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Fetch</button>
+                            </div>
+                            
+                            <span style="font-size:0.75rem; color:var(--text-tertiary);">or</span>
+                            
+                            <div style="display:flex; align-items:center; gap:0.4rem;">
+                                <input type="file" id="pdbFileInput" style="display:none;" onchange="uploadPdbFile(event)" />
+                                <button class="premium-btn-secondary" onclick="document.getElementById('pdbFileInput').click()" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); color:var(--text-secondary);">
+                                    <i class="fa-solid fa-upload"></i> Upload PDB
+                                </button>
+                            </div>
+
+                            <!-- Target Ligands Dropdown -->
+                            <div id="ligandSelectWrapper" style="display:none; align-items:center; gap:0.4rem; margin-left:auto;">
+                                <label for="ligandSelect" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">Select Ligand:</label>
+                                <select id="ligandSelect" class="premium-input" style="padding:0.2rem 0.5rem; font-size:0.75rem; width:130px;">
+                                    <option value="">-- Choose --</option>
+                                </select>
+                                <button class="premium-btn" onclick="computeInteractions()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Profile</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- SVG export floating button -->
+                    <button id="btnDownloadSVG" class="rail-btn" data-tooltip="Download Vector SVG" onclick="downloadInteractionSVG()" style="position:absolute; right:15px; bottom:15px; width:32px; height:32px; background:rgba(255,255,255,0.9); border:1px solid var(--border-primary); border-radius:50%; box-shadow:var(--shadow-sm); display:none; align-items:center; justify-content:center;">
+                        <i class="fa-solid fa-download" style="color:var(--text-secondary);"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Unified Smart Input Bar -->
+            <div class="smiles-bar">
+                <div style="display:flex; gap:0.5rem; width:100%; align-items:center;">
+                    <div class="smiles-wrapper" style="flex:1; position:relative;">
+                        <!-- Autocomplete dropdown (opens above) -->
+                        <div id="unified_autocomplete"></div>
+
+                        <input
+                            type="text"
+                            id="unified_input"
+                            class="premium-input"
+                            placeholder="Enter SMILES or drug name (e.g. Aspirin, CC(=O)O, Gleevec)..."
+                            autocomplete="off"
+                            style="width:100%; padding-right:90px;"
+                            oninput="onUnifiedInput(this.value)"
+                            onkeydown="onUnifiedKeydown(event)"
+                        />
+                        <span id="unified_source_badge">SMILES</span>
+                    </div>
+                    <button class="premium-btn" id="unified_submit_btn" onclick="triggerUnifiedSearch()" style="white-space:nowrap;">Render</button>
+                </div>
+                <div id="unified_status" style="font-size:0.75rem; color:var(--text-secondary); min-height:1rem; padding-left:2px;"></div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar Panel Stack -->
+        <aside class="right-panel w-[420px] min-w-[380px] max-w-[480px] h-[calc(100vh-48px)] max-h-[calc(100vh-48px)] bg-slate-50 border-l border-slate-200 px-4 py-4 overflow-y-auto overflow-x-hidden flex flex-col gap-4 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
+
+            <!-- Panel 1: PyMOL Assistant Chat Component -->
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
+                <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal mb-3">PyMOL Assistant</header>
+                
+                <!-- Instructional callout / Chat messages wrapper -->
+                <div class="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-xs text-cyan-900 leading-5 mb-3 max-h-48 overflow-y-auto" id="chatMessages">
+                    <div class="chat-message message-system leading-5 break-words">
+                        Describe your desired 3D visualization and I'll generate the corresponding PyMOL commands.
+                    </div>
+                    <div id="dynamicChatLog" class="flex flex-col gap-2 mt-2"></div>
+                </div>
+
+                <div class="chat-input-bar flex items-center gap-2">
+                    <input type="text" id="visible_chat_prompt" class="min-w-0 flex-1 h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 leading-5 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" placeholder="Type PyMOL visual commands..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
+                    <button class="premium-btn shrink-0 h-9 px-3 rounded-md bg-cyan-600 text-sm font-medium text-white leading-5 hover:bg-cyan-700 disabled:opacity-50" onclick="triggerChatSend()">Send</button>
+                </div>
+            </section>
+
+            <!-- Panel 2: Conformer Predictor -->
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                    <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal">Conformer Predictions</header>
+                    <span class="text-xs text-slate-500 leading-4 whitespace-nowrap font-medium">MDRepo Fast Inference</span>
+                </div>
+                <div class="overflow-x-auto overflow-y-hidden rounded-md border border-slate-200" id="dynamicPredictions">
+                    <div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic; padding: 12px;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div>
+                </div>
+            </section>
+
+            <!-- Panel 3: PDB Repurposing Target Search -->
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                    <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal">Drug Repurposing</header>
+                    <span class="text-xs text-slate-500 leading-4 whitespace-nowrap font-medium">Target Match Search</span>
+                </div>
+                <div class="overflow-hidden rounded-md border border-slate-200" id="dynamicRepurposing">
+                    <div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic; padding: 12px;'>Sketched drug target repurposing matches will populate here.</div>
+                </div>
+            </section>
+
+            <!-- Panel 3.5: Real-Time ADME Profile -->
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
+                <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal mb-3">ADME & Lipinski Profile</header>
+                <div id="dynamicADME" class="flex flex-col gap-3">
+                    <div style='color: var(--text-muted); font-size: 0.95rem; font-style: italic;'>Draw a molecule to live-calculate ADME descriptors.</div>
+                </div>
+            </section>
+
+            <!-- Panel 4: Checkpoint Logs -->
+            <section class="rounded-lg border border-slate-800 bg-slate-950 shadow-sm overflow-hidden">
+                <div class="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-3 py-2">
+                    <span class="text-xs font-medium text-slate-200 leading-4">Activity Log</span>
+                    <span class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 leading-4">ONLINE</span>
+                </div>
+                <div class="max-h-48 min-h-32 overflow-y-auto overflow-x-hidden px-3 py-2.5 font-mono text-[11px] leading-5 text-slate-300 bg-slate-950" id="checkpointBody">
+                    <div id="dynamicCheckpointLogs" class="flex flex-col gap-1">
+                        <div class="checkpoint-log-line"><span class="checkpoint-time">[READY]</span> Workspace ready for analysis.</div>
+                    </div>
+                </div>
+            </section>
+
+        </aside>
+    </div>
+
+    <!-- Script section for Canvas 2D Interaction -->
+    <script src="/static/interaction_viewer.js"></script>
+    <script src="/static/sketch.js?v=8"></script>
+
+    <!-- Unified Smart Input Logic -->
+    <script>
+    (function() {
+        /* ---------------------------------------------------------------
+         * SMILES Detection Regex
+         * A string is treated as SMILES if it contains characters typical
+         * of SMILES notation and no pure whitespace-separated words.
+         * --------------------------------------------------------------- */
+        const SMILES_RE = /^[A-Za-z0-9@+\-\[\]()=#$:\/\\%.]+$/;
+        const SMILES_HINT_RE = /[=#\[\]@+\\\/]|[0-9]{1,2}/;
+
+        function looksLikeSmiles(val) {
+            if (!val || val.trim().length === 0) return false;
+            const v = val.trim();
+            // Must pass character whitelist AND have at least one SMILES-specific char
+            return SMILES_RE.test(v) && SMILES_HINT_RE.test(v);
+        }
+
+        /* ---------------------------------------------------------------
+         * DOM refs
+         * --------------------------------------------------------------- */
+        const input   = document.getElementById('unified_input');
+        const acBox   = document.getElementById('unified_autocomplete');
+        const badge   = document.getElementById('unified_source_badge');
+        const status  = document.getElementById('unified_status');
+        const btn     = document.getElementById('unified_submit_btn');
+
+        let acIndex   = -1;    // currently highlighted autocomplete item
+        let acItems   = [];    // current suggestion data
+        let acTimer   = null;  // debounce timer
+
+        /* ---------------------------------------------------------------
+         * Badge update
+         * --------------------------------------------------------------- */
+        function updateBadge(mode, text) {
+            badge.className = '';
+            badge.textContent = text;
+            if (mode) {
+                badge.classList.add(mode + '-mode');
+            }
+        }
+
+        function setStatus(msg, color) {
+            status.textContent = msg;
+            status.style.color = color || 'var(--text-secondary)';
+        }
+
+        /* ---------------------------------------------------------------
+         * Autocomplete dropdown
+         * --------------------------------------------------------------- */
+        function showAutocomplete(suggestions) {
+            acItems = suggestions;
+            acIndex = -1;
+            acBox.innerHTML = '';
+            if (!suggestions || suggestions.length === 0) {
+                acBox.style.display = 'none';
+                return;
+            }
+            suggestions.forEach((s, i) => {
+                const div = document.createElement('div');
+                div.className = 'ac-item';
+                // Show 'Synonym' badge if the suggestion name doesn't match an INN pattern
+                // (synonym names are typically brand names — capitalised single words)
+                const isSynonym = s.name && /^[A-Z][a-z]+$/.test(s.name);
+                const badgeText = isSynonym ? 'Brand' : 'Drug';
+                const badgeStyle = isSynonym
+                    ? 'background:#EFF6FF; color:#2563EB; border:1px solid #DBEAFE;'
+                    : 'background:#ECFDF5; color:#059669; border:1px solid #D1FAE5;';
+                div.innerHTML =
+                    '<span class="ac-name">' + s.name + '</span>' +
+                    '<span class="ac-badge" style="' + badgeStyle + '">' + badgeText + '</span>';
+                div.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    selectAutocomplete(i);
+                });
+                acBox.appendChild(div);
+            });
+            acBox.style.display = 'block';
+        }
+
+        function hideAutocomplete() {
+            acBox.style.display = 'none';
+            acIndex = -1;
+        }
+
+        function selectAutocomplete(i) {
+            if (!acItems[i]) return;
+            const s = acItems[i];
+            input.value = s.name;
+            hideAutocomplete();
+            // Use the SMILES from the suggestion directly
+            if (s.smiles) {
+                renderSmilesDirect(s.smiles, s.name + ' (local DB)');
+            } else {
+                triggerUnifiedSearch();
+            }
+        }
+
+        function highlightItem(i) {
+            const items = acBox.querySelectorAll('.ac-item');
+            items.forEach((el, idx) => {
+                el.style.background = idx === i ? 'rgba(99,102,241,0.08)' : '';
+            });
+        }
+
+        async function fetchAutocomplete(prefix) {
+            try {
+                const r = await fetch('/api/drug/autocomplete?prefix=' + encodeURIComponent(prefix) + '&limit=8');
+                if (!r.ok) return;
+                const d = await r.json();
+                if (d.ok && d.suggestions && d.suggestions.length > 0) {
+                    showAutocomplete(d.suggestions);
+                } else {
+                    hideAutocomplete();
+                }
+            } catch (e) {
+                hideAutocomplete();
+            }
+        }
+
+        /* ---------------------------------------------------------------
+         * Input handler (called on every keystroke)
+         * --------------------------------------------------------------- */
+        window.onUnifiedInput = function(val) {
+            clearTimeout(acTimer);
+            if (!val || val.trim().length === 0) {
+                updateBadge('', '');
+                hideAutocomplete();
+                setStatus('');
+                return;
+            }
+
+            if (looksLikeSmiles(val)) {
+                updateBadge('smiles', 'SMILES');
+                hideAutocomplete();
+                setStatus('SMILES detected — press Enter or click Render');
+            } else {
+                updateBadge('name', 'Drug Name');
+                setStatus('Drug name mode — searching local database...');
+                // Debounce autocomplete fetch
+                if (val.trim().length >= 2) {
+                    acTimer = setTimeout(() => fetchAutocomplete(val.trim()), 200);
+                }
+            }
+        };
+
+        /* ---------------------------------------------------------------
+         * Keyboard navigation
+         * --------------------------------------------------------------- */
+        window.onUnifiedKeydown = function(e) {
+            const items = acBox.querySelectorAll('.ac-item');
+            if (acBox.style.display === 'block' && items.length > 0) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    acIndex = Math.min(acIndex + 1, items.length - 1);
+                    highlightItem(acIndex);
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    acIndex = Math.max(acIndex - 1, -1);
+                    highlightItem(acIndex);
+                    return;
+                }
+                if (e.key === 'Enter' && acIndex >= 0) {
+                    e.preventDefault();
+                    selectAutocomplete(acIndex);
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    hideAutocomplete();
+                    return;
+                }
+            }
+            if (e.key === 'Enter') {
+                triggerUnifiedSearch();
+            }
+        };
+
+        /* ---------------------------------------------------------------
+         * Render SMILES directly (bypasses lookup)
+         * --------------------------------------------------------------- */
+        function renderSmilesDirect(smiles, label) {
+            setStatus('Rendering: ' + (label || smiles.slice(0, 40)) + '...');
+            updateBadge('loading', '⏳');
+            // Delegate to sketch.js's existing SMILES handler
+            if (typeof window.submitSmilesFromExternal === 'function') {
+                window.submitSmilesFromExternal(smiles);
+            } else if (typeof window.handleExternalSmiles === 'function') {
+                window.handleExternalSmiles(smiles);
+            } else {
+                // Fallback: POST to analyze_smiles endpoint
+                fetch('/api/analyze_smiles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ smiles: smiles })
+                }).then(r => r.json()).then(d => {
+                    if (d.ok) {
+                        setStatus('✓ Rendered: ' + (label || smiles.slice(0, 30)), '#10B981');
+                        updateBadge('smiles', 'SMILES');
+                        
+                        // Update 2D canvas coordinates and right-side panels
+                        if (typeof window.applyAnalysisResponse === 'function') {
+                            window.applyAnalysisResponse(d);
+                        }
+                        
+                        // Execute ADME evaluation
+                        if (typeof window.runADMEEvaluation === 'function') {
+                            window.runADMEEvaluation();
+                        }
+                        
+                        // Fetch and render the 3D structural model
+                        fetch('/static/molecule.sdf?t=' + Date.now())
+                            .then(res => res.text())
+                            .then(sdfData => {
+                                if (typeof window.render3DModel === 'function') {
+                                    window.render3DModel(sdfData);
+                                }
+                            }).catch(err => {
+                                console.error('Failed to fetch molecule.sdf for 3D render:', err);
+                            });
+                            
+                        // Dispatch custom event for backward compatibility
+                        window.dispatchEvent(new CustomEvent('externalSmiles', { detail: { smiles } }));
+                    } else {
+                        setStatus('✗ ' + (d.error || 'Failed to render'), '#F43F5E');
+                        updateBadge('', '');
+                    }
+                }).catch(err => {
+                    setStatus('✗ Network error', '#F43F5E');
+                });
+            }
+        }
+
+        /* ---------------------------------------------------------------
+         * Main submit handler
+         * --------------------------------------------------------------- */
+        window.triggerUnifiedSearch = async function() {
+            const val = (input.value || '').trim();
+            if (!val) return;
+
+            hideAutocomplete();
+            btn.disabled = true;
+            btn.textContent = '...';
+
+            try {
+                if (looksLikeSmiles(val)) {
+                    // Direct SMILES render
+                    renderSmilesDirect(val);
+                } else {
+                    // Drug name lookup
+                    updateBadge('loading', '⏳');
+                    setStatus('Looking up "' + val + '"...');
+
+                    const r = await fetch('/api/drug/lookup?name=' + encodeURIComponent(val));
+                    const d = await r.json();
+
+                    if (d.ok && d.smiles) {
+                        const src = d.source === 'local' ? '🗄 local DB' : '🌐 PubChem';
+                        setStatus('✓ Found: ' + (d.name || val) + ' — ' + src, '#10B981');
+                        
+                        // CRITICAL: Replace the input box with the actual SMILES.
+                        // If we don't do this, the canvas auto-sync 1.2s later will see "aspirin" 
+                        // in the input, realise it isn't a SMILES, and fall back to deriving 
+                        // SMILES from the 2D canvas coordinates — losing structural fidelity!
+                        input.value = d.smiles;
+                        
+                        renderSmilesDirect(d.smiles, d.name || val);
+                    } else {
+                        setStatus('✗ Not found: ' + (d.error || 'unknown'), '#F43F5E');
+                        updateBadge('', '');
+                    }
+                }
+            } catch (e) {
+                setStatus('✗ Network error — check server', '#F43F5E');
+                updateBadge('', '');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Render';
+            }
+        };
+
+        /* ---------------------------------------------------------------
+         * Legacy compatibility shims
+         * (in case sketch.js or other JS calls the old function names)
+         * --------------------------------------------------------------- */
+        window.triggerSmilesPasted = function() {
+            const v = (input.value || '').trim();
+            if (v) triggerUnifiedSearch();
+        };
+        window.triggerPubChemSearch = function() {
+            const v = (input.value || '').trim();
+            if (v) triggerUnifiedSearch();
+        };
+
+        // Close autocomplete on outside click
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.smiles-wrapper')) {
+                hideAutocomplete();
+            }
+        });
+
+    })();
+    </script>
+</body>
+</html>

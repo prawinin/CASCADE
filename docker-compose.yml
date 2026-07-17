@@ -1,0 +1,117 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kinetic-sketch-app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - HOST=0.0.0.0
+      - PORT=5000
+      - PYMOL_SERVER_HOST=pymol
+      - PYMOL_SERVER_PORT=9123
+      - PYMOL_ENABLED=0
+      - OLLAMA_API_URL=http://ollama:11434
+      - OLLAMA_ENABLED=0
+      - MOLECULE_SIZE_LIMIT=200
+      - SMILES_LENGTH_LIMIT=2000
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+      - REDIS_URL=redis://redis:6379/0
+    networks:
+      - kinetic-sketch
+    restart: unless-stopped
+    volumes:
+      - /tmp/kinetic_sketch_logs:/tmp
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: kinetic-sketch-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - kinetic-sketch
+    restart: unless-stopped
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kinetic-sketch-celery
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - FLASK_ENV=production
+    networks:
+      - kinetic-sketch
+    restart: unless-stopped
+
+  pymol:
+    image: pymol/pymol:latest
+    container_name: kinetic-sketch-pymol
+    ports:
+      - "9123:9123"
+    environment:
+      - PYMOL_SERVER_PORT=9123
+    networks:
+      - kinetic-sketch
+    restart: unless-stopped
+    profiles:
+      - visualizer
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: kinetic-sketch-ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_MODEL=mistral
+    networks:
+      - kinetic-sketch
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    profiles:
+      - llm
+
+  # Optional: Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: kinetic-sketch-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - kinetic-sketch
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+networks:
+  kinetic-sketch:
+    driver: bridge
+
+volumes:
+  ollama-data:
+  prometheus-data:
+
+# Usage:
+# docker compose up -d                         # Start the production-safe app only
+# docker compose --profile llm up -d           # Include local Ollama
+# docker compose --profile visualizer up -d    # Include PyMOL sidecar
+# docker compose --profile monitoring up -d    # Include Prometheus

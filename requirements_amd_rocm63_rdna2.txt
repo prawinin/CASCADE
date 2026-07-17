@@ -1,0 +1,61 @@
+# =============================================================================
+# KineticSketch AI — AMD GPU Optimized Dependencies (Manjaro / Python 3.14)
+# =============================================================================
+
+# --- Core Chemistry & Data Science (Letting Manjaro's system packages handle versions) ---
+rdkit
+biopython
+
+# --- Web Framework & Server ---
+Flask
+flask-cors
+Flask-RESTful
+Flask-SocketIO
+gunicorn
+Werkzeug
+itsdangerous
+Jinja2
+MarkupSafe
+blinker
+python-engineio
+python-socketio
+simple-websocket
+
+# --- API Schema Validation ---
+marshmallow
+apispec
+apispec-webframeworks
+
+# --- Async Task Queue ---
+celery
+redis
+
+# --- Database & ORM ---
+SQLAlchemy
+openpyxl
+
+# --- Configuration & Environment ---
+python-dotenv
+toml
+
+# --- HTTP Clients ---
+requests
+urllib3
+certifi
+charset-normalizer
+idna
+
+# --- Data Utilities ---
+tqdm
+deepdiff
+python-dateutil
+pytz
+tzlocal
+six
+
+# --- System & Process Utilities ---
+psutil
+setproctitle
+packaging
+typing_extensions
+attrs
