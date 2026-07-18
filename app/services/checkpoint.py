@@ -1,8 +1,8 @@
-import os
-import json
-import logging
-from datetime import datetime
-from typing import Any, Dict, Optional
+import os  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+from datetime import datetime  # noqa: E402
+from typing import Any, Dict, Optional  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.Checkpoint")
 

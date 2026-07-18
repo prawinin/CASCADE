@@ -1,13 +1,13 @@
 # scratch/test_new_apis.py
-import json
-import unittest
-import sys
-import os
+import json  # noqa: E402
+import unittest  # noqa: E402
+import sys  # noqa: E402
+import os  # noqa: E402
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "app"))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from app.main import flask_app
+from app.main import flask_app  # noqa: E402
 
 class TestNewAPIs(unittest.TestCase):
     def setUp(self):

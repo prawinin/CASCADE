@@ -3,7 +3,7 @@
 KineticSketch — Drug Database Builder
 ======================================
 Builds the local SQLite drug database and pre-computed fingerprint matrix
-from the downloaded data files in the data/ directory.
+from the downloaded data files in the data/ directory.  # noqa: E402
 
 Run once before starting the server:
     cd /home/prawin/KineticSketch
@@ -20,17 +20,16 @@ What it does:
 7. Saves fingerprint matrix → data/drug_fingerprints.npz
 """
 
-import os
-import sys
-import csv
-import gzip
-import json
-import sqlite3
-import logging
-import argparse
-import time
-import warnings
-from typing import Set, Dict, Tuple
+import os  # noqa: E402
+import sys  # noqa: E402
+import csv  # noqa: E402
+import gzip  # noqa: E402
+import sqlite3  # noqa: E402
+import logging  # noqa: E402
+import argparse  # noqa: E402
+import time  # noqa: E402
+import warnings  # noqa: E402
+from typing import Set, Dict  # noqa: E402
 
 try:
     from rdkit import RDLogger
@@ -321,7 +320,7 @@ def load_chembl_approved(conn: sqlite3.Connection) -> None:
         logger.warning(f"  ✗ {CHEMBL_GZ} not found — skipping ChEMBL supplement")
         return
 
-    logger.info(f"  Loading ChEMBL 37 chemreps (2.9M compounds — filtering by InChIKey dedup)...")
+    logger.info("  Loading ChEMBL 37 chemreps (2.9M compounds — filtering by InChIKey dedup)...")
 
     # Get existing InChIKeys to avoid duplicates
     existing_keys: Set[str] = set()

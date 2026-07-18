@@ -5,14 +5,14 @@ Main Entrypoint & GUI Orchestration Server
 Clean Modular Multi-File Architecture
 """
 
-import os
-import sys
-import json
-import logging
-import html as html_module
-from datetime import datetime
-from types import SimpleNamespace
-from typing import Any, Dict, List, Optional, Tuple
+import os  # noqa: E402
+import sys  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+import html as html_module  # noqa: E402
+from datetime import datetime  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+from typing import Any, Dict, List, Optional  # noqa: E402
 
 # Setup relative paths so the project can be run from anywhere
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +23,7 @@ services_dir = os.path.join(current_dir, "services")
 if services_dir not in sys.path:
     sys.path.insert(0, services_dir)
 
-from config import get_config
+from config import get_config  # noqa: E402
 
 config = get_config()
 
@@ -277,7 +277,7 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
     except Exception as e:
         logger.error(f"Error in dynamics integration pipeline: {e}", exc_info=True)
         log_checkpoint_to_ui(state, f"Pipeline Error: {str(e)[:100]}", "error")
-        state.predictions_html = f"<div style='color: var(--accent-pink); font-size: 0.95rem;'>Pipeline failed. Check logs.</div>"
+        state.predictions_html = "<div style='color: var(--accent-pink); font-size: 0.95rem;'>Pipeline failed. Check logs.</div>"
 
 
 def render_predictions_table(state: State, mol: "Chem.Mol", predictions: dict) -> None:
@@ -483,7 +483,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
                 f"     title='{first_target}'>{first_target}</div>"
             ) if first_target and first_target not in ("No PDB target recorded", "Unknown target") else ""
             pdb_section = (
-                f"<div style='display:flex; flex-wrap:wrap; gap:4px; margin-top:5px;'>"
+                "<div style='display:flex; flex-wrap:wrap; gap:4px; margin-top:5px;'>"
                 + "".join(pdb_pills) + "</div>"
                 + target_line
             )
@@ -664,7 +664,7 @@ def on_chat_send(state: State) -> None:
         exec_success = execute_pymol_commands(commands_text)
 
         # Format system bubble response (sanitized)
-        sys_bubble = f"<div class='chat-message message-system'>"
+        sys_bubble = "<div class='chat-message message-system'>"
         if exec_success:
             sys_bubble += "Visualization request sent to PyMOL."
         else:
@@ -675,7 +675,7 @@ def on_chat_send(state: State) -> None:
     
     except Exception as e:
         logger.error(f"Error in chat handler: {e}")
-        sys_bubble = f"<div class='chat-message message-system' style='color: var(--accent-pink);'>Error processing request. Check logs.</div>"
+        sys_bubble = "<div class='chat-message message-system' style='color: var(--accent-pink);'>Error processing request. Check logs.</div>"
         state.chat_log_html += sys_bubble
 
     # Clear prompt input
@@ -752,7 +752,7 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
             mol = rw_mol.GetMol()
             try:
                 Chem.SanitizeMol(mol)
-            except Exception as e:
+            except Exception:
                 log_checkpoint_to_ui(state, "Error: Invalid molecule structure", "error")
                 return
             
@@ -811,8 +811,8 @@ def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
 # SERVER RUN ENTRYPOINT
 # =====================================================================
 # Pure Flask app — serves our index.html directly without Taipy's React shell
-import requests
-from flask import Flask, jsonify, request, send_from_directory
+import requests  # noqa: E402
+from flask import Flask, jsonify, request, send_from_directory  # noqa: E402
 flask_app = Flask(__name__, static_folder=os.path.join(current_dir, "static"))
 
 gui_dir = os.path.join(current_dir, "gui")
@@ -842,7 +842,6 @@ def pubchem_fetch():
     name = request.args.get("name", "").strip()
     if not name:
         return jsonify({"ok": False, "error": "Name parameter is required."}), 400
-    from flask import redirect, url_for
     return drug_lookup()
 
 
@@ -1104,8 +1103,10 @@ def interactions():
             for bond in mol.GetBonds():
                 bt = bond.GetBondType()
                 b_type = 1
-                if bt == Chem.BondType.DOUBLE: b_type = 2
-                elif bt == Chem.BondType.TRIPLE: b_type = 3
+                if bt == Chem.BondType.DOUBLE:
+                    b_type = 2
+                elif bt == Chem.BondType.TRIPLE:
+                    b_type = 3
                 bonds.append({
                     "source": bond.GetBeginAtomIdx() + 1,
                     "target": bond.GetEndAtomIdx() + 1,
@@ -1247,8 +1248,10 @@ def mcs_align():
             for b in mol.GetBonds():
                 bt = b.GetBondType()
                 b_type = 1
-                if bt == Chem.BondType.DOUBLE: b_type = 2
-                elif bt == Chem.BondType.TRIPLE: b_type = 3
+                if bt == Chem.BondType.DOUBLE:
+                    b_type = 2
+                elif bt == Chem.BondType.TRIPLE:
+                    b_type = 3
                 bonds.append({
                     "source": b.GetBeginAtomIdx() + 1,
                     "target": b.GetEndAtomIdx() + 1,

@@ -7,9 +7,9 @@ Run from the project root:
     python benchmark.py
 """
 
-import sys
-import os
-import time
+import sys  # noqa: E402
+import os  # noqa: E402
+import time  # noqa: E402
 
 # --- Setup paths so we can import from the app ---
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +59,7 @@ print(f"\n{SEP}")
 print("  1.  SMILES Validation & Sanitization")
 print(SEP)
 
-from rdkit import Chem
+from rdkit import Chem  # noqa: E402
 mol = measure(
     "MolFromSmiles + SanitizeMol",
     fn=lambda: Chem.MolFromSmiles(TEST_SMILES)
@@ -70,7 +70,7 @@ print(f"\n{SEP}")
 print("  2.  3D Coordinate Embedding")
 print(SEP)
 
-from services.cheminformatics import optimize_conformer_3d
+from services.cheminformatics import optimize_conformer_3d  # noqa: E402
 
 mol_3d = measure(
     "ETKDGv3 embed + MMFF94 minimise",
@@ -82,8 +82,8 @@ print(f"\n{SEP}")
 print("  3.  MDRepoPredictor GNN Inference")
 print(SEP)
 
-import torch
-from services.models import get_predictor, get_one_hot_nodes
+import torch  # noqa: E402
+from services.models import get_predictor, get_one_hot_nodes  # noqa: E402
 
 predictor = get_predictor()
 predictor.eval()
@@ -116,7 +116,7 @@ print(f"\n{SEP}")
 print("  4.  ADME Drug-Likeness Profiling")
 print(SEP)
 
-from services.descriptors import calculate_adme_descriptors
+from services.descriptors import calculate_adme_descriptors  # noqa: E402
 
 plain_mol = Chem.MolFromSmiles(TEST_SMILES)
 adme = measure(
@@ -133,7 +133,7 @@ print(f"\n{SEP}")
 print("  5.  Morgan Similarity Search")
 print(SEP)
 
-from services.pdb_repurposing import find_repurposing_targets
+from services.pdb_repurposing import find_repurposing_targets  # noqa: E402
 
 repurpose = measure(
     "Tanimoto similarity search",

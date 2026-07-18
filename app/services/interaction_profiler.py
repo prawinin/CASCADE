@@ -1,8 +1,7 @@
-import logging
-import numpy as np
-from typing import List, Dict, Any, Tuple
-from Bio.PDB import Residue, Atom
-from rdkit import Chem
+import logging  # noqa: E402
+import numpy as np  # noqa: E402
+from typing import List, Dict, Any, Tuple  # noqa: E402
+from Bio.PDB import Residue, Atom  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.InteractionProfiler")
 
@@ -75,7 +74,6 @@ def detect_interactions(ligand_atoms: List[Atom.Atom], pocket_residues: List[Res
     interactions = []
     
     # 1. Build ligand info: coordinates, elements, donors, acceptors, rings
-    ligand_coords = {a.get_name(): a.get_coord() for a in ligand_atoms}
     
     # Helper to check if a ligand atom is donor/acceptor
     # For ligand, any N or O can be donor or acceptor; Halogens F, Cl, Br, I are acceptors.
@@ -86,8 +84,6 @@ def detect_interactions(ligand_atoms: List[Atom.Atom], pocket_residues: List[Res
     # Look for planar cycles of length 5 or 6 among C, N, O, S atoms.
     ligand_rings = []
     atom_coords_arr = np.array([a.get_coord() for a in ligand_atoms])
-    atom_names = [a.get_name() for a in ligand_atoms]
-    atom_elements = [a.element.upper() for a in ligand_atoms]
     
     # Simple cycle finder for 5 and 6 membered rings based on distance (< 1.8 Å)
     n_atoms = len(ligand_atoms)
@@ -159,11 +155,6 @@ def detect_interactions(ligand_atoms: List[Atom.Atom], pocket_residues: List[Res
                         # Calculate distance
                         dist = np.linalg.norm(l_coord - p_coord)
                         if dist <= 3.5:
-                            # Classify who is donor / acceptor
-                            # Protein donor list:
-                            is_p_donor = p_name in PROTEIN_DONORS.get(resname, []) or p_name in PROTEIN_DONORS["BACKBONE"]
-                            is_p_acceptor = p_name in PROTEIN_ACCEPTORS.get(resname, []) or p_name in PROTEIN_ACCEPTORS["BACKBONE"]
-                            
                             # Add H-bond
                             interactions.append({
                                 "type": "hydrogen_bond",

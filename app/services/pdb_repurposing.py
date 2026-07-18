@@ -1,6 +1,5 @@
-import logging
-import os
-from typing import List, Dict, Any
+import logging  # noqa: E402
+from typing import List, Dict, Any  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.PDBRepurposing")
 

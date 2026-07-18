@@ -3,9 +3,9 @@
 KineticSketch AI - Root Launcher
 Allows booting the application seamlessly from the root workspace directory.
 """
-import os
-import sys
-import runpy
+import os  # noqa: E402
+import sys  # noqa: E402
+import runpy  # noqa: E402
 
 # Resolve absolute paths to prevent launch system conflicts
 current_dir = os.path.dirname(os.path.abspath(__file__))

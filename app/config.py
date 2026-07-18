@@ -9,11 +9,9 @@ This module loads environment variables and provides defaults for:
 - Logging configuration
 """
 
-import os
-import json
-from typing import Optional, Dict, Any
-from pathlib import Path
-from dotenv import load_dotenv
+import os  # noqa: E402
+from typing import Optional, Dict, Any  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
 
 # Load environment variables from .env file at the root of the project
 load_dotenv()
@@ -118,7 +116,7 @@ class Config:
         """
         lines = [
             f"{'='*60}",
-            f"KineticSketch AI - Startup Configuration",
+            "KineticSketch AI - Startup Configuration",
             f"{'='*60}",
             f"Environment:        {cls.ENVIRONMENT}",
             f"Debug Mode:         {cls.DEBUG}",

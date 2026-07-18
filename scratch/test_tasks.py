@@ -1,16 +1,16 @@
-import os
-import sys
-import unittest
-import json
+import os  # noqa: E402
+import sys  # noqa: E402
+import unittest  # noqa: E402
+import json  # noqa: E402
 
 # Ensure parent paths are configured for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "app"))
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from app.main import flask_app
-from app.tasks import celery_app
-from app.tasks.task_schemas import TaskSubmitSchema
-from marshmallow import ValidationError
+from app.main import flask_app  # noqa: E402
+from app.tasks import celery_app  # noqa: E402
+from app.tasks.task_schemas import TaskSubmitSchema  # noqa: E402
+from marshmallow import ValidationError  # noqa: E402
 
 # Force Celery to run tasks synchronously for unit testing without Redis connection
 celery_app.conf.update(

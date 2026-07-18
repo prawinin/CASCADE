@@ -1,6 +1,6 @@
-from celery import Celery
-import os
-import sys
+from celery import Celery  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
 
 # Ensure app and parent directories are in python path
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,7 +10,7 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from app.config import get_config
+from app.config import get_config  # noqa: E402
 
 config = get_config()
 

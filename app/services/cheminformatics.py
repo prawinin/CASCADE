@@ -1,7 +1,7 @@
-import logging
-from typing import List
-from rdkit import Chem
-from rdkit.Chem import AllChem
+import logging  # noqa: E402
+from typing import List  # noqa: E402
+from rdkit import Chem  # noqa: E402
+from rdkit.Chem import AllChem  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.Cheminformatics")
 
@@ -42,19 +42,30 @@ def write_mol2(mol: Chem.Mol, filepath: str) -> None:
         tripos_type = symbol
         
         if symbol == 'C':
-            if hyb == Chem.HybridizationType.SP3: tripos_type = "C.3"
-            elif hyb == Chem.HybridizationType.SP2: tripos_type = "C.2"
-            elif hyb == Chem.HybridizationType.SP: tripos_type = "C.1"
-            elif atom.GetIsAromatic(): tripos_type = "C.ar"
+            if hyb == Chem.HybridizationType.SP3:
+                tripos_type = "C.3"
+            elif hyb == Chem.HybridizationType.SP2:
+                tripos_type = "C.2"
+            elif hyb == Chem.HybridizationType.SP:
+                tripos_type = "C.1"
+            elif atom.GetIsAromatic():
+                tripos_type = "C.ar"
         elif symbol == 'N':
-            if hyb == Chem.HybridizationType.SP3: tripos_type = "N.3"
-            elif hyb == Chem.HybridizationType.SP2: tripos_type = "N.2"
-            elif hyb == Chem.HybridizationType.SP: tripos_type = "N.1"
-            elif atom.GetIsAromatic(): tripos_type = "N.ar"
+            if hyb == Chem.HybridizationType.SP3:
+                tripos_type = "N.3"
+            elif hyb == Chem.HybridizationType.SP2:
+                tripos_type = "N.2"
+            elif hyb == Chem.HybridizationType.SP:
+                tripos_type = "N.1"
+            elif atom.GetIsAromatic():
+                tripos_type = "N.ar"
         elif symbol == 'O':
-            if hyb == Chem.HybridizationType.SP3: tripos_type = "O.3"
-            elif hyb == Chem.HybridizationType.SP2: tripos_type = "O.2"
-            elif atom.GetIsAromatic(): tripos_type = "O.co2"
+            if hyb == Chem.HybridizationType.SP3:
+                tripos_type = "O.3"
+            elif hyb == Chem.HybridizationType.SP2:
+                tripos_type = "O.2"
+            elif atom.GetIsAromatic():
+                tripos_type = "O.co2"
         elif symbol == 'S':
             tripos_type = "S.3"
         elif symbol == 'P':
@@ -75,9 +86,12 @@ def write_mol2(mol: Chem.Mol, filepath: str) -> None:
             bond_type = "ar"
         else:
             bt = bond.GetBondType()
-            if bt == Chem.BondType.SINGLE: bond_type = "1"
-            elif bt == Chem.BondType.DOUBLE: bond_type = "2"
-            elif bt == Chem.BondType.TRIPLE: bond_type = "3"
+            if bt == Chem.BondType.SINGLE:
+                bond_type = "1"
+            elif bt == Chem.BondType.DOUBLE:
+                bond_type = "2"
+            elif bt == Chem.BondType.TRIPLE:
+                bond_type = "3"
 
         lines.append(
             f"{idx+1:>5} {bond.GetBeginAtomIdx()+1:>5} {bond.GetEndAtomIdx()+1:>5} {bond_type:>3}"

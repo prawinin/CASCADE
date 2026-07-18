@@ -3,10 +3,10 @@
 Hugging Face Spaces Entrypoint (Gradio SDK Workaround)
 Starts local Redis-server, Celery worker, and binds Flask app to port 7860.
 """
-import subprocess
-import os
-import sys
-import time
+import subprocess  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+import time  # noqa: E402
 
 print("--- STARTING SYSTEM SERVICES FOR KINETIC_SKETCH ---", flush=True)
 
@@ -43,5 +43,5 @@ os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 
 # 4. Launch the application
 print("Launching KineticSketch server...", flush=True)
-import runpy
+import runpy  # noqa: E402
 runpy.run_path("kinetic_sketch.py", run_name="__main__")

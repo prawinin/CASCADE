@@ -6,8 +6,8 @@ falls back to RDKit descriptor-based heuristics.
 Install: pip install admet-ai  (optional — graceful degradation if not installed)
 """
 
-import logging
-from typing import Dict, Any, Optional
+import logging  # noqa: E402
+from typing import Dict, Any  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.ADMET_NN")
 
@@ -95,23 +95,28 @@ def _predict_with_rdkit_fallback(smiles: str) -> Dict[str, Any]:
         logp = Descriptors.MolLogP(mol)
         tpsa = Descriptors.TPSA(mol)
         hbd = rdMolDescriptors.CalcNumHBD(mol)
-        hba = rdMolDescriptors.CalcNumHBA(mol)
-        rotatable = rdMolDescriptors.CalcNumRotatableBonds(mol)
         aromatic_rings = rdMolDescriptors.CalcNumAromaticRings(mol)
         
         # Heuristic absorption estimates
         hia_score = 1.0
-        if mw > 500: hia_score -= 0.3
-        if logp > 5 or logp < -1: hia_score -= 0.2
-        if tpsa > 140: hia_score -= 0.3
-        if hbd > 5: hia_score -= 0.1
+        if mw > 500:
+            hia_score -= 0.3
+        if logp > 5 or logp < -1:
+            hia_score -= 0.2
+        if tpsa > 140:
+            hia_score -= 0.3
+        if hbd > 5:
+            hia_score -= 0.1
         hia_score = max(0.0, min(1.0, hia_score))
         
         # Heuristic BBB penetration
         bbb_score = 1.0
-        if mw > 400: bbb_score -= 0.3
-        if tpsa > 90: bbb_score -= 0.4
-        if hbd > 3: bbb_score -= 0.2
+        if mw > 400:
+            bbb_score -= 0.3
+        if tpsa > 90:
+            bbb_score -= 0.4
+        if hbd > 3:
+            bbb_score -= 0.2
         bbb_score = max(0.0, min(1.0, bbb_score))
         
         return {

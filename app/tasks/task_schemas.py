@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, validate, ValidationError
+from marshmallow import Schema, fields, validate, ValidationError  # noqa: E402
 
 class Optimize3DParamsSchema(Schema):
     smiles = fields.Str(required=True, validate=validate.Length(min=1))

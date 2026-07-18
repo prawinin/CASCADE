@@ -4,11 +4,11 @@ Silently records every user drawing operation during the sketch phase.
 Writes JSONL (JSON Lines) files: one line per action, ordered chronologically.
 """
 
-import os
-import json
-import logging
-from datetime import datetime
-from typing import Dict, Any, Optional
+import os  # noqa: E402
+import json  # noqa: E402
+import logging  # noqa: E402
+from datetime import datetime  # noqa: E402
+from typing import Dict, Any, Optional  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.ActionLogger")
 

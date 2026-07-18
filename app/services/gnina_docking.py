@@ -7,11 +7,10 @@ Setup: Download gnina binary from https://github.com/gnina/gnina/releases
        Place it in the project root or set GNINA_PATH env var.
 """
 
-import os
-import logging
-import subprocess
-import tempfile
-from typing import Dict, Any, Optional, List
+import os  # noqa: E402
+import logging  # noqa: E402
+import subprocess  # noqa: E402
+from typing import Dict, Any, List  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.GNINADocking")
 

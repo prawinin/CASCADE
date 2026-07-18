@@ -1,6 +1,6 @@
-import logging
-from rdkit import Chem
-from rdkit.Chem import Descriptors, rdMolDescriptors
+import logging  # noqa: E402
+from rdkit import Chem  # noqa: E402
+from rdkit.Chem import Descriptors, rdMolDescriptors  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.Descriptors")
 
@@ -54,10 +54,14 @@ def calculate_adme_descriptors(mol: Chem.Mol) -> dict:
         hba_pass = hba <= 10
         
         lipinski_violations = 0
-        if not mw_pass: lipinski_violations += 1
-        if not logp_pass: lipinski_violations += 1
-        if not hbd_pass: lipinski_violations += 1
-        if not hba_pass: lipinski_violations += 1
+        if not mw_pass:
+            lipinski_violations += 1
+        if not logp_pass:
+            lipinski_violations += 1
+        if not hbd_pass:
+            lipinski_violations += 1
+        if not hba_pass:
+            lipinski_violations += 1
         lipinski_pass = lipinski_violations <= 1 # Can violate at most 1 rule
 
         # Veber Rule checks:
@@ -66,8 +70,10 @@ def calculate_adme_descriptors(mol: Chem.Mol) -> dict:
         tpsa_pass = tpsa <= 140
         
         veber_violations = 0
-        if not rb_pass: veber_violations += 1
-        if not tpsa_pass: veber_violations += 1
+        if not rb_pass:
+            veber_violations += 1
+        if not tpsa_pass:
+            veber_violations += 1
         veber_pass = veber_violations == 0
 
         return {

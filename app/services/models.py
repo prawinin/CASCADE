@@ -1,5 +1,5 @@
-import os
-import logging
+import os  # noqa: E402
+import logging  # noqa: E402
 
 # Override GFX version for AMD Radeon RX 6500M (reported as gfx1030 on Manjaro/ROCm).
 # Maps the GPU to the supported RDNA2 gfx1030 instruction set for PyTorch HIP dispatch.
@@ -7,10 +7,10 @@ if "HSA_OVERRIDE_GFX_VERSION" not in os.environ:
     os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from typing import List, Optional, Dict, Any
+import torch  # noqa: E402
+import torch.nn as nn  # noqa: E402
+import torch.nn.functional as F  # noqa: E402
+from typing import List, Optional, Dict, Any  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.Models")
 
@@ -321,7 +321,11 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
 
     if os.path.exists(WEIGHTS_PATH):
         try:
-            checkpoint = torch.load(WEIGHTS_PATH, map_location=device, weights_only=False)
+            try:
+                checkpoint = torch.load(WEIGHTS_PATH, map_location=device, weights_only=True)
+            except Exception:
+                logger.warning("Failed to load checkpoint with weights_only=True, falling back to weights_only=False")
+                checkpoint = torch.load(WEIGHTS_PATH, map_location=device, weights_only=False)
 
             if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
                 model_config.update(checkpoint.get("config", {}))

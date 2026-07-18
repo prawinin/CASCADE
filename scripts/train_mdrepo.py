@@ -12,8 +12,12 @@ Key optimisations vs v3
 No quality changes: same architecture, same loss, same gradients, same math.
 """
 
-import os, sys, random, logging, argparse, warnings
-import numpy as np
+import os  # noqa: E402
+import sys  # noqa: E402
+import random  # noqa: E402
+import logging  # noqa: E402
+import argparse  # noqa: E402
+import warnings  # noqa: E402
 
 # ── ROCm GFX override (RDNA2 / RX 6500 series) ────────────────────────────────
 if "HSA_OVERRIDE_GFX_VERSION" not in os.environ:
@@ -21,7 +25,8 @@ if "HSA_OVERRIDE_GFX_VERSION" not in os.environ:
 
 
 try:
-    from rdkit import RDLogger; RDLogger.DisableLog("rdApp.*")
+    from rdkit import RDLogger
+    RDLogger.DisableLog("rdApp.*")
 except ImportError:
     pass
 warnings.filterwarnings("ignore")
@@ -72,7 +77,6 @@ SEED_SMILES = [
 
 def compute_multitask_labels(mol):
     """Generates synthetic multi-task labels for training."""
-    from rdkit.Chem import Descriptors, rdMolDescriptors
     
     ri = mol.GetRingInfo()
     ar, ra = set(), set()
@@ -135,7 +139,8 @@ def compute_multitask_labels(mol):
 # ── Synthetic dataset generation/caching ─────────────────────────────────────
 
 def generate_synthetic(n=150000):
-    import json, gzip
+    import json
+    import gzip
     cache = os.path.join(DATA_DIR, f"synthetic_dataset_{n}.json.gz")
     if os.path.exists(cache):
         logger.info(f"Loading cache: {cache}")
@@ -258,7 +263,8 @@ class RMSFDataset:
             self.coords_t.append(torch.tensor(s["positions"], dtype=torch.float32))
             nf = s.get("node_features") or [[0.0] * 13 for _ in s["positions"]]
             if not any(nf[0]):        # all-zero row → Carbon
-                for row in nf: row[1] = 1.0
+                for row in nf:
+                    row[1] = 1.0
             self.nf_t.append(torch.tensor(nf, dtype=torch.float32))
             # Multi-task target: (N, 7) — [rmsf_10ns, rmsf_1us, rmsf_cont, sasa, bfactor, charge, homo_lumo_gap_repeated]
             n = len(s["positions"])
@@ -304,6 +310,38 @@ def collate_padded(batch):
     return torch.stack(cl), torch.stack(nl), torch.stack(tl), torch.stack(ml)
 
 
+# ── Shared multi-task loss helper ─────────────────────────────────────────────
+
+def _compute_multitask_loss(pred_dict: dict, T_d, M_d, crit):
+    """
+    Computes the weighted multi-task MSE loss from batch predictions.
+
+    T_d shape: (B, N, 7) — columns: [rmsf_10ns, rmsf_1us, rmsf_cont, sasa, bfactor, charge, hl_gap]
+    M_d shape: (B, N)    — boolean mask for valid (non-padded) atoms
+
+    Weights: rmsf=1.0, sasa=0.5, bfactor=0.5, charge=1.0, homo_lumo=0.3
+    """
+    rmsf_pred = pred_dict["rmsf"]           # (B, N, 3)
+    rmsf_tgt  = T_d[:, :, :3]              # (B, N, 3)
+    sasa_pred = pred_dict["sasa"]           # (B, N)
+    sasa_tgt  = T_d[:, :, 3]               # (B, N)
+    bf_pred   = pred_dict["bfactor"]        # (B, N)
+    bf_tgt    = T_d[:, :, 4]               # (B, N)
+    ch_pred   = pred_dict["charge"]         # (B, N)
+    ch_tgt    = T_d[:, :, 5]               # (B, N)
+    hl_pred   = pred_dict["homo_lumo_gap"]  # (B,)
+    hl_tgt    = T_d[:, 0, 6]              # (B,) — same value repeated per node
+
+    mask3d = M_d.unsqueeze(-1).expand_as(rmsf_pred)
+    loss_rmsf = crit(rmsf_pred[mask3d], rmsf_tgt[mask3d])
+    loss_sasa = crit(sasa_pred[M_d], sasa_tgt[M_d])
+    loss_bf   = crit(bf_pred[M_d],   bf_tgt[M_d])
+    loss_ch   = crit(ch_pred[M_d],   ch_tgt[M_d])
+    loss_hl   = crit(hl_pred, hl_tgt)
+
+    return loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl
+
+
 # ── Training loop ─────────────────────────────────────────────────────────────
 
 def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
@@ -347,7 +385,11 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
     # Load checkpoint into raw_model if resuming
     if resume and os.path.exists(WEIGHTS_PATH):
         try:
-            ckpt = torch.load(WEIGHTS_PATH, map_location=device, weights_only=False)
+            try:
+                ckpt = torch.load(WEIGHTS_PATH, map_location=device, weights_only=True)
+            except Exception:
+                logger.warning("Failed to load checkpoint with weights_only=True, falling back to weights_only=False")
+                ckpt = torch.load(WEIGHTS_PATH, map_location=device, weights_only=False)
             sd = ckpt["state_dict"] if isinstance(ckpt, dict) and "state_dict" in ckpt else ckpt
             raw_model.load_state_dict(sd, strict=False)
             logger.info("  ✓ Checkpoint resumed")
@@ -391,27 +433,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
             if use_amp:
                 with torch.amp.autocast(device_type="cuda"):
                     pred_dict = model.forward_batch(C_d, Nf_d, M_d)
-                    # Reconstruct per-node target columns
-                    # T_d shape: (B, N, 7) — cols: [rmsf_10ns, rmsf_1us, rmsf_cont, sasa, bf, charge, hl_gap]
-                    rmsf_pred = pred_dict["rmsf"]          # (B, N, 3)
-                    rmsf_tgt = T_d[:, :, :3]               # (B, N, 3)
-                    sasa_pred = pred_dict["sasa"]           # (B, N)
-                    sasa_tgt = T_d[:, :, 3]                # (B, N)
-                    bf_pred = pred_dict["bfactor"]          # (B, N)
-                    bf_tgt = T_d[:, :, 4]                  # (B, N)
-                    ch_pred = pred_dict["charge"]           # (B, N)
-                    ch_tgt = T_d[:, :, 5]                  # (B, N)
-                    hl_pred = pred_dict["homo_lumo_gap"]    # (B,)
-                    hl_tgt = T_d[:, 0, 6]                  # (B,) — same value per node
-
-                    loss_rmsf = crit(rmsf_pred[M_d.unsqueeze(-1).expand_as(rmsf_pred)],
-                                     rmsf_tgt[M_d.unsqueeze(-1).expand_as(rmsf_tgt)])
-                    loss_sasa = crit(sasa_pred[M_d], sasa_tgt[M_d])
-                    loss_bf = crit(bf_pred[M_d], bf_tgt[M_d])
-                    loss_ch = crit(ch_pred[M_d], ch_tgt[M_d])
-                    loss_hl = crit(hl_pred, hl_tgt)
-
-                    loss = (loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl) / accum_steps
+                    loss = _compute_multitask_loss(pred_dict, T_d, M_d, crit) / accum_steps
                 scaler.scale(loss).backward()
                 if (step + 1) % accum_steps == 0 or (step + 1) == len(tl):
                     scaler.unscale_(opt)
@@ -421,27 +443,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
                     opt.zero_grad(set_to_none=True)
             else:
                 pred_dict = model.forward_batch(C_d, Nf_d, M_d)
-                # Reconstruct per-node target columns
-                # T_d shape: (B, N, 7) — cols: [rmsf_10ns, rmsf_1us, rmsf_cont, sasa, bf, charge, hl_gap]
-                rmsf_pred = pred_dict["rmsf"]          # (B, N, 3)
-                rmsf_tgt = T_d[:, :, :3]               # (B, N, 3)
-                sasa_pred = pred_dict["sasa"]           # (B, N)
-                sasa_tgt = T_d[:, :, 3]                # (B, N)
-                bf_pred = pred_dict["bfactor"]          # (B, N)
-                bf_tgt = T_d[:, :, 4]                  # (B, N)
-                ch_pred = pred_dict["charge"]           # (B, N)
-                ch_tgt = T_d[:, :, 5]                  # (B, N)
-                hl_pred = pred_dict["homo_lumo_gap"]    # (B,)
-                hl_tgt = T_d[:, 0, 6]                  # (B,) — same value per node
-
-                loss_rmsf = crit(rmsf_pred[M_d.unsqueeze(-1).expand_as(rmsf_pred)],
-                                 rmsf_tgt[M_d.unsqueeze(-1).expand_as(rmsf_tgt)])
-                loss_sasa = crit(sasa_pred[M_d], sasa_tgt[M_d])
-                loss_bf = crit(bf_pred[M_d], bf_tgt[M_d])
-                loss_ch = crit(ch_pred[M_d], ch_tgt[M_d])
-                loss_hl = crit(hl_pred, hl_tgt)
-
-                loss = (loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl) / accum_steps
+                loss = _compute_multitask_loss(pred_dict, T_d, M_d, crit) / accum_steps
                 loss.backward()
                 if (step + 1) % accum_steps == 0 or (step + 1) == len(tl):
                     nn.utils.clip_grad_norm_(raw_model.parameters(), 1.0)
@@ -466,26 +468,8 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
                         pred_dict = model.forward_batch(C_d, Nf_d, M_d)
                 else:
                     pred_dict = model.forward_batch(C_d, Nf_d, M_d)
-                
-                rmsf_pred = pred_dict["rmsf"]
-                rmsf_tgt = T_d[:, :, :3]
-                sasa_pred = pred_dict["sasa"]
-                sasa_tgt = T_d[:, :, 3]
-                bf_pred = pred_dict["bfactor"]
-                bf_tgt = T_d[:, :, 4]
-                ch_pred = pred_dict["charge"]
-                ch_tgt = T_d[:, :, 5]
-                hl_pred = pred_dict["homo_lumo_gap"]
-                hl_tgt = T_d[:, 0, 6]
 
-                loss_rmsf = crit(rmsf_pred[M_d.unsqueeze(-1).expand_as(rmsf_pred)],
-                                 rmsf_tgt[M_d.unsqueeze(-1).expand_as(rmsf_tgt)])
-                loss_sasa = crit(sasa_pred[M_d], sasa_tgt[M_d])
-                loss_bf = crit(bf_pred[M_d], bf_tgt[M_d])
-                loss_ch = crit(ch_pred[M_d], ch_tgt[M_d])
-                loss_hl = crit(hl_pred, hl_tgt)
-
-                vl2 += (loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl).item()
+                vl2 += _compute_multitask_loss(pred_dict, T_d, M_d, crit).item()
                 vn  += 1
         av = vl2 / max(1, vn)
 

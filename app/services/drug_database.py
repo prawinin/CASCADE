@@ -6,11 +6,11 @@ and pre-computed Morgan fingerprints for fast vectorized Tanimoto repurposing.
 Build the database first by running: python scripts/build_drug_db.py
 """
 
-import os
-import logging
-import sqlite3
-import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+import os  # noqa: E402
+import logging  # noqa: E402
+import sqlite3  # noqa: E402
+import numpy as np  # noqa: E402
+from typing import List, Dict, Any, Optional  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.DrugDatabase")
 

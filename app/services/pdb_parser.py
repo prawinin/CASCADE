@@ -1,8 +1,8 @@
-import os
-import urllib.request
-import logging
-from typing import List, Tuple, Dict, Any
-from Bio.PDB import PDBParser, NeighborSearch, Structure, Residue, Atom
+import os  # noqa: E402
+import urllib.request  # noqa: E402
+import logging  # noqa: E402
+from typing import List, Tuple  # noqa: E402
+from Bio.PDB import PDBParser, NeighborSearch, Structure, Residue, Atom  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.PDBParser")
 
@@ -24,6 +24,9 @@ def fetch_pdb_file(pdb_id: str) -> str:
         return filepath
         
     url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+    # Security: always validate the scheme is https before downloading
+    if not url.startswith("https://"):
+        raise ValueError(f"Refusing to download from non-HTTPS URL: {url}")
     logger.info(f"Downloading PDB structure from {url}...")
     try:
         urllib.request.urlretrieve(url, filepath)

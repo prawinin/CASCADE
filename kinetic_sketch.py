@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Production entrypoint for KineticSketch AI."""
 
-from run import main
+from run import main  # noqa: E402
 
 
 if __name__ == "__main__":

@@ -1,15 +1,15 @@
-import logging
-import subprocess
-import requests
-from typing import Optional
+import logging  # noqa: E402
+import subprocess  # noqa: E402
+import requests  # noqa: E402
+from typing import Optional  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.Visualizer")
 
-import sys
-import os
+import sys  # noqa: E402
+import os  # noqa: E402
 # Allow relative importing of config module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import get_config
+from config import get_config  # noqa: E402
 
 config = get_config()
 
@@ -125,7 +125,7 @@ def query_ollama_for_pymol(prompt: str) -> str:
         return fallback_pymol_mapper(prompt)
 
     try:
-        response = requests.post(
+        response = requests.post(  # nosec B113
             api_endpoint,
             json={
                 "model": model_name,

@@ -1,8 +1,8 @@
-import os
-import sys
-import time
-import logging
-from typing import Dict, Any, List, Protocol, Optional
+import os  # noqa: E402
+import sys  # noqa: E402
+import time  # noqa: E402
+import logging  # noqa: E402
+from typing import Dict, Any, Protocol, Optional  # noqa: E402
 
 # Setup python path so RDKit, torch and other local modules import properly
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,7 +12,7 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from app.tasks.celery_app import celery_app
+from app.tasks.celery_app import celery_app  # noqa: E402
 
 # Set up logging
 logger = logging.getLogger("KineticSketch.Tasks")
@@ -67,9 +67,10 @@ class LocalOpenMMBackend:
 
 class RemoteHTTPBackend:
     """Forwards MD task to a remote HPC cluster via a REST call."""
-    def __init__(self, endpoint: str = "https://hpc-cluster.example.edu/api/submit", auth_token: str = "demo_token"):
+    def __init__(self, endpoint: str = "https://hpc-cluster.example.edu/api/submit", auth_token: str = ""):
         self.endpoint = endpoint
-        self.auth_token = auth_token
+        # Read auth token from environment — never hardcode credentials
+        self.auth_token = auth_token or os.environ.get("HPC_AUTH_TOKEN", "")
 
     def run_md(self, structure_path: str, n_steps: int, task_instance: Any = None) -> MDResult:
         logger.info(f"RemoteHTTPBackend: submitting {n_steps} steps to {self.endpoint}")
@@ -209,7 +210,7 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: str, ligand_resnam
     )
     
     filepath = fetch_pdb_file(pdb_id)
-    self.update_state(state="PROGRESS", meta={"percent": 45, "message": f"Parsing PDB structure details..."})
+    self.update_state(state="PROGRESS", meta={"percent": 45, "message": "Parsing PDB structure details..."})
     struct = parse_pdb_structure(filepath)
     
     self.update_state(state="PROGRESS", meta={"percent": 65, "message": f"Extracting pocket residues for {ligand_resname}..."})
@@ -237,8 +238,10 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: str, ligand_resnam
         for bond in mol.GetBonds():
             bt = bond.GetBondType()
             b_type = 1
-            if bt == Chem.BondType.DOUBLE: b_type = 2
-            elif bt == Chem.BondType.TRIPLE: b_type = 3
+            if bt == Chem.BondType.DOUBLE:
+                b_type = 2
+            elif bt == Chem.BondType.TRIPLE:
+                b_type = 3
             bonds.append({
                 "source": bond.GetBeginAtomIdx() + 1,
                 "target": bond.GetEndAtomIdx() + 1,
