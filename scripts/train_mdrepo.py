@@ -16,7 +16,9 @@ import os, sys, random, logging, argparse, warnings
 import numpy as np
 
 # ── ROCm GFX override (RDNA2 / RX 6500 series) ────────────────────────────────
-os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
+if "HSA_OVERRIDE_GFX_VERSION" not in os.environ:
+    os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
+
 
 try:
     from rdkit import RDLogger; RDLogger.DisableLog("rdApp.*")
@@ -68,7 +70,10 @@ SEED_SMILES = [
 
 # ── Synthetic RMSF labels ─────────────────────────────────────────────────────
 
-def compute_rmsf(mol):
+def compute_multitask_labels(mol):
+    """Generates synthetic multi-task labels for training."""
+    from rdkit.Chem import Descriptors, rdMolDescriptors
+    
     ri = mol.GetRingInfo()
     ar, ra = set(), set()
     for ring in ri.AtomRings():
@@ -76,9 +81,14 @@ def compute_rmsf(mol):
             ra.add(i)
             if mol.GetAtomWithIdx(i).GetIsAromatic():
                 ar.add(i)
-    r10, r1u = [], []
+
+    r10, r1u, r_cont = [], [], []
+    sasa_labels, bf_labels, charge_labels = [], [], []
+
     for atom in mol.GetAtoms():
         i, sym, deg = atom.GetIdx(), atom.GetSymbol(), atom.GetDegree()
+
+        # ── RMSF labels (same logic as before) ──
         if i in ar:
             base = 0.08 + random.gauss(0, 0.02)
         elif i in ra:
@@ -97,7 +107,29 @@ def compute_rmsf(mol):
         base = max(0.01, base)
         r10.append(round(base, 4))
         r1u.append(round(base * (1.5 + random.gauss(0, 0.2)), 4))
-    return r10, r1u
+        r_cont.append(round(base * (1.0 + random.gauss(0, 0.3)), 4))
+
+        # ── SASA labels (heuristic: exposed atoms have higher SASA) ──
+        if sym == "H":
+            sasa_val = 5.0 + random.gauss(0, 1.0)
+        elif deg <= 1:
+            sasa_val = 30.0 + random.gauss(0, 5.0)
+        elif i in ar:
+            sasa_val = 8.0 + random.gauss(0, 2.0)
+        else:
+            sasa_val = 15.0 + random.gauss(0, 4.0)
+        sasa_labels.append(max(0.0, round(sasa_val, 3)))
+
+        # ── B-factor labels (correlate with RMSF) ──
+        bf = base * 8.0 * (3.14159**2) + random.gauss(0, 2.0)  # B = 8π²<u²>
+        bf_labels.append(max(0.0, round(bf, 3)))
+
+        # ── Gasteiger charge labels (element-based heuristic) ──
+        charge_map = {"C": 0.0, "H": 0.1, "N": -0.3, "O": -0.4, "S": -0.1, "P": 0.3, "F": -0.2, "Cl": -0.15, "Br": -0.1}
+        ch = charge_map.get(sym, 0.0) + random.gauss(0, 0.05)
+        charge_labels.append(round(ch, 4))
+
+    return r10, r1u, r_cont, sasa_labels, bf_labels, charge_labels
 
 
 # ── Synthetic dataset generation/caching ─────────────────────────────────────
@@ -135,13 +167,15 @@ def generate_synthetic(n=150000):
                  conf.GetAtomPosition(i).z]
                 for i in range(mol_h.GetNumAtoms())
             ]
-            r10, r1u = compute_rmsf(mol_h)
+            r10, r1u, r_cont, sasa_vals, bf_vals, ch_vals = compute_multitask_labels(mol_h)
             nf = [[0.0] * 13 for _ in range(mol_h.GetNumAtoms())]
             for row in nf:
                 row[1] = 1.0
             data.append({
                 "positions": pos, "node_features": nf,
-                "rmsf_10ns": r10, "rmsf_1us": r1u,
+                "rmsf_10ns": r10, "rmsf_1us": r1u, "rmsf_continuous": r_cont,
+                "sasa": sasa_vals, "bfactor": bf_vals, "charge": ch_vals,
+                "homo_lumo_gap": 3.0 + random.gauss(0, 1.5),  # synthetic gap ~3 eV
                 "n_atoms": mol_h.GetNumAtoms()
             })
             gen += 1
@@ -226,10 +260,21 @@ class RMSFDataset:
             if not any(nf[0]):        # all-zero row → Carbon
                 for row in nf: row[1] = 1.0
             self.nf_t.append(torch.tensor(nf, dtype=torch.float32))
-            self.target_t.append(
-                torch.tensor(list(zip(s["rmsf_10ns"], s["rmsf_1us"])),
-                             dtype=torch.float32)
-            )
+            # Multi-task target: (N, 7) — [rmsf_10ns, rmsf_1us, rmsf_cont, sasa, bfactor, charge, homo_lumo_gap_repeated]
+            n = len(s["positions"])
+            hl_gap = s.get("homo_lumo_gap", 3.0)
+            target_rows = []
+            for j in range(n):
+                target_rows.append([
+                    s["rmsf_10ns"][j],
+                    s["rmsf_1us"][j],
+                    s.get("rmsf_continuous", s["rmsf_10ns"])[j],
+                    s.get("sasa", [15.0]*n)[j],
+                    s.get("bfactor", [5.0]*n)[j],
+                    s.get("charge", [0.0]*n)[j],
+                    hl_gap,  # repeated per-node for easy masking
+                ])
+            self.target_t.append(torch.tensor(target_rows, dtype=torch.float32))
             if (idx + 1) % 50000 == 0:
                 logger.info(f"  ... {idx+1:,}/{len(valid):,}")
         logger.info(f"Dataset ready — {len(self.coords_t):,} molecules in RAM")
@@ -345,8 +390,28 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
             
             if use_amp:
                 with torch.amp.autocast(device_type="cuda"):
-                    pred = model.forward_batch(C_d, Nf_d, M_d)
-                    loss = crit(pred[M_d], T_d[M_d]) / accum_steps
+                    pred_dict = model.forward_batch(C_d, Nf_d, M_d)
+                    # Reconstruct per-node target columns
+                    # T_d shape: (B, N, 7) — cols: [rmsf_10ns, rmsf_1us, rmsf_cont, sasa, bf, charge, hl_gap]
+                    rmsf_pred = pred_dict["rmsf"]          # (B, N, 3)
+                    rmsf_tgt = T_d[:, :, :3]               # (B, N, 3)
+                    sasa_pred = pred_dict["sasa"]           # (B, N)
+                    sasa_tgt = T_d[:, :, 3]                # (B, N)
+                    bf_pred = pred_dict["bfactor"]          # (B, N)
+                    bf_tgt = T_d[:, :, 4]                  # (B, N)
+                    ch_pred = pred_dict["charge"]           # (B, N)
+                    ch_tgt = T_d[:, :, 5]                  # (B, N)
+                    hl_pred = pred_dict["homo_lumo_gap"]    # (B,)
+                    hl_tgt = T_d[:, 0, 6]                  # (B,) — same value per node
+
+                    loss_rmsf = crit(rmsf_pred[M_d.unsqueeze(-1).expand_as(rmsf_pred)],
+                                     rmsf_tgt[M_d.unsqueeze(-1).expand_as(rmsf_tgt)])
+                    loss_sasa = crit(sasa_pred[M_d], sasa_tgt[M_d])
+                    loss_bf = crit(bf_pred[M_d], bf_tgt[M_d])
+                    loss_ch = crit(ch_pred[M_d], ch_tgt[M_d])
+                    loss_hl = crit(hl_pred, hl_tgt)
+
+                    loss = (loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl) / accum_steps
                 scaler.scale(loss).backward()
                 if (step + 1) % accum_steps == 0 or (step + 1) == len(tl):
                     scaler.unscale_(opt)
@@ -355,8 +420,28 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
                     scaler.update()
                     opt.zero_grad(set_to_none=True)
             else:
-                pred = model.forward_batch(C_d, Nf_d, M_d)
-                loss = crit(pred[M_d], T_d[M_d]) / accum_steps
+                pred_dict = model.forward_batch(C_d, Nf_d, M_d)
+                # Reconstruct per-node target columns
+                # T_d shape: (B, N, 7) — cols: [rmsf_10ns, rmsf_1us, rmsf_cont, sasa, bf, charge, hl_gap]
+                rmsf_pred = pred_dict["rmsf"]          # (B, N, 3)
+                rmsf_tgt = T_d[:, :, :3]               # (B, N, 3)
+                sasa_pred = pred_dict["sasa"]           # (B, N)
+                sasa_tgt = T_d[:, :, 3]                # (B, N)
+                bf_pred = pred_dict["bfactor"]          # (B, N)
+                bf_tgt = T_d[:, :, 4]                  # (B, N)
+                ch_pred = pred_dict["charge"]           # (B, N)
+                ch_tgt = T_d[:, :, 5]                  # (B, N)
+                hl_pred = pred_dict["homo_lumo_gap"]    # (B,)
+                hl_tgt = T_d[:, 0, 6]                  # (B,) — same value per node
+
+                loss_rmsf = crit(rmsf_pred[M_d.unsqueeze(-1).expand_as(rmsf_pred)],
+                                 rmsf_tgt[M_d.unsqueeze(-1).expand_as(rmsf_tgt)])
+                loss_sasa = crit(sasa_pred[M_d], sasa_tgt[M_d])
+                loss_bf = crit(bf_pred[M_d], bf_tgt[M_d])
+                loss_ch = crit(ch_pred[M_d], ch_tgt[M_d])
+                loss_hl = crit(hl_pred, hl_tgt)
+
+                loss = (loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl) / accum_steps
                 loss.backward()
                 if (step + 1) % accum_steps == 0 or (step + 1) == len(tl):
                     nn.utils.clip_grad_norm_(raw_model.parameters(), 1.0)
@@ -378,10 +463,29 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
                 M_d  = M.to(device, non_blocking=True)
                 if use_amp:
                     with torch.amp.autocast(device_type="cuda"):
-                        pred = model.forward_batch(C_d, Nf_d, M_d)
+                        pred_dict = model.forward_batch(C_d, Nf_d, M_d)
                 else:
-                    pred = model.forward_batch(C_d, Nf_d, M_d)
-                vl2 += crit(pred[M_d], T_d[M_d]).item()
+                    pred_dict = model.forward_batch(C_d, Nf_d, M_d)
+                
+                rmsf_pred = pred_dict["rmsf"]
+                rmsf_tgt = T_d[:, :, :3]
+                sasa_pred = pred_dict["sasa"]
+                sasa_tgt = T_d[:, :, 3]
+                bf_pred = pred_dict["bfactor"]
+                bf_tgt = T_d[:, :, 4]
+                ch_pred = pred_dict["charge"]
+                ch_tgt = T_d[:, :, 5]
+                hl_pred = pred_dict["homo_lumo_gap"]
+                hl_tgt = T_d[:, 0, 6]
+
+                loss_rmsf = crit(rmsf_pred[M_d.unsqueeze(-1).expand_as(rmsf_pred)],
+                                 rmsf_tgt[M_d.unsqueeze(-1).expand_as(rmsf_tgt)])
+                loss_sasa = crit(sasa_pred[M_d], sasa_tgt[M_d])
+                loss_bf = crit(bf_pred[M_d], bf_tgt[M_d])
+                loss_ch = crit(ch_pred[M_d], ch_tgt[M_d])
+                loss_hl = crit(hl_pred, hl_tgt)
+
+                vl2 += (loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl).item()
                 vn  += 1
         av = vl2 / max(1, vn)
 

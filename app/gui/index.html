@@ -1138,7 +1138,6 @@
             <button class="rail-btn-element active-element" data-tooltip="Carbon (C)" onclick="setActiveElement('C', this)" style="color: var(--element-C);">C</button>
             <button class="rail-btn-element" data-tooltip="Nitrogen (N)" onclick="setActiveElement('N', this)" style="color: var(--element-N);">N</button>
             <button class="rail-btn-element" data-tooltip="Oxygen (O)" onclick="setActiveElement('O', this)" style="color: var(--element-O);">O</button>
-            <button class="rail-btn-element" data-tooltip="Hydrogen (H)" onclick="setActiveElement('H', this)" style="color: var(--element-H);">H</button>
             <button class="rail-btn-element" data-tooltip="Phosphorus (P)" onclick="setActiveElement('P', this)" style="color: var(--element-P);">P</button>
             <button class="rail-btn-element" data-tooltip="Sulfur (S)" onclick="setActiveElement('S', this)" style="color: var(--element-S);">S</button>
             <button class="rail-btn-element" data-tooltip="Fluorine (F) — metabolic stability" onclick="setActiveElement('F', this)" style="color: var(--element-F);">F</button>
@@ -1385,6 +1384,7 @@
 
             <!-- Canvas Container -->
             <div class="canvas-container" id="canvasContainer">
+                <div id="designScoreWidget" style="position:absolute; top:8px; right:8px; z-index:100;"></div>
                 <canvas id="molCanvas"></canvas>
             </div>
 
@@ -1447,6 +1447,11 @@
                                     <option value="">-- Choose --</option>
                                 </select>
                                 <button class="premium-btn" onclick="computeInteractions()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Profile</button>
+                                <button id="btnDockGnina" class="premium-btn" onclick="runOneClickDocking()"
+                                        style="background: linear-gradient(135deg, #6366F1, #8B5CF6); margin-left: 8px;"
+                                        title="Dock drawn molecule against loaded PDB target using GNINA">
+                                    ⚡ Dock with GNINA
+                                </button>
                             </div>
                         </div>
                     </div>

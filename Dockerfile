@@ -26,10 +26,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies only (smaller image)
+# Install runtime dependencies + redis-server
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     curl \
+    redis-server \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built wheels from builder stage
@@ -43,17 +44,18 @@ ENV PATH=/root/.local/bin:$PATH \
 # Copy application code
 COPY . .
 
-# Create non-root user for security
+# Create non-root user for security and set entrypoint permissions
 RUN useradd -m -u 1000 appuser && \
+    chmod +x entrypoint.sh && \
     chown -R appuser:appuser /app
 USER appuser
 
 # Health check endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
+    CMD curl -f http://localhost:7860/health || exit 1
 
 # Expose port
-EXPOSE 5000
+EXPOSE 7860
 
-# Run application
-CMD ["python", "kinetic_sketch.py"]
+# Run application via entrypoint script
+CMD ["./entrypoint.sh"]

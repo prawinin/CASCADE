@@ -79,3 +79,4 @@ app/models/*.json
 # Local cloudflared binaries/downloads
 cloudflared
 cloudflared.deb
+gnina

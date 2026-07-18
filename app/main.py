@@ -16,8 +16,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Setup relative paths so the project can be run from anywhere
 current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+parent_dir = os.path.dirname(current_dir)
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 services_dir = os.path.join(current_dir, "services")
 if services_dir not in sys.path:
     sys.path.insert(0, services_dir)
@@ -256,15 +257,18 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
                     pass
 
                 with torch.no_grad():
-                    predictions = predictor(pos_tensor, node_features)  # Shape (N, 2)
-                    predictions = predictions.cpu()  # Move back to CPU for rendering
+                    pred_dict = predictor(pos_tensor, node_features)
+                    # Move all tensors to CPU for rendering
+                    predictions = {k: v.cpu() if isinstance(v, torch.Tensor) else v
+                                   for k, v in pred_dict.items()}
 
                 checkpoint_manager.save_checkpoint("RUN_INFERENCE", {
-                    "predictions": predictions.tolist()
+                    "rmsf": predictions["rmsf"].tolist(),
+                    "homo_lumo_gap": float(predictions["homo_lumo_gap"]),
                 })
                 log_checkpoint_to_ui(state, "MDRepo dynamic atomic fluctuation predictions computed successfully.", "success")
 
-                # Render dynamic predictions table
+                # Render multi-task predictions tables
                 render_predictions_table(state, mol_h, predictions)
                 
                 # Render dynamic PDB drug repurposing table
@@ -276,48 +280,59 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
         state.predictions_html = f"<div style='color: var(--accent-pink); font-size: 0.95rem;'>Pipeline failed. Check logs.</div>"
 
 
-def render_predictions_table(state: State, mol: "Chem.Mol", predictions: "torch.Tensor") -> None:
+def render_predictions_table(state: State, mol: "Chem.Mol", predictions: dict) -> None:
     """
-    Formats neural network variance coordinates into a dynamic premium HTML table.
+    Formats multi-task neural network predictions into a dynamic premium HTML table.
     
     Args:
         state: Taipy GUI state object
         mol: RDKit Mol object with conformer
-        predictions: PyTorch tensor of shape (N, 2) with variance predictions
+        predictions: Dict with keys 'rmsf' (N,3), 'sasa' (N,), 'bfactor' (N,), 'charge' (N,), 'homo_lumo_gap' (scalar)
     """
+    rmsf = predictions["rmsf"]      # (N, 3)
+    sasa = predictions["sasa"]       # (N,)
+    bfactor = predictions["bfactor"] # (N,)
+    charge = predictions["charge"]   # (N,)
+    homo_lumo = float(predictions["homo_lumo_gap"])
+
     lines: List[str] = []
+
+    # HOMO-LUMO banner
+    hl_color = "#10B981" if homo_lumo > 3.0 else "#F59E0B" if homo_lumo > 1.0 else "#F43F5E"
+    lines.append(
+        f"<div style='padding:8px 12px; margin-bottom:8px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:6px; display:flex; justify-content:space-between; align-items:center;'>"
+        f"  <span style='font-size:12px; font-weight:600; color:#334155;'>Quantum HOMO–LUMO Gap</span>"
+        f"  <span style='font-size:14px; font-weight:700; font-family:monospace; color:{hl_color};'>{homo_lumo:.3f} eV</span>"
+        f"</div>"
+    )
+
     lines.append("<table class='w-full min-w-[720px] table-fixed border-collapse text-xs'>")
     
-    # Colgroup for widths
+    # Colgroup
     lines.append("<colgroup>")
-    lines.append("  <col class='w-[64px]' />")
-    lines.append("  <col class='w-[72px]' />")
-    lines.append("  <col class='w-[88px]' />")
-    lines.append("  <col class='w-[88px]' />")
-    lines.append("  <col class='w-[88px]' />")
-    lines.append("  <col class='w-[104px]' />")
-    lines.append("  <col class='w-[104px]' />")
+    for _ in range(10):  # Atom, El, X, Y, Z, 10ns, 1µs, SASA, B-factor, Charge
+        lines.append("  <col />")
     lines.append("</colgroup>")
     
     # Headers
     lines.append("<thead><tr>")
-    lines.append("  <th class='px-2.5 py-2 text-left text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'>Atom</th>")
-    lines.append("  <th class='px-2.5 py-2 text-center text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'>El.</th>")
-    lines.append("  <th class='px-2.5 py-2 text-right text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'>X</th>")
-    lines.append("  <th class='px-2.5 py-2 text-right text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'>Y</th>")
-    lines.append("  <th class='px-2.5 py-2 text-right text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'>Z</th>")
-    lines.append("  <th class='px-2.5 py-2 text-right text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'><span class='block'>10ns</span><span class='block text-[10px] font-normal text-slate-400'>RMSF (Å²)</span></th>")
-    lines.append("  <th class='px-2.5 py-2 text-right text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'><span class='block'>1µs</span><span class='block text-[10px] font-normal text-slate-400'>RMSF (Å²)</span></th>")
+    headers = [
+        ("Atom", "text-left"), ("El.", "text-center"),
+        ("X", "text-right"), ("Y", "text-right"), ("Z", "text-right"),
+        ("<span class='block'>10ns</span><span class='block text-[10px] font-normal text-slate-400'>RMSF (Å²)</span>", "text-right"),
+        ("<span class='block'>1µs</span><span class='block text-[10px] font-normal text-slate-400'>RMSF (Å²)</span>", "text-right"),
+        ("<span class='block'>SASA</span><span class='block text-[10px] font-normal text-slate-400'>(Å²)</span>", "text-right"),
+        ("<span class='block'>B-factor</span><span class='block text-[10px] font-normal text-slate-400'>(Å²)</span>", "text-right"),
+        ("<span class='block'>Charge</span><span class='block text-[10px] font-normal text-slate-400'>(e)</span>", "text-right"),
+    ]
+    for label, align in headers:
+        lines.append(f"  <th class='px-2 py-2 {align} text-[11px] font-semibold text-slate-600 leading-4 align-bottom bg-slate-50 border-b border-slate-200 whitespace-normal break-words'>{label}</th>")
     lines.append("</tr></thead>")
     lines.append("<tbody>")
 
     element_colors = {
-        'C': '#6B7280',
-        'O': '#DC2626',
-        'N': '#2563EB',
-        'H': '#9CA3AF',
-        'P': '#EA580C',
-        'S': '#CA8A04'
+        'C': '#6B7280', 'O': '#DC2626', 'N': '#2563EB',
+        'H': '#9CA3AF', 'P': '#EA580C', 'S': '#CA8A04'
     }
 
     conf = mol.GetConformer()
@@ -325,22 +340,31 @@ def render_predictions_table(state: State, mol: "Chem.Mol", predictions: "torch.
         atom = mol.GetAtomWithIdx(i)
         symbol = atom.GetSymbol()
         pos = conf.GetAtomPosition(i)
-        var_10ns = predictions[i, 0].item()
-        var_1us = predictions[i, 1].item()
+        var_10ns = rmsf[i, 0].item()
+        var_1us = rmsf[i, 1].item()
+        sasa_val = sasa[i].item()
+        bf_val = bfactor[i].item()
+        ch_val = charge[i].item()
 
-        # Styles based on volatility thresholds (Emerald, Amber, Rose)
+        # Color coding
         color_10ns = "#10B981" if var_10ns < 0.25 else "#F59E0B" if var_10ns < 0.55 else "#F43F5E"
         color_1us = "#10B981" if var_1us < 0.45 else "#F59E0B" if var_1us < 0.85 else "#F43F5E"
+        color_sasa = "#2563EB"
+        color_bf = "#6366F1"
+        color_ch = "#10B981" if ch_val >= 0 else "#F43F5E"
         el_color = element_colors.get(symbol, '#1E293B')
 
         lines.append("<tr class='hover:bg-slate-50 last:border-b-0'>")
-        lines.append(f"  <td class='px-2.5 py-2 text-xs text-slate-700 leading-4 border-b border-slate-100 align-middle truncate'>#{i+1}</td>")
-        lines.append(f"  <td class='px-2.5 py-2 text-xs text-slate-700 leading-4 border-b border-slate-100 align-middle truncate text-center font-medium'><span class='inline-block w-2 h-2 rounded-full mr-1.5' style='background-color: {el_color}'></span>{symbol}</td>")
-        lines.append(f"  <td class='px-2.5 py-2 border-b border-slate-100 align-middle truncate font-mono text-[11px] tabular-nums text-right text-slate-500'>{pos.x:.2f}</td>")
-        lines.append(f"  <td class='px-2.5 py-2 border-b border-slate-100 align-middle truncate font-mono text-[11px] tabular-nums text-right text-slate-500'>{pos.y:.2f}</td>")
-        lines.append(f"  <td class='px-2.5 py-2 border-b border-slate-100 align-middle truncate font-mono text-[11px] tabular-nums text-right text-slate-500'>{pos.z:.2f}</td>")
-        lines.append(f"  <td class='px-2.5 py-2 border-b border-slate-100 align-middle truncate font-mono text-[11px] tabular-nums text-right font-medium' style='color: {color_10ns}'><span class='inline-block w-1.5 h-1.5 rounded-full mr-1.5' style='background-color: {color_10ns}'></span>{var_10ns:.4f}</td>")
-        lines.append(f"  <td class='px-2.5 py-2 border-b border-slate-100 align-middle truncate font-mono text-[11px] tabular-nums text-right font-medium' style='color: {color_1us}'><span class='inline-block w-1.5 h-1.5 rounded-full mr-1.5' style='background-color: {color_1us}'></span>{var_1us:.4f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 text-xs text-slate-700 border-b border-slate-100 truncate'>#{i+1}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 text-xs text-slate-700 border-b border-slate-100 text-center font-medium'><span class='inline-block w-2 h-2 rounded-full mr-1' style='background-color: {el_color}'></span>{symbol}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right text-slate-500'>{pos.x:.2f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right text-slate-500'>{pos.y:.2f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right text-slate-500'>{pos.z:.2f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right font-medium' style='color: {color_10ns}'>{var_10ns:.4f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right font-medium' style='color: {color_1us}'>{var_1us:.4f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right font-medium' style='color: {color_sasa}'>{sasa_val:.3f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right font-medium' style='color: {color_bf}'>{bf_val:.3f}</td>")
+        lines.append(f"  <td class='px-2 py-1.5 border-b border-slate-100 font-mono text-[11px] tabular-nums text-right font-medium' style='color: {color_ch}'>{ch_val:+.4f}</td>")
         lines.append("</tr>")
 
     lines.append("</tbody></table>")
@@ -965,26 +989,40 @@ def descriptors():
 
 @flask_app.post("/api/pdb/upload")
 def pdb_upload():
+    """Upload a custom PDB file for local profiling and docking."""
     from app.services import parse_pdb_structure, get_ligands_in_structure
-    import tempfile
+    from app.services.pdb_parser import PDB_CACHE_DIR
+    
     if "file" not in request.files:
         return jsonify({"ok": False, "error": "No file uploaded"}), 400
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"ok": False, "error": "No file selected"}), 400
-        
+    
+    # Validate file extension
+    allowed_extensions = {".pdb", ".ent", ".pdb.gz"}
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_extensions:
+        return jsonify({"ok": False, "error": f"Unsupported file type: {ext}. Upload a .pdb file."}), 400
+    
     try:
-        with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as tmp:
-            file.save(tmp.name)
-            tmp_path = tmp.name
-            
-        struct = parse_pdb_structure(tmp_path)
+        # Save to pdb_cache with a sanitized name
+        safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in file.filename)
+        save_path = os.path.join(PDB_CACHE_DIR, safe_name)
+        file.save(save_path)
+        logger.info(f"Custom PDB uploaded: {safe_name} → {save_path}")
+        
+        struct = parse_pdb_structure(save_path)
         ligands = get_ligands_in_structure(struct)
-        os.remove(tmp_path)
+        
+        # Generate a pseudo PDB ID for UI reference
+        pseudo_id = os.path.splitext(safe_name)[0][:8].upper()
         
         return jsonify({
             "ok": True,
             "filename": file.filename,
+            "pdb_id": pseudo_id,
+            "saved_path": save_path,
             "ligands": [{"resname": name, "chain": chain, "seq": seq} for name, chain, seq in ligands]
         })
     except Exception as e:
@@ -1106,6 +1144,55 @@ def interactions():
         })
     except Exception as e:
         logger.error(f"Interactions profiling error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/dock")
+def dock():
+    """One-click docking: dock drawn molecule against uploaded/fetched PDB target."""
+    from app.services import dock_molecule, is_gnina_available, autobox_from_ligand, fetch_pdb_file
+    
+    if not is_gnina_available():
+        return jsonify({"ok": False, "error": "GNINA binary not installed. See /health for setup instructions."}), 503
+    
+    payload = request.get_json(silent=True) or {}
+    pdb_id = str(payload.get("pdb_id", "")).strip().upper()
+    ligand_resname = str(payload.get("ligand_resname", "")).strip().upper()
+    ligand_sdf = payload.get("ligand_sdf_path", "molecule.sdf")
+    
+    if not pdb_id:
+        return jsonify({"ok": False, "error": "pdb_id is required"}), 400
+    
+    try:
+        receptor_path = fetch_pdb_file(pdb_id)
+        
+        # Auto-calculate box from existing ligand if available
+        box_params = {}
+        if ligand_resname:
+            box_params = autobox_from_ligand(receptor_path, ligand_resname)
+        
+        result = dock_molecule(
+            ligand_sdf_path=ligand_sdf,
+            receptor_pdb_path=receptor_path,
+            **box_params
+        )
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Docking error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/admet")
+def admet():
+    """Neural network ADMET prediction endpoint."""
+    from app.services import predict_admet_nn
+    payload = request.get_json(silent=True) or {}
+    smiles = str(payload.get("smiles", "")).strip()
+    if not smiles:
+        return jsonify({"ok": False, "error": "SMILES is required"}), 400
+    try:
+        result = predict_admet_nn(smiles)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"ADMET prediction error: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @flask_app.post("/api/mcs_align")
@@ -1280,6 +1367,36 @@ def tasks_cancel(task_id):
     except Exception as e:
         logger.error(f"Task cancel error: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
+
+@flask_app.post("/api/action_log")
+def action_log():
+    """Silently log user drawing actions for generative AI training data."""
+    from app.services import log_action
+    payload = request.get_json(silent=True) or {}
+    action_type = payload.get("action", "")
+    data = payload.get("data", {})
+    session_id = payload.get("session_id")
+    if action_type:
+        log_action(action_type, data, session_id)
+    return jsonify({"ok": True}), 200
+
+@flask_app.post("/api/action_log/start")
+def action_log_start():
+    """Start a new action logging session."""
+    from app.services import start_session
+    sid = start_session()
+    return jsonify({"ok": True, "session_id": sid})
+
+@flask_app.post("/api/design_score")
+def design_score():
+    """Real-time design score for gamified feedback."""
+    from app.services import calculate_design_score
+    payload = request.get_json(silent=True) or {}
+    smiles = str(payload.get("smiles", "")).strip()
+    if not smiles:
+        return jsonify({"ok": False, "score": 0, "grade": "F", "color": "#EF4444"}), 200
+    result = calculate_design_score(smiles)
+    return jsonify(result)
 
 if __name__ == "__main__":
     logger.info("Starting modular KineticSketch Workspace Server...")

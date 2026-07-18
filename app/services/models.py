@@ -3,7 +3,9 @@ import logging
 
 # Override GFX version for AMD Radeon RX 6500M (reported as gfx1030 on Manjaro/ROCm).
 # Maps the GPU to the supported RDNA2 gfx1030 instruction set for PyTorch HIP dispatch.
-os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
+if "HSA_OVERRIDE_GFX_VERSION" not in os.environ:
+    os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
+
 
 import torch
 import torch.nn as nn
@@ -133,9 +135,9 @@ class MDRepoPredictor(nn.Module):
             MPNNLayer(embed_dim, num_gammas) for _ in range(num_layers)
         ])
 
-        # 3. MLP head
+        # 3. Shared MLP trunk (processes concatenated [node_embed, global_mean, dist_to_com])
         mlp_in = embed_dim + embed_dim + 1
-        self.mlp_head = nn.Sequential(
+        self.shared_trunk = nn.Sequential(
             nn.Linear(mlp_in, 256),
             nn.LayerNorm(256),
             nn.ReLU(),
@@ -144,10 +146,33 @@ class MDRepoPredictor(nn.Module):
             nn.LayerNorm(128),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 2),
         )
+
+        # 4. Task-specific heads (per-node outputs)
+        #    - rmsf_head: 3 outputs (10ns, 1µs, continuous)
+        #    - sasa_head: 1 output (solvent accessible surface area)
+        #    - bfactor_head: 1 output (crystallographic B-factor)
+        #    - charge_head: 1 output (Gasteiger partial charge)
+        self.rmsf_head = nn.Sequential(
+            nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 3)
+        )
+        self.sasa_head = nn.Sequential(
+            nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 1)
+        )
+        self.bfactor_head = nn.Sequential(
+            nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 1)
+        )
+        self.charge_head = nn.Sequential(
+            nn.Linear(128, 32), nn.Tanh(), nn.Linear(32, 1)
+        )
+
+        # 5. Graph-level head (HOMO-LUMO gap: 1 scalar per molecule)
+        self.homo_lumo_head = nn.Sequential(
+            nn.Linear(128, 64), nn.ReLU(), nn.Linear(64, 1)
+        )
+
+        # Legacy compatibility: mlp_head property for old checkpoint loading
+        self.mlp_head = None  # Set to None; old checkpoints handled in get_predictor
 
     def _forward_single(
         self, coords: torch.Tensor, node_features: torch.Tensor
@@ -164,7 +189,26 @@ class MDRepoPredictor(nn.Module):
         com = coords.mean(dim=0, keepdim=True)
         dist_to_com = torch.norm(coords - com, p=2, dim=-1, keepdim=True)
         combined = torch.cat([h, global_mean, dist_to_com], dim=-1)
-        return F.softplus(self.mlp_head(combined))
+
+        trunk = self.shared_trunk(combined)  # (N, 128)
+
+        # Per-node predictions
+        rmsf = F.softplus(self.rmsf_head(trunk))          # (N, 3) — all positive
+        sasa = F.softplus(self.sasa_head(trunk))           # (N, 1) — positive area
+        bfactor = F.softplus(self.bfactor_head(trunk))     # (N, 1) — positive
+        charge = self.charge_head(trunk)                    # (N, 1) — can be negative
+
+        # Graph-level prediction (pool over real nodes)
+        graph_pool = trunk.mean(dim=0, keepdim=True)       # (1, 128)
+        homo_lumo = F.softplus(self.homo_lumo_head(graph_pool))  # (1, 1) — positive gap
+
+        return {
+            "rmsf": rmsf,                            # (N, 3): [10ns, 1µs, continuous]
+            "sasa": sasa.squeeze(-1),                # (N,)
+            "bfactor": bfactor.squeeze(-1),          # (N,)
+            "charge": charge.squeeze(-1),            # (N,)
+            "homo_lumo_gap": homo_lumo.squeeze(),    # scalar
+        }
 
 
     def forward_batch(
@@ -196,13 +240,36 @@ class MDRepoPredictor(nn.Module):
         com = (coords * m).sum(dim=1, keepdim=True) / n_real
         dist_to_com = torch.norm(coords - com, p=2, dim=-1, keepdim=True)
         combined = torch.cat([h, global_mean, dist_to_com], dim=-1)
-        return F.softplus(self.mlp_head(combined))
+
+        trunk = self.shared_trunk(combined)  # (B, N, 128)
+
+        rmsf = F.softplus(self.rmsf_head(trunk))        # (B, N, 3)
+        sasa = F.softplus(self.sasa_head(trunk))         # (B, N, 1)
+        bfactor = F.softplus(self.bfactor_head(trunk))   # (B, N, 1)
+        charge = self.charge_head(trunk)                  # (B, N, 1)
+
+        # Graph-level: masked mean pooling
+        graph_pool = (trunk * m).sum(dim=1) / n_real.squeeze(-1)  # (B, 128)
+        homo_lumo = F.softplus(self.homo_lumo_head(graph_pool))   # (B, 1)
+
+        return {
+            "rmsf": rmsf,
+            "sasa": sasa.squeeze(-1),
+            "bfactor": bfactor.squeeze(-1),
+            "charge": charge.squeeze(-1),
+            "homo_lumo_gap": homo_lumo.squeeze(-1),
+        }
 
     def forward(
         self,
         coords: torch.Tensor,
         node_features: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Single-molecule inference. Returns a dict of predictions.
+        For backward compatibility, also supports legacy 2-column tensor access
+        via the 'rmsf' key (columns 0 and 1 = 10ns and 1µs).
+        """
         if node_features is None:
             N = coords.size(0)
             nf = torch.zeros((N, 13), dtype=torch.float32, device=coords.device)
@@ -282,21 +349,48 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
     param_count = sum(p.numel() for p in model.parameters())
 
     if state_dict is not None:
+        # Detect old 2-output checkpoint and migrate weights to new multi-head arch
+        old_keys = [k for k in state_dict if k.startswith("mlp_head.")]
+        new_keys = [k for k in state_dict if k.startswith("shared_trunk.") or
+                    k.startswith("rmsf_head.") or k.startswith("sasa_head.") or
+                    k.startswith("bfactor_head.") or k.startswith("charge_head.") or
+                    k.startswith("homo_lumo_head.")]
+
+        if old_keys and not new_keys:
+            logger.info("Migrating old 2-output checkpoint to multi-task architecture...")
+            # Map old mlp_head layers 0-7 → shared_trunk layers 0-7
+            migrated_sd = {}
+            for key, val in state_dict.items():
+                if key.startswith("mlp_head."):
+                    # Old layers: 0(Linear),1(LN),2(ReLU),3(Drop),4(Linear),5(LN),6(ReLU),7(Drop),8(Linear),9(ReLU),10(Linear)
+                    # New shared_trunk: 0(Linear),1(LN),2(ReLU),3(Drop),4(Linear),5(LN),6(ReLU),7(Drop)
+                    parts = key.split(".")
+                    layer_idx = int(parts[1])
+                    rest = ".".join(parts[2:]) if len(parts) > 2 else ""
+                    if layer_idx <= 7:
+                        new_key = f"shared_trunk.{layer_idx}"
+                        if rest:
+                            new_key += f".{rest}"
+                        migrated_sd[new_key] = val
+                    # Layers 8-10 (old 64→2 projection) are discarded — new heads start fresh
+                else:
+                    migrated_sd[key] = val
+            state_dict = migrated_sd
+            logger.info(f"Migrated {len(old_keys)} old mlp_head keys. New task heads initialized randomly.")
+
         try:
-            model.load_state_dict(state_dict, strict=True)
+            model.load_state_dict(state_dict, strict=False)
+            loaded_keys = set(state_dict.keys()) & set(model.state_dict().keys())
             logger.info(
                 f"✓ MDRepoPredictor ready — "
                 f"embed_dim={model_config['embed_dim']}, "
                 f"layers={model_config['num_layers']}, "
                 f"gammas={model_config['num_gammas']}, "
-                f"params={param_count:,}"
+                f"params={param_count:,}, "
+                f"loaded={len(loaded_keys)}/{len(model.state_dict())} keys"
             )
-        except RuntimeError as e:
-            logger.warning(f"Strict load failed ({e}) — partial load")
-            try:
-                model.load_state_dict(state_dict, strict=False)
-            except Exception as e2:
-                logger.error(f"Weight load failed: {e2} — random init")
+        except Exception as e:
+            logger.error(f"Weight load failed: {e} — random init")
 
     model = model.to(device)
     model.eval()

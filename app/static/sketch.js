@@ -1,3 +1,29 @@
+// ── Action Logger ──────────────────────────────────────────────────
+let _actionSessionId = null;
+
+async function initActionLogger() {
+    try {
+        const res = await fetch("/api/action_log/start", { method: "POST" });
+        const data = await res.json();
+        _actionSessionId = data.session_id;
+    } catch (e) { /* silent */ }
+}
+
+function logAction(actionType, actionData) {
+    if (!_actionSessionId) return;
+    fetch("/api/action_log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            action: actionType,
+            data: actionData,
+            session_id: _actionSessionId
+        })
+    }).catch(() => {});  // Fire and forget
+}
+
+document.addEventListener("DOMContentLoaded", initActionLogger);
+
 // React Input Value Setter Utility
 function setReactInputValue(containerId, value) {
     const el = document.getElementById(containerId);
@@ -442,6 +468,7 @@ function clearCanvas() {
     atoms = [];
     bonds = [];
     nextAtomId = 1;
+    logAction("clear_canvas", {});
     saveSnapshot();
     redraw();
     pushPayload();
@@ -619,24 +646,35 @@ if (canvas) {
                 // Check in-place bond order toggling first
                 const clickedBond = getBondAt(x, y);
                 if (clickedBond) {
+                    const oldType = clickedBond.type;
                     cycleBondType(clickedBond);
+                    logAction("change_bond_type", { source_id: clickedBond.source, target_id: clickedBond.target, old_type: oldType, new_type: clickedBond.type });
                     saveSnapshot();
                     redraw();
                     pushPayload();
                     return;
                 }
                 const snap = snapGrid;
-                atoms.push({ id: nextAtomId++, x: Math.round(x / snap) * snap, y: Math.round(y / snap) * snap, element: activeElement });
+                const newX = Math.round(x / snap) * snap;
+                const newY = Math.round(y / snap) * snap;
+                const newAtomId = nextAtomId++;
+                atoms.push({ id: newAtomId, x: newX, y: newY, element: activeElement });
+                logAction("add_atom", { element: activeElement, x: newX, y: newY, atom_id: newAtomId });
                 saveSnapshot();
                 redraw(); pushPayload();
             }
         } else if (activeMode === "move") {
-            if (clickedAtom) { selectedAtom = clickedAtom; isDragging = true; }
+            if (clickedAtom) { 
+                selectedAtom = clickedAtom; 
+                isDragging = true; 
+                window._dragStartCoords = { x: clickedAtom.x, y: clickedAtom.y }; 
+            }
             else { isPanning = true; panStartX = sx - panX; panStartY = sy - panY; }
         } else if (activeMode === "erase") {
             if (clickedAtom) {
                 atoms = atoms.filter(a => a.id !== clickedAtom.id);
                 bonds = bonds.filter(b => b.source !== clickedAtom.id && b.target !== clickedAtom.id);
+                logAction("delete_atom", { atom_id: clickedAtom.id });
                 saveSnapshot();
                 redraw(); pushPayload();
             } else {
@@ -645,7 +683,11 @@ if (canvas) {
                     const a1 = atoms.find(a => a.id === bond.source);
                     const a2 = atoms.find(a => a.id === bond.target);
                     if (!a1 || !a2) return true;
-                    return distToSegment({x, y}, a1, a2) > 8;
+                    if (distToSegment({x, y}, a1, a2) <= 8) {
+                        logAction("delete_bond", { source_id: bond.source, target_id: bond.target });
+                        return false;
+                    }
+                    return true;
                 });
                 if (bonds.length !== oldBondCount) {
                     saveSnapshot();
@@ -711,11 +753,14 @@ if (canvas) {
                 let changed = false;
                 if (existingBond) {
                     if (existingBond.type !== activeBondType) {
+                        const oldType = existingBond.type;
                         existingBond.type = activeBondType;
+                        logAction("change_bond_type", { source_id: existingBond.source, target_id: existingBond.target, old_type: oldType, new_type: activeBondType });
                         changed = true;
                     }
                 } else {
                     bonds.push({ source: dragStartAtom.id, target: targetAtom.id, type: activeBondType });
+                    logAction("add_bond", { source_id: dragStartAtom.id, target_id: targetAtom.id, bond_type: activeBondType });
                     changed = true;
                 }
                 if (changed) {
@@ -726,6 +771,9 @@ if (canvas) {
             dragStartAtom = null;
         }
         if (activeMode === "move" && selectedAtom) { 
+            if (window._dragStartCoords && (window._dragStartCoords.x !== selectedAtom.x || window._dragStartCoords.y !== selectedAtom.y)) {
+                logAction("move_atom", { atom_id: selectedAtom.id, old_x: window._dragStartCoords.x, old_y: window._dragStartCoords.y, new_x: selectedAtom.x, new_y: selectedAtom.y });
+            }
             selectedAtom = null; 
             saveSnapshot();
             pushPayload(); 
@@ -849,6 +897,7 @@ function undo() {
     if (historyIndex > 0) {
         historyIndex--;
         restoreSnapshot(historyStack[historyIndex]);
+        logAction("undo", {});
         redraw();
         pushPayload();
     }
@@ -858,6 +907,7 @@ function redo() {
     if (historyIndex < historyStack.length - 1) {
         historyIndex++;
         restoreSnapshot(historyStack[historyIndex]);
+        logAction("redo", {});
         redraw();
         pushPayload();
     }
@@ -1173,6 +1223,9 @@ async function runLive3DSync() {
 
     const smiles = await getActiveSmiles();
     if (!smiles) return;
+    
+    // Update design score
+    updateDesignScore(smiles);
 
     try {
         const response = await fetch('/api/analyze_smiles', {
@@ -1552,6 +1605,61 @@ async function computeInteractions() {
     }
 }
 
+async function runOneClickDocking() {
+    const pdbIdInput = document.getElementById("pdbIdInput");
+    const pdbId = pdbIdInput ? pdbIdInput.value.trim().toUpperCase() : "";
+    if (!pdbId || pdbId.length !== 4) {
+        alert("Please enter and fetch a valid PDB ID first.");
+        return;
+    }
+    
+    // Get current ligand selection for autobox
+    const ligandSelect = document.getElementById("ligandSelect");
+    const ligandResname = ligandSelect ? ligandSelect.value : "";
+    
+    const btn = document.getElementById("btnDockGnina");
+    if (btn) { btn.disabled = true; btn.textContent = "Docking..."; }
+    
+    try {
+        const response = await fetch("/api/dock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                pdb_id: pdbId,
+                ligand_resname: ligandResname,
+                ligand_sdf_path: "molecule.sdf"
+            })
+        });
+        const data = await response.json();
+        
+        if (data.ok && data.poses && data.poses.length > 0) {
+            let resultHtml = "<div style='padding:8px;'><strong>GNINA Docking Results</strong><br>";
+            data.poses.forEach(pose => {
+                resultHtml += `<div>Mode ${pose.mode}: ΔG = ${pose.affinity_kcal.toFixed(2)} kcal/mol`;
+                if (pose.cnn_score) resultHtml += ` | CNN: ${pose.cnn_score.toFixed(3)}`;
+                resultHtml += `</div>`;
+            });
+            resultHtml += "</div>";
+            
+            const logBox = document.getElementById("dynamicCheckpointLogs");
+            if (logBox) logBox.innerHTML += resultHtml;
+            
+            // Load best docked pose into 3D viewer
+            if (data.output_sdf) {
+                const sdfRes = await fetch(`/static/${data.output_sdf}`);
+                const sdfText = await sdfRes.text();
+                render3DModel(sdfText);
+            }
+        } else {
+            alert(data.error || "Docking returned no poses.");
+        }
+    } catch (e) {
+        alert("Docking failed: " + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "⚡ Dock with GNINA"; }
+    }
+}
+
 // ==========================================
 // Phase 3.3: Tab Switching Logic
 // ==========================================
@@ -1664,4 +1772,31 @@ function toggle3DStyle(styleType) {
     
     glViewer.render();
     console.log(`Changed 3Dmol style to: ${styleType}`);
+}
+
+// ── Design Score Widget ────────────────────────────────────────────
+async function updateDesignScore(smiles) {
+    if (!smiles) return;
+    try {
+        const res = await fetch("/api/design_score", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ smiles })
+        });
+        const data = await res.json();
+        const scoreWidget = document.getElementById("designScoreWidget");
+        if (scoreWidget && data.ok) {
+            scoreWidget.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px; padding:6px 12px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px;">
+                    <div style="width:40px; height:40px; border-radius:50%; background:${data.color}; display:flex; align-items:center; justify-content:center; color:white; font-weight:700; font-size:14px;">
+                        ${data.grade}
+                    </div>
+                    <div>
+                        <div style="font-size:18px; font-weight:700; color:${data.color};">${data.score}</div>
+                        <div style="font-size:10px; color:#64748B;">Design Score</div>
+                    </div>
+                </div>
+            `;
+        }
+    } catch (e) { /* silent */ }
 }

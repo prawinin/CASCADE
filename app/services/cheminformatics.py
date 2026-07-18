@@ -87,16 +87,19 @@ def write_mol2(mol: Chem.Mol, filepath: str) -> None:
         f.write("\n".join(lines) + "\n")
 
 
-def optimize_conformer_3d(mol: Chem.Mol) -> Chem.Mol:
+def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mol:
     """
     Appends explicit hydrogens, embeds 3D coordinates using ETKDGv3,
-    and minimizes spatial geometry using MMFF94.
+    and minimizes spatial geometry using the specified force field.
+    
+    Args:
+        mol: RDKit Mol object
+        force_field: "MMFF94" (default), "MMFF94s", or "UFF"
     """
     logger.info("Appending explicit hydrogen atoms...")
     try:
         mol_h = Chem.AddHs(mol)
     except Exception:
-        # Fallback to coordinate generation on heavy atoms if AddHs fails (valence issues)
         mol_h = mol
 
     logger.info("Embedding 3D conformation coordinates via ETKDGv3...")
@@ -121,16 +124,31 @@ def optimize_conformer_3d(mol: Chem.Mol) -> Chem.Mol:
             try:
                 conf = Chem.Conformer(mol_h.GetNumAtoms())
                 for i in range(mol_h.GetNumAtoms()):
-                    conf.SetAtomPosition(i, (i * 1.5, 0.0, 0.0))  # linear chain coordinates layout
+                    conf.SetAtomPosition(i, (i * 1.5, 0.0, 0.0))
                 mol_h.AddConformer(conf)
             except Exception as e:
                 logger.error(f"Failed to generate layout conformer fallback: {e}")
 
-    logger.info("Minimizing spatial geometry via MMFF94 force field engine...")
-    try:
-        AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant='MMFF94')
-    except Exception as e:
-        logger.warning(f"MMFF94 minimization failed: {e}. Continuing with embedded coords.")
+    # Force field minimization with fallback chain: requested → MMFF94 → UFF
+    ff_upper = force_field.upper()
+    minimized = False
+
+    if ff_upper in ("MMFF94", "MMFF94S"):
+        logger.info(f"Minimizing spatial geometry via {ff_upper} force field engine...")
+        try:
+            variant = "MMFF94s" if ff_upper == "MMFF94S" else "MMFF94"
+            AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant=variant)
+            minimized = True
+        except Exception as e:
+            logger.warning(f"{ff_upper} minimization failed: {e}. Trying UFF fallback...")
+
+    if not minimized:
+        logger.info("Minimizing spatial geometry via UFF (Universal Force Field)...")
+        try:
+            AllChem.UFFOptimizeMolecule(mol_h)
+            minimized = True
+        except Exception as e:
+            logger.warning(f"UFF minimization also failed: {e}. Continuing with embedded coords.")
 
     return mol_h
 
