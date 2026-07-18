@@ -3,6 +3,7 @@
 # =============================================================================
 
 # --- Core Chemistry & Data Science (Letting Manjaro's system packages handle versions) ---
+admet-ai
 rdkit
 biopython
 
