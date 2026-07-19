@@ -344,7 +344,7 @@ window.addEventListener('load', () => {
         resizeCanvas();
         panX = canvas.width / 2;
         panY = canvas.height / 2;
-        drawGrid();
+        redraw(); // single call — draws grid + clears properly
     }
     // Initialize history stack
     initHistory();
@@ -353,8 +353,9 @@ window.addEventListener('load', () => {
 // ==========================================
 // 2D Molecular Sketcher Canvas Engine (HTML5)
 // ==========================================
-let canvas = document.getElementById("molCanvas");
-let ctx = canvas ? canvas.getContext("2d") : null;
+// Canvas and context — initialized in window 'load' handler above
+let canvas = null;
+let ctx = null;
 let activeMode = "draw"; // "draw", "move", "erase"
 let activeElement = "C";
 let activeBondType = 1; // 1, 2, 3
@@ -809,8 +810,8 @@ function pushPayload() {
 // Fit all atoms into view with nice padding
 function fitToView() {
     // If the 3D tab is active and the viewer is initialised, zoom the 3D model
-    const is3DActive = document.getElementById('interactionViewContainer') &&
-                       document.getElementById('interactionViewContainer').style.display !== 'none';
+    const is3DActive = document.getElementById('page-3d') && 
+                       document.getElementById('page-3d').classList.contains('active');
     if (is3DActive && glViewer) {
         glViewer.zoomTo();
         glViewer.render();
@@ -1470,6 +1471,9 @@ async function fetchPdbTarget() {
             activePdbId = data.pdb_id;
             activeLigands = data.ligands;
             populateLigandSelect(data.ligands);
+            // Show GNINA dock button regardless of ligand count
+            const gninaTb = document.getElementById("gninaDockToolbar");
+            if (gninaTb) gninaTb.style.display = "flex";
             
             const logBox = document.getElementById("dynamicCheckpointLogs");
             if (logBox) {
@@ -1505,6 +1509,9 @@ async function uploadPdbFile(event) {
             activePdbId = data.filename.split(".")[0].toUpperCase().substring(0, 4);
             activeLigands = data.ligands;
             populateLigandSelect(data.ligands);
+            // Show GNINA dock button regardless of ligand count
+            const gninaTb = document.getElementById("gninaDockToolbar");
+            if (gninaTb) gninaTb.style.display = "flex";
             
             const logBox = document.getElementById("dynamicCheckpointLogs");
             if (logBox) {
@@ -1661,37 +1668,21 @@ async function runOneClickDocking() {
 }
 
 // ==========================================
-// Phase 3.3: Tab Switching Logic
+// Global 6-Tab Switching Logic
 // ==========================================
-function switchMainTab(tab) {
-    const tabSketcher = document.getElementById("tabSketcher");
-    const tabInteractions = document.getElementById("tabInteractions");
-    const canvasContainer = document.getElementById("canvasContainer");
-    const interactionViewContainer = document.getElementById("interactionViewContainer");
-    const smilesBar = document.querySelector(".smiles-bar");
-    const leftRail = document.querySelector(".left-rail");
-    
-    if (tab === "sketcher") {
-        tabSketcher.classList.add("active");
-        tabInteractions.classList.remove("active");
-        canvasContainer.style.display = "block";
-        interactionViewContainer.style.display = "none";
-        if (smilesBar) smilesBar.style.display = "flex";
-        if (leftRail) leftRail.style.display = "flex";
-        resizeCanvas();
-    } else {
-        tabSketcher.classList.remove("active");
-        tabInteractions.classList.add("active");
-        canvasContainer.style.display = "none";
-        interactionViewContainer.style.display = "flex";
-        if (smilesBar) smilesBar.style.display = "none";
-        if (leftRail) leftRail.style.display = "none";
-        
-        // Resize 3Dmol viewer to fit the visible container size correctly
-        if (glViewer) {
-            glViewer.resize();
-            glViewer.render();
-        }
+function switchGlobalTab(tabId) {
+    document.querySelectorAll('.gnav-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('gnav-' + tabId);
+    if (btn) btn.classList.add('active');
+
+    document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+    const page = document.getElementById('page-' + tabId);
+    if (page) page.classList.add('active');
+
+    if (tabId === 'sketch') resizeCanvas();
+    if (tabId === '3d' && typeof glViewer !== 'undefined' && glViewer) {
+        glViewer.resize();
+        glViewer.render();
     }
 }
 
@@ -1800,3 +1791,224 @@ async function updateDesignScore(smiles) {
         }
     } catch (e) { /* silent */ }
 }
+
+// ==========================================
+// Phase N+1: Deep ADMET Neural Network
+// ==========================================
+async function runDeepADMET() {
+    const smiles = await getActiveSmiles();
+    const div = document.getElementById("dynamicADMET");
+    if (!smiles) {
+        if (div) div.innerHTML = `<div style='color:#EF4444; font-size:0.8rem;'>Draw or enter a molecule first.</div>`;
+        return;
+    }
+    if (div) div.innerHTML = `<div style='color:var(--text-muted); font-size:0.8rem;'><i class='fa-solid fa-spinner fa-spin' style='margin-right:5px;'></i>Running neural network predictions...</div>`;
+    try {
+        const res = await fetch("/api/admet", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ smiles })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            div.innerHTML = `<div style='color:#F59E0B; font-size:0.8rem;'>⚠ ${data.error || "Prediction failed"}</div>`;
+            return;
+        }
+
+        const source = data.source === "admet_ai" ? "ADMET-AI Neural Network" : "RDKit Heuristic Fallback";
+        const sourceBadge = data.source === "admet_ai"
+            ? `<span style='background:#8B5CF6;color:white;padding:1px 6px;border-radius:9999px;font-size:10px;'>NN</span>`
+            : `<span style='background:#64748B;color:white;padding:1px 6px;border-radius:9999px;font-size:10px;'>Heuristic</span>`;
+
+        const rows = [];
+        const renderSection = (title, obj) => {
+            if (!obj) return;
+            rows.push(`<div style='font-size:10px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.05em;margin-top:8px;margin-bottom:2px;'>${title}</div>`);
+            Object.entries(obj).forEach(([k, v]) => {
+                if (v == null) return;
+                const label = k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                const display = typeof v === "number" ? v.toFixed(3) : v;
+                const isGood = typeof v === "number" && v > 0.5;
+                const color = typeof v === "number" ? (isGood ? "#10B981" : "#F59E0B") : "#334155";
+                rows.push(`<div style='display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:1px solid #F1F5F9;'>
+                    <span style='font-size:11px;color:#475569;'>${label}</span>
+                    <span style='font-size:11px;font-weight:600;font-family:monospace;color:${color};'>${display}</span>
+                </div>`);
+            });
+        };
+
+        renderSection("Absorption", data.absorption);
+        renderSection("Distribution", data.distribution);
+        renderSection("Metabolism", data.metabolism);
+        renderSection("Excretion", data.excretion);
+        renderSection("Toxicity", data.toxicity);
+
+        div.innerHTML = `
+            <div style='display:flex;align-items:center;gap:6px;margin-bottom:6px;'>
+                ${sourceBadge}
+                <span style='font-size:10px;color:#64748B;'>${source}</span>
+            </div>
+            ${rows.join("")}
+        `;
+    } catch(e) {
+        if (div) div.innerHTML = `<div style='color:#EF4444;font-size:0.8rem;'>Error: ${e.message}</div>`;
+    }
+}
+
+// ==========================================
+// Phase N+2: MCS Align
+// ==========================================
+async function runMCSAlign() {
+    const textarea = document.getElementById("mcsSmilesList");
+    const resultDiv = document.getElementById("mcsAlignResult");
+    if (!textarea || !resultDiv) return;
+
+    const lines = textarea.value.split("\n").map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) {
+        resultDiv.innerHTML = `<span style='color:#EF4444;'>Enter at least 2 SMILES strings (one per line).</span>`;
+        return;
+    }
+
+    resultDiv.innerHTML = `<i class='fa-solid fa-spinner fa-spin' style='margin-right:4px;'></i>Finding common scaffold...`;
+    try {
+        const res = await fetch("/api/mcs_align", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ smiles_list: lines })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+            resultDiv.innerHTML = `<span style='color:#EF4444;'>Error: ${data.error}</span>`;
+            return;
+        }
+
+        const count = data.aligned ? data.aligned.length : 0;
+        const totalAtoms = data.aligned ? data.aligned.reduce((s, m) => s + m.atoms.length, 0) : 0;
+        resultDiv.innerHTML = `
+            <div style='background:#F0FDF4;border:1px solid #86EFAC;border-radius:6px;padding:8px;margin-top:4px;'>
+                <div style='font-weight:600;color:#15803D;font-size:11px;'>✓ MCS Alignment Complete</div>
+                <div style='color:#166534;font-size:11px;margin-top:2px;'>${count} molecules aligned · ${totalAtoms} total atoms</div>
+                <div style='color:#64748B;font-size:10px;margin-top:4px;'>Aligned coordinates returned — ready for 2D overlay rendering.</div>
+            </div>
+        `;
+        // Log to activity log
+        const logBox = document.getElementById("dynamicCheckpointLogs");
+        if (logBox) {
+            logBox.innerHTML += `<div class="checkpoint-log-line"><span class="checkpoint-success">[MCS]</span> Aligned ${count} structures via Maximum Common Substructure.</div>`;
+            document.getElementById("checkpointBody").scrollTop = 99999;
+        }
+    } catch(e) {
+        resultDiv.innerHTML = `<span style='color:#EF4444;'>Failed: ${e.message}</span>`;
+    }
+}
+
+// ==========================================
+// Phase N+3: HPC Async Task Submission
+// ==========================================
+async function submitHPCTask(taskType) {
+    const smiles = await getActiveSmiles();
+    const statusDiv = document.getElementById("hpcTaskStatus");
+    const taskMsg = document.getElementById("hpcTaskMsg");
+    const taskIdDiv = document.getElementById("hpcTaskId");
+    const logBox = document.getElementById("dynamicCheckpointLogs");
+    const logBody = document.getElementById("checkpointBody");
+
+    function appendLog(icon, cls, text) {
+        if (!logBox) return;
+        const ts = new Date().toLocaleTimeString("en-GB", {hour12: false});
+        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="${cls}">[${ts}]</span> ${text}</div>`;
+        if (logBody) logBody.scrollTop = 99999;
+    }
+
+    if (!smiles && taskType !== "md_simulation") {
+        appendLog("", "checkpoint-time", "No molecule loaded. Draw or enter a SMILES first.");
+        return;
+    }
+
+    const pdbInput = document.getElementById("pdbIdInput");
+    const ligandSelect = document.getElementById("ligandSelect");
+    const pdbId = pdbInput ? pdbInput.value.trim().toUpperCase() : "";
+
+    const paramsMap = {
+        "optimize_3d": { smiles },
+        "md_simulation": { sdf_path: "molecule.sdf", n_steps: 5000 },
+        "interaction_profile": {
+            smiles,
+            pdb_id: pdbId || "1OPJ",
+            ligand_resname: ligandSelect ? ligandSelect.value.split("|")[0] || "LIG" : "LIG"
+        }
+    };
+
+    if (statusDiv) statusDiv.classList.remove("hidden");
+    if (taskMsg) taskMsg.textContent = `Running ${taskType.replace(/_/g, " ")}…`;
+    if (taskIdDiv) taskIdDiv.textContent = "";
+
+    try {
+        const res = await fetch("/api/tasks/submit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task_type: taskType, params: paramsMap[taskType] })
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+            const label = taskType.replace(/_/g, " ");
+            const eta = data.estimated_time || "~15s";
+            const isSync = data.sync === true;
+
+            if (taskMsg) taskMsg.textContent = isSync
+                ? `Running ${label} in-process… ${eta}`
+                : `✓ ${label} queued — ETA ${eta}`;
+            if (taskIdDiv) taskIdDiv.textContent = data.task_id ? `id: ${data.task_id}` : "";
+
+            appendLog("", "checkpoint-success", `[HPC] ${label} ${isSync ? "started (sync)" : "queued"}. ETA ${eta}`);
+
+            // Auto-dismiss spinner after ETA
+            const ms = (parseInt(eta) || 15) * 1000 + 2000;
+            setTimeout(() => {
+                if (statusDiv) statusDiv.classList.add("hidden");
+            }, ms);
+
+        } else if (data.requires_redis) {
+            if (statusDiv) statusDiv.classList.add("hidden");
+            const warn = document.getElementById("redisOfflineWarning");
+            if (warn) warn.style.display = "block";
+            const badge = document.getElementById("redisBadge");
+            if (badge) { badge.textContent = "Redis unavailable"; }
+            appendLog("", "checkpoint-time", `[HPC] ${taskType.replace(/_/g, " ")} requires Redis. ${data.error || ""}`);
+        } else {
+            if (taskMsg) taskMsg.textContent = `⚠ ${data.error || "Submission failed"}`;
+            appendLog("", "checkpoint-time", `[HPC] Error: ${data.error || "submission failed"}`);
+        }
+    } catch(e) {
+        if (taskMsg) taskMsg.textContent = `Error: ${e.message}`;
+        appendLog("", "checkpoint-time", `[HPC] Network error: ${e.message}`);
+    }
+}
+
+
+// Probe Redis health on page load and update the badge
+async function probeRedisHealth() {
+    const badge = document.getElementById("redisBadge");
+    const warn = document.getElementById("redisOfflineWarning");
+    try {
+        const res = await fetch("/api/tasks/health");
+        const data = await res.json();
+        if (badge) {
+            if (data.ok) {
+                badge.textContent = "Redis ready";
+                badge.style.color = "#64748b";
+                badge.className = "text-[10px] font-medium text-slate-400";
+            } else {
+                badge.textContent = "";
+                badge.className = "text-[10px] font-medium text-slate-400";
+                if (warn) warn.style.display = "block";
+            }
+        }
+    } catch(e) {
+        if (badge) { badge.textContent = ""; }
+    }
+}
+
+// Auto-probe Redis status 2 seconds after page load (give server time to warm up)
+window.addEventListener("load", () => setTimeout(probeRedisHealth, 2000));

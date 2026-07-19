@@ -143,9 +143,10 @@
             align-items: center;
             border-bottom: 1px solid var(--border-primary);
             background: var(--bg-header);
-            padding: 0 1.25rem;
+            padding: 0 1rem 0 1.25rem;
             z-index: 10;
             box-shadow: var(--shadow-sm);
+            gap: 1.5rem;
         }
 
         .logo-container {
@@ -189,23 +190,7 @@
             text-transform: uppercase;
         }
 
-        .status-indicator {
-            font-size: 0.72rem;
-            color: var(--text-secondary);
-            font-family: 'JetBrains Mono', monospace;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
 
-        .status-dot {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            background-color: var(--accent-green);
-            border-radius: 50%;
-            box-shadow: 0 0 4px rgba(5, 150, 105, 0.4);
-        }
 
         /* ============================================================
            WORKSPACE MAIN LAYOUT
@@ -215,6 +200,7 @@
             flex: 1;
             min-height: 0;
             position: relative;
+            overflow: hidden;
         }
 
         /* ============================================================
@@ -1107,18 +1093,256 @@
             background: transparent !important;
             border-color: transparent !important;
         }
+
+        /* ============================================================
+           GLOBAL 6-TAB NAV (in top header)
+           ============================================================ */
+        .global-nav {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            height: 100%;
+            flex: 1;
+        }
+
+        .gnav-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0 0.85rem;
+            height: 100%;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: color 0.15s, border-color 0.15s;
+            font-family: 'Inter', sans-serif;
+            position: relative;
+        }
+        .gnav-btn i { font-size: 12px; }
+        .gnav-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+        .gnav-btn.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+            font-weight: 600;
+        }
+        /* ============================================================
+           PAGE SECTION CONTAINERS
+           ============================================================ */
+        .page-section {
+            /* Use absolute overlay so pages never stack. display:none would
+               be overridden by .fw-page {display:flex}, so we use position. */
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            visibility: hidden;
+            pointer-events: none;
+            overflow: hidden;
+            background: var(--bg-base);
+            z-index: 0;
+        }
+        .page-section.active {
+            visibility: visible;
+            pointer-events: auto;
+            z-index: 1;
+        }
+
+        /* Sketch page — keeps left-rail + canvas in a row */
+        #page-sketch {
+            flex-direction: row;
+        }
+
+        /* Full-width page base — just adds bg, fw-page is already position:absolute via .page-section */
+        .fw-page {
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+            background: var(--bg-base);
+            overflow-y: auto;
+            padding: 1.5rem;
+            gap: 1.5rem;
+        }
+
+        .fw-page-inner {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .fw-page-header {
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid var(--border-primary);
+            background: var(--bg-panel);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .fw-page-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .fw-page-title i { color: var(--accent-blue); }
+        .fw-page-subtitle {
+            font-size: 0.72rem;
+            color: var(--text-tertiary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Card used on full-width pages */
+        .fw-card {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-primary);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+        .fw-card-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+        .fw-card-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .fw-card-body { padding: 1rem; }
+
+        /* Two-column grid for pages like ADMET */
+        .fw-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+        @media (max-width: 900px) { .fw-grid-2 { grid-template-columns: 1fr; } }
+
+        /* Three-column grid for Drug Discovery */
+        .fw-grid-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.25rem;
+        }
+        @media (max-width: 1100px) { .fw-grid-3 { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 700px) { .fw-grid-3 { grid-template-columns: 1fr; } }
+
+        /* 3D View page: main 3D area + narrow PyMOL sidebar */
+        #page-3d {
+            flex-direction: row;
+        }
+        .viewer-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            background: var(--bg-base);
+        }
+        .viewer-sidebar {
+            width: 340px;
+            min-width: 300px;
+            background: var(--bg-sidebar);
+            border-left: 1px solid var(--border-primary);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            gap: 0;
+            padding: 1rem;
+            gap: 1rem;
+        }
+
+        /* Compute page terminal */
+        .hpc-terminal {
+            background: #0F172A;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid #1E293B;
+        }
+        .hpc-terminal-header {
+            background: #1E293B;
+            padding: 0.5rem 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #334155;
+        }
+        .hpc-terminal-body {
+            padding: 0.75rem 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            line-height: 1.6;
+            color: #CBD5E1;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Hide old canvas-header 2-tab buttons (replaced by global nav) */
+        #tabSketcher, #tabInteractions { display: none !important; }
+
+        /* Hide old right sidebar (all content moved to dedicated pages) */
+        .right-panel { display: none !important; }
+
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
+
 <body>
 
     <header>
         <div class="logo-container">
             <h1>Kinetic<span>Sketch</span></h1>
         </div>
+
+        <!-- Global 6-Tab Navigation -->
+        <nav class="global-nav" aria-label="Main navigation">
+            <button class="gnav-btn active" id="gnav-sketch" onclick="switchGlobalTab('sketch')">
+                <i class="fa-solid fa-pen-nib"></i> Sketch
+            </button>
+            <button class="gnav-btn" id="gnav-3d" onclick="switchGlobalTab('3d')">
+                <i class="fa-solid fa-cube"></i> 3D View
+            </button>
+            <button class="gnav-btn" id="gnav-conformers" onclick="switchGlobalTab('conformers')">
+                <i class="fa-solid fa-chart-scatter"></i> Conformers
+            </button>
+            <button class="gnav-btn" id="gnav-admet" onclick="switchGlobalTab('admet')">
+                <i class="fa-solid fa-flask-vial"></i> ADMET
+            </button>
+            <button class="gnav-btn" id="gnav-drug" onclick="switchGlobalTab('drug')">
+                <i class="fa-solid fa-pills"></i> Drug Discovery
+            </button>
+            <button class="gnav-btn" id="gnav-compute" onclick="switchGlobalTab('compute')">
+                <i class="fa-solid fa-microchip"></i> Compute
+            </button>
+        </nav>
+
+        <!-- Header right: status indicator -->
+
     </header>
 
+    <!-- ── PAGE SECTIONS ─────────────────────────────────────────── -->
     <div class="workspace">
+
+    <!-- ═══════════════════════════════════════════
+         PAGE 1 — SKETCH (original left-rail + canvas)
+         ═══════════════════════════════════════════ -->
+    <div class="page-section active" id="page-sketch">
+
         <!-- Left Navigation Rail (Ketcher-Style Toolbar) -->
         <div class="left-rail">
             <span class="rail-section-label">Mode</span>
@@ -1388,8 +1612,45 @@
                 <canvas id="molCanvas"></canvas>
             </div>
 
-            <!-- Interaction Viewer Container (Phase 3) -->
-            <div id="interactionViewContainer" style="display:none; flex:1; flex-direction:column; background:var(--bg-panel); border-radius:0 0 var(--radius-lg) var(--radius-lg); overflow:hidden;">
+            
+
+            <!-- Unified Smart Input Bar -->
+            <div class="smiles-bar">
+                <div style="display:flex; gap:0.5rem; width:100%; align-items:center;">
+                    <div class="smiles-wrapper" style="flex:1; position:relative;">
+                        <!-- Autocomplete dropdown (opens above) -->
+                        <div id="unified_autocomplete"></div>
+
+                        <input
+                            type="text"
+                            id="unified_input"
+                            class="premium-input"
+                            placeholder="Enter SMILES or drug name (e.g. Aspirin, CC(=O)O, Gleevec)..."
+                            autocomplete="off"
+                            style="width:100%; padding-right:90px;"
+                            oninput="onUnifiedInput(this.value)"
+                            onkeydown="onUnifiedKeydown(event)"
+                        />
+                        <span id="unified_source_badge">SMILES</span>
+                    </div>
+                    <button class="premium-btn" id="unified_submit_btn" onclick="triggerUnifiedSearch()" style="white-space:nowrap;">Render</button>
+                </div>
+                <div id="unified_status" style="font-size:0.75rem; color:var(--text-secondary); min-height:1rem; padding-left:2px;"></div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar Panel Stack -->
+        
+
+            </div> <!-- end page-sketch -->
+
+            <div class="page-section fw-page" id="page-3d">
+            <!-- 3D Layout Wrapper -->
+            <div style="display:flex; flex-direction:row; gap:1.5rem; width:100%; flex:1; min-height:500px; overflow:hidden;">
+                <!-- Main 3D Viewer Area -->
+                <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border-primary); border-radius:var(--radius-lg);">
+                    <!-- Interaction Viewer Container (Phase 3) -->
+            <div id="interactionViewContainer" style="display:flex; flex:1; flex-direction:column; background:var(--bg-panel); border-radius:0 0 var(--radius-lg) var(--radius-lg); overflow:hidden;">
                 <!-- Interaction Diagram Workspace -->
                 <div style="display:flex; flex:1; position:relative; min-height:400px; background:#FFFFFF;">
                     <!-- SVG render area -->
@@ -1434,21 +1695,25 @@
                             <span style="font-size:0.75rem; color:var(--text-tertiary);">or</span>
                             
                             <div style="display:flex; align-items:center; gap:0.4rem;">
-                                <input type="file" id="pdbFileInput" style="display:none;" onchange="uploadPdbFile(event)" />
+                                <input type="file" id="pdbFileInput" style="display:flex;" onchange="uploadPdbFile(event)" />
                                 <button class="premium-btn-secondary" onclick="document.getElementById('pdbFileInput').click()" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); color:var(--text-secondary);">
                                     <i class="fa-solid fa-upload"></i> Upload PDB
                                 </button>
                             </div>
 
                             <!-- Target Ligands Dropdown -->
-                            <div id="ligandSelectWrapper" style="display:none; align-items:center; gap:0.4rem; margin-left:auto;">
+                            <div id="ligandSelectWrapper" style="display:flex; align-items:center; gap:0.4rem; margin-left:auto;">
                                 <label for="ligandSelect" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">Select Ligand:</label>
                                 <select id="ligandSelect" class="premium-input" style="padding:0.2rem 0.5rem; font-size:0.75rem; width:130px;">
                                     <option value="">-- Choose --</option>
                                 </select>
                                 <button class="premium-btn" onclick="computeInteractions()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Profile</button>
+                            </div>
+
+                            <!-- GNINA Dock Button — always visible once PDB is loaded -->
+                            <div id="gninaDockToolbar" style="display:flex; align-items:center; gap:0.4rem; margin-left:auto;">
                                 <button id="btnDockGnina" class="premium-btn" onclick="runOneClickDocking()"
-                                        style="background: linear-gradient(135deg, #6366F1, #8B5CF6); margin-left: 8px;"
+                                        style="background: linear-gradient(135deg, #6366F1, #8B5CF6); padding:0.25rem 0.75rem; font-size:0.75rem;"
                                         title="Dock drawn molecule against loaded PDB target using GNINA">
                                     ⚡ Dock with GNINA
                                 </button>
@@ -1457,41 +1722,15 @@
                     </div>
                     
                     <!-- SVG export floating button -->
-                    <button id="btnDownloadSVG" class="rail-btn" data-tooltip="Download Vector SVG" onclick="downloadInteractionSVG()" style="position:absolute; right:15px; bottom:15px; width:32px; height:32px; background:rgba(255,255,255,0.9); border:1px solid var(--border-primary); border-radius:50%; box-shadow:var(--shadow-sm); display:none; align-items:center; justify-content:center;">
+                    <button id="btnDownloadSVG" class="rail-btn" data-tooltip="Download Vector SVG" onclick="downloadInteractionSVG()" style="position:absolute; right:15px; bottom:15px; width:32px; height:32px; background:rgba(255,255,255,0.9); border:1px solid var(--border-primary); border-radius:50%; box-shadow:var(--shadow-sm); display:flex; align-items:center; justify-content:center;">
                         <i class="fa-solid fa-download" style="color:var(--text-secondary);"></i>
                     </button>
                 </div>
             </div>
-
-            <!-- Unified Smart Input Bar -->
-            <div class="smiles-bar">
-                <div style="display:flex; gap:0.5rem; width:100%; align-items:center;">
-                    <div class="smiles-wrapper" style="flex:1; position:relative;">
-                        <!-- Autocomplete dropdown (opens above) -->
-                        <div id="unified_autocomplete"></div>
-
-                        <input
-                            type="text"
-                            id="unified_input"
-                            class="premium-input"
-                            placeholder="Enter SMILES or drug name (e.g. Aspirin, CC(=O)O, Gleevec)..."
-                            autocomplete="off"
-                            style="width:100%; padding-right:90px;"
-                            oninput="onUnifiedInput(this.value)"
-                            onkeydown="onUnifiedKeydown(event)"
-                        />
-                        <span id="unified_source_badge">SMILES</span>
-                    </div>
-                    <button class="premium-btn" id="unified_submit_btn" onclick="triggerUnifiedSearch()" style="white-space:nowrap;">Render</button>
                 </div>
-                <div id="unified_status" style="font-size:0.75rem; color:var(--text-secondary); min-height:1rem; padding-left:2px;"></div>
-            </div>
-        </div>
-
-        <!-- Right Sidebar Panel Stack -->
-        <aside class="right-panel w-[420px] min-w-[380px] max-w-[480px] h-[calc(100vh-48px)] max-h-[calc(100vh-48px)] bg-slate-50 border-l border-slate-200 px-4 py-4 overflow-y-auto overflow-x-hidden flex flex-col gap-4 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent">
-
-            <!-- Panel 1: PyMOL Assistant Chat Component -->
+<!-- Right Sidebar: PyMOL Chat -->
+                <div style="width:380px; flex-shrink:0; display:flex; flex-direction:column; overflow-y:auto;">
+                    <!-- Panel 1: PyMOL Assistant Chat Component -->
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
                 <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal mb-3">PyMOL Assistant</header>
                 
@@ -1508,7 +1747,13 @@
                     <button class="premium-btn shrink-0 h-9 px-3 rounded-md bg-cyan-600 text-sm font-medium text-white leading-5 hover:bg-cyan-700 disabled:opacity-50" onclick="triggerChatSend()">Send</button>
                 </div>
             </section>
+                </div>
+            </div> <!-- end 3D Layout Wrapper -->
 
+
+            </div><!-- end page-3d -->
+
+    <div class="page-section fw-page" id="page-conformers">
             <!-- Panel 2: Conformer Predictor -->
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
                 <div class="flex items-start justify-between gap-3 mb-3">
@@ -1520,6 +1765,9 @@
                 </div>
             </section>
 
+            </div><!-- end page-conformers -->
+
+    <div class="page-section fw-page" id="page-drug">
             <!-- Panel 3: PDB Repurposing Target Search -->
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
                 <div class="flex items-start justify-between gap-3 mb-3">
@@ -1531,6 +1779,9 @@
                 </div>
             </section>
 
+            </div><!-- end page-drug -->
+
+    <div class="page-section fw-page" id="page-admet">
             <!-- Panel 3.5: Real-Time ADME Profile -->
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
                 <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal mb-3">ADME & Lipinski Profile</header>
@@ -1539,25 +1790,96 @@
                 </div>
             </section>
 
-            <!-- Panel 4: Checkpoint Logs -->
-            <section class="rounded-lg border border-slate-800 bg-slate-950 shadow-sm overflow-hidden">
-                <div class="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-3 py-2">
-                    <span class="text-xs font-medium text-slate-200 leading-4">Activity Log</span>
-                    <span class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 leading-4">ONLINE</span>
+            <!-- Panel 4.5: Deep ADMET Neural Network -->
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
+                <div class="flex items-start justify-between gap-3 mb-3">
+                    <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal">Deep ADMET</header>
+                    <span class="text-xs text-slate-500 leading-4 whitespace-nowrap font-medium">Neural Network</span>
                 </div>
-                <div class="max-h-48 min-h-32 overflow-y-auto overflow-x-hidden px-3 py-2.5 font-mono text-[11px] leading-5 text-slate-300 bg-slate-950" id="checkpointBody">
-                    <div id="dynamicCheckpointLogs" class="flex flex-col gap-1">
-                        <div class="checkpoint-log-line"><span class="checkpoint-time">[READY]</span> Workspace ready for analysis.</div>
-                    </div>
+                <div id="dynamicADMET" class="flex flex-col gap-2">
+                    <div style='color: var(--text-muted); font-size: 0.85rem; font-style: italic;'>Render a molecule to predict CYP450, hERG, BBB, and toxicity via neural network.</div>
                 </div>
+                <button onclick="runDeepADMET()" class="mt-3 w-full rounded-md bg-violet-600 text-white text-xs font-semibold py-1.5 hover:bg-violet-700 transition-colors" style="cursor:pointer;">
+                    <i class="fa-solid fa-brain mr-1"></i> Run Deep ADMET
+                </button>
             </section>
 
-        </aside>
+            <!-- Panel 4.7: MCS Align Tool -->
+            <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
+                <div class="flex items-start justify-between gap-3 mb-2">
+                    <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal">MCS Align</header>
+                    <span class="text-xs text-slate-500 leading-4 whitespace-nowrap font-medium">Scaffold Overlay</span>
+                </div>
+                <p class="text-xs text-slate-500 mb-2 leading-4">Enter 2+ SMILES (one per line) to find their Maximum Common Substructure and overlay them.</p>
+                <textarea id="mcsSmilesList" rows="3" class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500" placeholder="CC(=O)Oc1ccccc1C(=O)O&#10;CC(=O)Nc1ccc(O)cc1"></textarea>
+                <button onclick="runMCSAlign()" class="mt-2 w-full rounded-md bg-indigo-600 text-white text-xs font-semibold py-1.5 hover:bg-indigo-700 transition-colors" style="cursor:pointer;">
+                    <i class="fa-solid fa-object-group mr-1"></i> Align Structures
+                </button>
+                <div id="mcsAlignResult" class="mt-2 text-xs text-slate-600"></div>
+            </section>
+
+            </div><!-- end page-admet -->
+
+    <div class="page-section fw-page" id="page-compute">
+                        <!-- Panel 5/6: Compute & Logs -->
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:1rem;">
+                    <div style="font-size:1.5rem; font-weight:600; color:var(--text-primary);"><i class="fa-solid fa-microchip"></i> Compute</div>
+                </div>
+                
+                <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:1.5rem;">
+                    <button onclick="submitHPCTask('md_simulation')"
+                        class="rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 flex items-center gap-1.5 transition-colors shadow-sm"
+                        style="cursor:pointer;">
+                        <i class="fa-solid fa-wave-square text-blue-500" style="font-size:11px;"></i>
+                        OpenMM MD Simulation
+                        <span class="text-slate-400 text-[10px] ml-1">~1 min</span>
+                    </button>
+                    <button onclick="submitHPCTask('optimize_3d')"
+                        class="rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 flex items-center gap-1.5 transition-colors shadow-sm"
+                        style="cursor:pointer;">
+                        <i class="fa-solid fa-atom text-green-500" style="font-size:11px;"></i>
+                        3D Conformer Optimization
+                        <span class="text-slate-400 text-[10px] ml-1">~10 sec</span>
+                    </button>
+                    <button onclick="submitHPCTask('interaction_profile')"
+                        class="rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 flex items-center gap-1.5 transition-colors shadow-sm"
+                        style="cursor:pointer;">
+                        <i class="fa-solid fa-circle-nodes text-purple-500" style="font-size:11px;"></i>
+                        Interaction Profile
+                        <span class="text-slate-400 text-[10px] ml-1">~15 sec</span>
+                    </button>
+                    <span id="redisBadge" class="text-[10px] text-slate-400 ml-auto" style="font-family:'JetBrains Mono',monospace;"></span>
+                </div>
+
+                <!-- Task spinner -->
+                <div id="hpcTaskStatus" class="text-xs text-slate-500 hidden mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-spinner fa-spin text-slate-400"></i>
+                        <span id="hpcTaskMsg">Submitting task...</span>
+                        <span class="font-mono text-[10px] text-slate-400 ml-1" id="hpcTaskId"></span>
+                    </div>
+                </div>
+
+                <!-- Activity log terminal -->
+                <div class="hpc-terminal" id="hpcTerminalContainer" style="display:flex; flex-direction:column; background:#0f172a; border-radius:8px; border:1px solid #1e293b; overflow:hidden;">
+                    <div class="hpc-terminal-hdr" onclick="const body = document.getElementById('checkpointBody'); const isHidden = body.style.display === 'none'; body.style.display = isHidden ? 'block' : 'none'; this.querySelector('i').className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';" style="background:#1e293b; padding:8px 12px; border-bottom:1px solid #334155; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                        <span class="text-xs font-medium text-slate-200">Activity Log</span>
+                        <button style="color:#94a3b8; background:none; border:none; padding:0; font-size:12px;"><i class="fa-solid fa-chevron-down"></i></button>
+                    </div>
+                    <div class="hpc-terminal-body" id="checkpointBody" style="display:none; padding:12px; max-height:500px; overflow-y:auto; font-family:monospace; font-size:11px; color:#cbd5e1;">
+                        <div id="dynamicCheckpointLogs" class="flex flex-col gap-1">
+                            <div class="checkpoint-log-line"><span class="checkpoint-time text-emerald-400">[READY]</span> Workspace ready for analysis.</div>
+                        </div>
+                    </div>
+                </div>
+
+
+        </div><!-- end page-compute -->
     </div>
 
     <!-- Script section for Canvas 2D Interaction -->
     <script src="/static/interaction_viewer.js"></script>
-    <script src="/static/sketch.js?v=8"></script>
+    <script src="/static/sketch.js?v=13"></script>
 
     <!-- Unified Smart Input Logic -->
     <script>

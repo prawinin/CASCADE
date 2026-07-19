@@ -1264,11 +1264,30 @@ def mcs_align():
         logger.error(f"MCS align error: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
 
+def _redis_available() -> bool:
+    """Fast Redis ping — returns True only if Redis is reachable within 1 second."""
+    try:
+        import redis as redis_lib
+        from app.config import get_config as _gc
+        url = _gc().REDIS_URL
+        r = redis_lib.from_url(url, socket_connect_timeout=1, socket_timeout=1)
+        return r.ping()
+    except Exception:
+        return False
+
+
+@flask_app.get("/api/tasks/health")
+def tasks_health():
+    """Quick probe: is the Celery/Redis backend reachable?"""
+    ok = _redis_available()
+    return jsonify({"ok": ok, "broker": "redis", "status": "online" if ok else "offline"}), 200
+
+
 @flask_app.post("/api/tasks/submit")
 def tasks_submit():
     from app.tasks.task_schemas import TaskSubmitSchema
     from marshmallow import ValidationError
-    
+
     payload = request.get_json(silent=True) or {}
     schema = TaskSubmitSchema()
     try:
@@ -1276,13 +1295,76 @@ def tasks_submit():
         schema.validate_params(validated_data)
     except ValidationError as err:
         return jsonify({"ok": False, "error": err.messages}), 400
-        
+
     task_type = validated_data["task_type"]
     params = validated_data["params"]
-    
+    redis_up = _redis_available()
+
+    # ── Synchronous fallback for optimize_3d ────────────────────────────────
+    if task_type == "optimize_3d" and not redis_up:
+        import threading, uuid as _uuid
+        smiles = params.get("smiles", "")
+        if not smiles:
+            return jsonify({"ok": False, "error": "SMILES required"}), 400
+
+        fake_id = str(_uuid.uuid4())[:8]
+
+        def _run():
+            try:
+                from rdkit import Chem
+                from app.services import (
+                    optimize_conformer_3d,
+                    write_all_conformers,
+                    calculate_adme_descriptors,
+                    MDRepoPredictor,
+                    get_one_hot_nodes,
+                )
+                import torch
+
+                logger.info(f"[sync] optimize_3d for {smiles}")
+                mol = Chem.MolFromSmiles(smiles)
+                if mol is None:
+                    logger.error("[sync] Invalid SMILES")
+                    return
+
+                mol_h = optimize_conformer_3d(mol)
+                write_all_conformers(mol_h, "molecule.sdf", "molecule.xyz", "molecule.mol2")
+
+                conf = mol_h.GetConformer()
+                positions = [[*conf.GetAtomPosition(i)] for i in range(mol_h.GetNumAtoms())]
+                pos_tensor = torch.tensor(positions, dtype=torch.float32)
+                node_features = get_one_hot_nodes(mol_h)
+
+                predictor = MDRepoPredictor()
+                predictor.eval()
+                with torch.no_grad():
+                    predictor(pos_tensor, node_features)
+
+                calculate_adme_descriptors(mol_h)
+                logger.info("[sync] optimize_3d complete")
+            except Exception as ex:
+                logger.error(f"[sync] optimize_3d failed: {ex}")
+
+        threading.Thread(target=_run, daemon=True).start()
+
+        return jsonify({
+            "ok": True,
+            "task_id": f"sync-{fake_id}",
+            "estimated_time": "~15s",
+            "sync": True
+        })
+
+    # ── All other tasks require Redis/Celery ────────────────────────────────
+    if not redis_up:
+        return jsonify({
+            "ok": False,
+            "error": f"'{task_type}' requires the Celery task queue. Start Redis first: redis-server --daemonize yes",
+            "requires_redis": True
+        }), 200
+
     task_id = None
     estimated_time = "~30s"
-    
+
     try:
         if task_type == "optimize_3d":
             from app.tasks import run_3d_optimization_task
@@ -1291,7 +1373,7 @@ def tasks_submit():
             )
             task_id = result.id
             estimated_time = "~10s"
-            
+
         elif task_type == "interaction_profile":
             from app.tasks import run_interaction_profiling_task
             result = run_interaction_profiling_task.delay(
@@ -1303,22 +1385,17 @@ def tasks_submit():
             )
             task_id = result.id
             estimated_time = "~15s"
-            
+
         elif task_type == "md_simulation":
             from app.tasks import run_openmm_md_task
-            structure_path = params.get("sdf_path")
-            if not structure_path and params.get("smiles"):
-                structure_path = "molecule.sdf"
-            elif not structure_path:
-                structure_path = "molecule.sdf"
-                
+            structure_path = params.get("sdf_path") or "molecule.sdf"
             result = run_openmm_md_task.delay(
                 structure_path=structure_path,
                 n_steps=params["n_steps"]
             )
             task_id = result.id
             estimated_time = "~1m"
-            
+
         return jsonify({
             "ok": True,
             "task_id": task_id,
