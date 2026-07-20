@@ -112,9 +112,7 @@ except ImportError:
 checkpoint_manager = CheckpointManager()
 
 
-# =====================================================================
 # TAIPY GUI REACTIVE VARIABLE BINDINGS
-# =====================================================================
 canvas_payload = "{}"
 smiles_input = ""
 smiles_submit_token = ""
@@ -406,7 +404,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
         state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic; text-align: center; padding: 1rem;'>No high-similarity PDB drug targets identified. Sketched molecule represents a novel chemical fragment!</div>"
         return
 
-    # ── Deduplicate: group PDB entries by drug name ─────────────────────────
+    #  Deduplicate: group PDB entries by drug name 
     drug_cards: dict = {}
     for t in targets:
         key = t.get("matched_drug", "Unknown")
@@ -431,7 +429,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
         key=lambda c: (0 if c["pdbs"] else 1, -c["similarity"])
     )
 
-    # ── Build card HTML ──────────────────────────────────────────────────────
+    #  Build card HTML 
     lines: List[str] = []
     lines.append("<div style='display:flex; flex-direction:column; gap:0; padding:0;'>")
 
@@ -524,7 +522,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
         lines.append(
             f"<div style='padding:10px 12px 10px 12px; {border_bottom}'>"
 
-            # ── Row 1: drug name + score ──────────────────────────────────
+            #  Row 1: drug name + score 
             f"  <div style='display:flex; align-items:flex-start; justify-content:space-between; gap:6px;'>"
             f"    <div style='font-size:12px; font-weight:600; color:#1E293B; "
             f"                line-height:1.35; flex:1; min-width:0; overflow:hidden; "
@@ -538,17 +536,17 @@ def render_repurposing_table(state: State, smiles: str) -> None:
             f"    </span>"
             f"  </div>"
 
-            # ── Row 2: similarity bar ──────────────────────────────────────
+            #  Row 2: similarity bar 
             f"  <div style='margin-top:5px; height:4px; border-radius:2px; background:#E2E8F0; overflow:hidden;'>"
             f"    <div style='width:{min(sim_pct, 100):.1f}%; height:100%; "
             f"               border-radius:2px; background:{bar_color}; "
             f"               transition:width 0.4s ease;'></div>"
             f"  </div>"
 
-            # ── Row 3: PDB pills + target name ────────────────────────────
+            #  Row 3: PDB pills + target name 
             f"  {pdb_section}"
 
-            # ── Row 4: affinity + approval badge ──────────────────────────
+            #  Row 4: affinity + approval badge 
             f"  <div style='display:flex; align-items:center; gap:6px; margin-top:5px; flex-wrap:wrap;'>"
             f"    <span style='font-size:10.5px; color:#64748B; font-family:monospace; "
             f"                 background:#F8FAFC; border:1px solid #E2E8F0; "
@@ -559,10 +557,10 @@ def render_repurposing_table(state: State, smiles: str) -> None:
             f"</div>"
         )
 
-    # ── Dev Log & Search Computation Breakdown ──────────────────────────────
+    #  Dev Log & Search Computation Breakdown 
     lines.append(
         f"<details style='margin-top:12px; border:1px solid #E2E8F0; border-radius:6px; background:#F8FAFC; padding:8px 12px; font-family:monospace; font-size:11px;'>"
-        f"  <summary style='cursor:pointer; color:#0284C7; font-weight:700;'>⚙ Drug Discovery Computation Log &amp; Pipeline Breakdown</summary>"
+        f"  <summary style='cursor:pointer; color:#0284C7; font-weight:700;'> Drug Discovery Computation Log &amp; Pipeline Breakdown</summary>"
         f"  <div style='margin-top:8px; display:flex; flex-direction:column; gap:4px; color:#475569; font-size:10.5px; line-height:1.5;'>"
         f"    <div>[1] <strong>SMILES Input:</strong> Query <code>{html_module.escape(smiles[:60])}</code></div>"
         f"    <div>[2] <strong>Fingerprint Generation:</strong> Calculated 2048-bit Morgan Fingerprint (Radius 2, ECFP4-equivalent) via RDKit</div>"
@@ -651,9 +649,7 @@ def process_smiles_submission(state: State, smiles: str, submission_key: Optiona
         return False
 
 
-# =====================================================================
 # TAIPY STATE REACTIVE BINDINGS (MODULE 1 BRIDGE)
-# =====================================================================
 def on_chat_send(state: State) -> None:
     """
     Processes chat prompt through visualizer service connection APIs.
@@ -836,9 +832,7 @@ def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
         "checkpoint_logs_html": getattr(response_state, "checkpoint_logs_html", checkpoint_logs_html),
     }
 
-# =====================================================================
 # SERVER RUN ENTRYPOINT
-# =====================================================================
 # Pure Flask app — serves our index.html directly without Taipy's React shell
 import requests  # noqa: E402
 from flask import Flask, jsonify, request, send_from_directory  # noqa: E402
@@ -1116,31 +1110,11 @@ def interactions():
         
         # Generate 2D coordinates for the ligand smiles to layout the diagram
         mol = smiles_to_rdkit_mol(smiles)
+        coords, bonds = [], []
         if mol:
             mol = generate_2d_coords(mol)
-            conf = mol.GetConformer(0)
-            coords = []
-            for i, atom in enumerate(mol.GetAtoms()):
-                pos = conf.GetAtomPosition(i)
-                coords.append({
-                    "id": i + 1,
-                    "x": round(pos.x, 4),
-                    "y": round(pos.y, 4),
-                    "element": atom.GetSymbol()
-                })
-            bonds = []
-            for bond in mol.GetBonds():
-                bt = bond.GetBondType()
-                b_type = 1
-                if bt == Chem.BondType.DOUBLE:
-                    b_type = 2
-                elif bt == Chem.BondType.TRIPLE:
-                    b_type = 3
-                bonds.append({
-                    "source": bond.GetBeginAtomIdx() + 1,
-                    "target": bond.GetEndAtomIdx() + 1,
-                    "type": b_type
-                })
+            from app.services.cheminformatics import mol_to_json_graph
+            coords, bonds = mol_to_json_graph(mol)
                 
             # Format interactions for front-end diagram
             serializable_profile = []
@@ -1250,10 +1224,9 @@ def mcs_align():
         if res.numAtoms == 0:
             aligned_coords = []
             for mol in mols:
-                conf = mol.GetConformer(0)
-                atoms = [{"id": i+1, "x": conf.GetAtomPosition(i).x, "y": conf.GetAtomPosition(i).y, "element": mol.GetAtomWithIdx(i).GetSymbol()} for i in range(mol.GetNumAtoms())]
-                bonds = [{"source": b.GetBeginAtomIdx()+1, "target": b.GetEndAtomIdx()+1, "type": 1 if b.GetBondType() == Chem.BondType.SINGLE else 2} for b in mol.GetBonds()]
-                aligned_coords.append({"atoms": atoms, "bonds": bonds})
+                from app.services.cheminformatics import mol_to_json_graph
+                c, b = mol_to_json_graph(mol)
+                aligned_coords.append({"atoms": c, "bonds": b})
             return jsonify({"ok": True, "aligned": aligned_coords})
             
         mcs_query = Chem.MolFromSmarts(res.smartsString)
@@ -1261,32 +1234,18 @@ def mcs_align():
         ref_match = ref_mol.GetSubstructMatch(mcs_query)
         
         aligned_coords = []
+        from app.services.cheminformatics import mol_to_json_graph
         for i, mol in enumerate(mols):
-            conf = mol.GetConformer(0)
             if i > 0:
                 match = mol.GetSubstructMatch(mcs_query)
                 if match and ref_match:
                     try:
                         rdDepictor.GenerateDepictionMatching2DStructure(mol, ref_mol, acceptFailure=True)
-                        conf = mol.GetConformer(0)
                     except Exception as align_err:
                         logger.warning(f"Matching 2D alignment failed: {align_err}")
                         
-            atoms = [{"id": j+1, "x": conf.GetAtomPosition(j).x, "y": conf.GetAtomPosition(j).y, "element": mol.GetAtomWithIdx(j).GetSymbol()} for j in range(mol.GetNumAtoms())]
-            bonds = []
-            for b in mol.GetBonds():
-                bt = b.GetBondType()
-                b_type = 1
-                if bt == Chem.BondType.DOUBLE:
-                    b_type = 2
-                elif bt == Chem.BondType.TRIPLE:
-                    b_type = 3
-                bonds.append({
-                    "source": b.GetBeginAtomIdx() + 1,
-                    "target": b.GetEndAtomIdx() + 1,
-                    "type": b_type
-                })
-            aligned_coords.append({"atoms": atoms, "bonds": bonds})
+            c, b = mol_to_json_graph(mol)
+            aligned_coords.append({"atoms": c, "bonds": b})
             
         return jsonify({"ok": True, "aligned": aligned_coords})
     except Exception as e:
@@ -1329,9 +1288,10 @@ def tasks_submit():
     params = validated_data["params"]
     redis_up = _redis_available()
 
-    # ── Synchronous fallback for optimize_3d ────────────────────────────────
+    #  Synchronous fallback for optimize_3d 
     if task_type == "optimize_3d" and not redis_up:
-        import threading, uuid as _uuid
+        import threading
+        import uuid as _uuid
         smiles = params.get("smiles", "")
         force_field = params.get("force_field", "MMFF94")
         if not smiles:
@@ -1384,7 +1344,7 @@ def tasks_submit():
             "sync": True
         })
 
-    # ── All other tasks require Redis/Celery ────────────────────────────────
+    #  All other tasks require Redis/Celery 
     if not redis_up:
         return jsonify({
             "ok": False,

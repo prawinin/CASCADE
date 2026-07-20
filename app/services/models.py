@@ -14,11 +14,11 @@ from typing import List, Optional, Dict, Any  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.Models")
 
-# ── Weights path ──────────────────────────────────────────────────────────────
+#  Weights path 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WEIGHTS_PATH = os.path.join(_PROJECT_ROOT, "app", "models", "mdrepo_predictor.pt")
 
-# ── Singleton predictor (loaded once at server startup) ───────────────────────
+#  Singleton predictor (loaded once at server startup) 
 _predictor_instance: Optional["MDRepoPredictor"] = None
 _predictor_device: Optional[torch.device] = None
 
@@ -43,9 +43,7 @@ def get_one_hot_nodes(mol) -> torch.Tensor:
     return torch.tensor(nodes, dtype=torch.float32)
 
 
-# =============================================================================
 # MPNNLayer — Multi-Scale Message Passing Layer
-# =============================================================================
 
 class MPNNLayer(nn.Module):
     """
@@ -95,9 +93,7 @@ class MPNNLayer(nn.Module):
 
 
 
-# =============================================================================
 # MDRepoPredictor — Full Multi-Layer MPNN
-# =============================================================================
 
 class MDRepoPredictor(nn.Module):
     """
@@ -278,9 +274,7 @@ class MDRepoPredictor(nn.Module):
         return self._forward_single(coords, node_features)
 
 
-# =============================================================================
 # Singleton loader with auto-config detection and torch.compile
-# =============================================================================
 
 def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
     """
@@ -323,14 +317,13 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
         try:
             try:
                 checkpoint = torch.load(WEIGHTS_PATH, map_location=device, weights_only=True)
-            except Exception:
-                logger.warning("Failed to load checkpoint with weights_only=True, falling back to weights_only=False")
-                checkpoint = torch.load(WEIGHTS_PATH, map_location=device, weights_only=False)
-
+            except Exception as e:
+                logger.error(f"Failed to load checkpoint with weights_only=True: {e}")
+                raise
             if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
                 model_config.update(checkpoint.get("config", {}))
                 state_dict = checkpoint["state_dict"]
-                logger.info(f"✓ Checkpoint config: {model_config}")
+                logger.info(f" Checkpoint config: {model_config}")
             else:
                 # Legacy raw state_dict (old Fedora-era single-layer model)
                 state_dict = checkpoint
@@ -386,7 +379,7 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
             model.load_state_dict(state_dict, strict=False)
             loaded_keys = set(state_dict.keys()) & set(model.state_dict().keys())
             logger.info(
-                f"✓ MDRepoPredictor ready — "
+                f" MDRepoPredictor ready — "
                 f"embed_dim={model_config['embed_dim']}, "
                 f"layers={model_config['num_layers']}, "
                 f"gammas={model_config['num_gammas']}, "
@@ -405,7 +398,7 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
     #   2. CUDA Graph modes cause TLS AssertionError in Flask worker threads.
     #   3. The 1.2M param model runs fast natively on ROCm without compilation.
     # torch.compile is only beneficial during training (already used in train_mdrepo.py).
-    logger.info("✓ MDRepoPredictor ready for inference (no compile — instant response)")
+    logger.info(" MDRepoPredictor ready for inference (no compile — instant response)")
 
     _predictor_instance = model
     return model

@@ -473,3 +473,44 @@ def canvas_json_to_smiles(canvas_json: dict) -> str:
         logger.error(f"Failed to generate SMILES from canvas JSON: {e}")
         return ""
 
+def mol_to_json_graph(mol: Chem.Mol) -> tuple[list[dict], list[dict]]:
+    """Converts an RDKit Mol object into JSON graph arrays for the front-end canvas."""
+    coords = []
+    bonds = []
+    
+    if mol is None:
+        return coords, bonds
+        
+    try:
+        if mol.GetNumConformers() == 0:
+            return coords, bonds
+            
+        conf = mol.GetConformer(0)
+        for i, atom in enumerate(mol.GetAtoms()):
+            pos = conf.GetAtomPosition(i)
+            coords.append({
+                "id": i + 1,
+                "x": round(pos.x, 4),
+                "y": round(pos.y, 4),
+                "element": atom.GetSymbol()
+            })
+            
+        for bond in mol.GetBonds():
+            bt = bond.GetBondType()
+            b_type = 1
+            if bt == Chem.BondType.DOUBLE:
+                b_type = 2
+            elif bt == Chem.BondType.TRIPLE:
+                b_type = 3
+            elif bond.GetIsAromatic():
+                b_type = 4
+                
+            bonds.append({
+                "source": bond.GetBeginAtomIdx() + 1,
+                "target": bond.GetEndAtomIdx() + 1,
+                "type": b_type
+            })
+    except Exception as e:
+        logger.error(f"Error converting mol to JSON graph: {e}")
+        
+    return coords, bonds

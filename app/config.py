@@ -10,6 +10,7 @@ This module loads environment variables and provides defaults for:
 """
 
 import os  # noqa: E402
+import tempfile
 from typing import Optional, Dict, Any  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
 
@@ -26,7 +27,7 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-key-change-in-production")
 
     # Server
-    HOST = os.getenv("HOST", "0.0.0.0")
+    HOST = os.getenv("HOST", "127.0.0.1")
     PORT = int(os.getenv("PORT", 5000))
 
     # PyMOL Integration
@@ -50,12 +51,12 @@ class Config:
 
     # Caching
     PDB_CACHE_TTL = int(os.getenv("PDB_CACHE_TTL", 3600))  # 1 hour in seconds
-    PDB_CACHE_DIR = os.getenv("PDB_CACHE_DIR", "/tmp/kinetic_sketch_pdb_cache")
+    PDB_CACHE_DIR = os.getenv("PDB_CACHE_DIR", os.path.join(tempfile.gettempdir(), "kinetic_sketch_pdb_cache"))
 
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FORMAT = os.getenv("LOG_FORMAT", "json")  # "json" or "text"
-    LOG_FILE = os.getenv("LOG_FILE", "/tmp/kinetic_sketch.log")
+    LOG_FILE = os.getenv("LOG_FILE", os.path.join(tempfile.gettempdir(), "kinetic_sketch.log"))
 
     # Development
     ENABLE_DEBUG_CONSOLE = os.getenv("ENABLE_DEBUG_CONSOLE", "0").lower() in ("1", "true", "yes")
@@ -121,8 +122,8 @@ class Config:
             f"Environment:        {cls.ENVIRONMENT}",
             f"Debug Mode:         {cls.DEBUG}",
             f"Server:             {cls.HOST}:{cls.PORT}",
-            f"PyMOL Integration:  {'✓ Enabled' if cls.PYMOL_ENABLED else '✗ Disabled'}",
-            f"Ollama Integration: {'✓ Enabled' if cls.OLLAMA_ENABLED else '✗ Disabled'}",
+            f"PyMOL Integration:  {' Enabled' if cls.PYMOL_ENABLED else ' Disabled'}",
+            f"Ollama Integration: {' Enabled' if cls.OLLAMA_ENABLED else ' Disabled'}",
             f"Molecule Limit:     {cls.MOLECULE_SIZE_LIMIT} atoms",
             f"SMILES Length Limit: {cls.SMILES_LENGTH_LIMIT} chars",
             f"Logging Level:      {cls.LOG_LEVEL}",
@@ -201,8 +202,8 @@ if __name__ == "__main__":
     # Validate configuration
     is_valid, errors = config.validate()
     if not is_valid:
-        print("\n⚠️  Configuration Warnings:")
+        print("\n  Configuration Warnings:")
         for error in errors:
             print(f"  - {error}")
     else:
-        print("\n✓ Configuration is valid")
+        print("\n Configuration is valid")

@@ -61,9 +61,7 @@ PMDA_CSV = os.path.join(DATA_DIR, "PMDA_Approved.csv")
 CHEMBL_GZ = os.path.join(DATA_DIR, "chembl_37_chemreps.txt.gz")
 
 
-# =============================================================================
 # Step 1: Create SQLite schema
-# =============================================================================
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS drugs (
@@ -101,12 +99,10 @@ CREATE INDEX IF NOT EXISTS idx_targets_pdb  ON drug_targets(pdb_id);
 def create_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
     conn.commit()
-    logger.info("✓ SQLite schema created")
+    logger.info(" SQLite schema created")
 
 
-# =============================================================================
 # Step 2: Load DrugCentral SMILES TSV
-# =============================================================================
 
 def load_approved_ids(csv_path: str) -> Set[str]:
     """Returns a set of DrugCentral INN names that are approved by this agency."""
@@ -127,7 +123,7 @@ def load_drugcentral_smiles(conn: sqlite3.Connection) -> Dict[str, int]:
     Returns {inn_lower: rowid} mapping for target injection.
     """
     if not os.path.exists(SMILES_TSV):
-        logger.warning(f"  ✗ {SMILES_TSV} not found — skipping DrugCentral SMILES")
+        logger.warning(f"   {SMILES_TSV} not found — skipping DrugCentral SMILES")
         return {}
 
     # Load agency approval sets
@@ -174,13 +170,11 @@ def load_drugcentral_smiles(conn: sqlite3.Connection) -> Dict[str, int]:
                 logger.debug(f"Insert error for {inn}: {e}")
 
     conn.commit()
-    logger.info(f"✓ Loaded {inserted:,} drugs from DrugCentral SMILES TSV")
+    logger.info(f" Loaded {inserted:,} drugs from DrugCentral SMILES TSV")
     return id_map
 
 
-# =============================================================================
 # Step 3: Extract drug-target PDB links from DrugCentral SQL dump
-# =============================================================================
 
 def extract_pdb_targets_from_sql(conn: sqlite3.Connection, id_map: Dict[str, int]) -> None:
     """
@@ -297,12 +291,10 @@ def extract_pdb_targets_from_sql(conn: sqlite3.Connection, id_map: Dict[str, int
             pass
 
     conn.commit()
-    logger.info(f"✓ Inserted {inserted:,} drug-PDB target associations")
+    logger.info(f" Inserted {inserted:,} drug-PDB target associations")
 
 
-# =============================================================================
 # Step 4: Supplement with ChEMBL Phase 4 approved drugs
-# =============================================================================
 
 def load_chembl_approved(conn: sqlite3.Connection) -> None:
     """
@@ -317,7 +309,7 @@ def load_chembl_approved(conn: sqlite3.Connection) -> None:
     For performance we skip duplicates by InChIKey.
     """
     if not os.path.exists(CHEMBL_GZ):
-        logger.warning(f"  ✗ {CHEMBL_GZ} not found — skipping ChEMBL supplement")
+        logger.warning(f"   {CHEMBL_GZ} not found — skipping ChEMBL supplement")
         return
 
     logger.info("  Loading ChEMBL 37 chemreps (2.9M compounds — filtering by InChIKey dedup)...")
@@ -381,23 +373,19 @@ def load_chembl_approved(conn: sqlite3.Connection) -> None:
         logger.error(f"  Error loading ChEMBL: {e}")
         return
 
-    logger.info(f"✓ Added {inserted:,} ChEMBL compounds (skipped {skipped:,} duplicates)")
+    logger.info(f" Added {inserted:,} ChEMBL compounds (skipped {skipped:,} duplicates)")
 
 
-# =============================================================================
 # Step 5: Build FTS5 index
-# =============================================================================
 
 def build_fts_index(conn: sqlite3.Connection) -> None:
     logger.info("  Building FTS5 full-text search index...")
     conn.execute("INSERT INTO drugs_fts(drugs_fts) VALUES('rebuild')")
     conn.commit()
-    logger.info("✓ FTS5 index built")
+    logger.info(" FTS5 index built")
 
 
-# =============================================================================
 # Step 6: Pre-compute Morgan fingerprints → numpy array
-# =============================================================================
 
 def build_fingerprint_matrix(conn: sqlite3.Connection) -> None:
     """
@@ -453,13 +441,11 @@ def build_fingerprint_matrix(conn: sqlite3.Connection) -> None:
     id_array = drug_ids[:valid_count]
 
     np.savez_compressed(FP_PATH, fingerprints=fp_matrix, drug_ids=id_array)
-    logger.info(f"✓ Saved fingerprint matrix: {fp_matrix.shape} → {FP_PATH}")
+    logger.info(f" Saved fingerprint matrix: {fp_matrix.shape} → {FP_PATH}")
     logger.info(f"  ({failed:,} drugs skipped due to invalid SMILES)")
 
 
-# =============================================================================
 # Main
-# =============================================================================
 
 def main():
     parser = argparse.ArgumentParser(description="Build KineticSketch drug database")
@@ -521,7 +507,7 @@ def main():
         logger.info("  Skipping fingerprint computation (--skip-fingerprints)")
 
     elapsed = time.time() - start
-    logger.info(f"\n✅ Done in {elapsed/60:.1f} minutes")
+    logger.info(f"\n Done in {elapsed/60:.1f} minutes")
     logger.info(f"   DB: {DB_PATH}")
     logger.info(f"   FP: {FP_PATH}")
 

@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
-# =====================================================================
 # KINETICKSKETCH AI - WSL 2 AUTO-SETUP UTILITY
-# =====================================================================
 set -e
 
-echo -e "\e[1;35m=== 🧬 KineticSketch AI WSL 2 Environment Setup ===\e[0m"
+echo -e "\e[1;35m===  KineticSketch AI WSL 2 Environment Setup ===\e[0m"
 
 # 1. Resolve WSL 2 MTU Issue to prevent SSL decryption failures
 echo -e "\e[1;34m[1/5] Adjusting network MTU to 1400 to prevent SSL packet decryption errors...\e[0m"

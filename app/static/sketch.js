@@ -1,4 +1,4 @@
-// ── Action Logger ──────────────────────────────────────────────────
+//  Action Logger 
 let _actionSessionId = null;
 
 async function initActionLogger() {
@@ -186,7 +186,7 @@ function applyAICommandTo3Dmol(commandText) {
     let styled = false;
 
     for (const line of lines) {
-        // ── Representation style ──────────────────────────────────────────────
+        //  Representation style 
         if (line.startsWith("show stick") || line === "show sticks") {
             glViewer.setStyle({}, { stick: { colorscheme: "Jmol", radius: 0.16 }, sphere: { colorscheme: "Jmol", scale: 0.28 } });
             styled = true;
@@ -203,7 +203,7 @@ function applyAICommandTo3Dmol(commandText) {
             glViewer.setStyle({}, {});
             styled = true;
 
-        // ── Colour commands ───────────────────────────────────────────────────
+        //  Colour commands 
         } else if (line.startsWith("color ") || line.startsWith("colour ") || line.includes("color ") || line.includes("colour ")) {
             // Handles both standard ("color green, elem c") and compound LLM styles ("color atom 1, red color atom 2, blue...")
             const colorsList = ["red", "green", "blue", "yellow", "orange", "purple", "cyan", "magenta", "white", "black", "grey", "gray", "pink", "brown", "violet"];
@@ -237,12 +237,12 @@ function applyAICommandTo3Dmol(commandText) {
             }
             styled = true;
 
-        // ── Background colour ─────────────────────────────────────────────────
+        //  Background colour 
         } else if (line.startsWith("bg_color ") || line.startsWith("bg_colour ")) {
             const bg = line.split(/\s+/)[1] || "black";
             glViewer.setBackgroundColor(bg === "white" ? 0xFFFFFF : 0x020617);
 
-        // ── Camera ────────────────────────────────────────────────────────────
+        //  Camera 
         } else if (line === "zoom" || line === "zoom all" || line === "reset") {
             glViewer.zoomTo();
 
@@ -958,7 +958,7 @@ document.addEventListener('keydown', e => {
 // Phase 1.3: Structural Ring Templates
 // ==========================================
 const RING_TEMPLATES = {
-    // ── 6-membered carbocyclics ────────────────────────────────────────────
+    //  6-membered carbocyclics 
     benzene: {
         atoms: 6, elements: ['C','C','C','C','C','C'],
         bonds: [[0,1,2],[1,2,1],[2,3,2],[3,4,1],[4,5,2],[5,0,1]],
@@ -970,14 +970,14 @@ const RING_TEMPLATES = {
         radius: 40
     },
 
-    // ── 5-membered carbocyclic ─────────────────────────────────────────────
+    //  5-membered carbocyclic 
     cyclopentane: {
         atoms: 5, elements: ['C','C','C','C','C'],
         bonds: [[0,1,1],[1,2,1],[2,3,1],[3,4,1],[4,0,1]],
         radius: 35
     },
 
-    // ── 6-membered N-heterocyclics ─────────────────────────────────────────
+    //  6-membered N-heterocyclics 
     pyridine: {
         atoms: 6, elements: ['N','C','C','C','C','C'],
         bonds: [[0,1,1],[1,2,2],[2,3,1],[3,4,2],[4,5,1],[5,0,2]],
@@ -1009,7 +1009,7 @@ const RING_TEMPLATES = {
         radius: 40
     },
 
-    // ── 5-membered heterocyclics (aromatic & saturated) ───────────────────
+    //  5-membered heterocyclics (aromatic & saturated) 
     imidazole: {
         atoms: 5, elements: ['N','C','N','C','C'],
         bonds: [[0,1,1],[1,2,2],[2,3,1],[3,4,2],[4,0,1]],
@@ -1056,7 +1056,7 @@ const RING_TEMPLATES = {
         radius: 35
     },
 
-    // ── Fused bicyclics ────────────────────────────────────────────────────
+    //  Fused bicyclics 
     naphthalene: {
         atoms: 10,
         elements: ['C','C','C','C','C','C','C','C','C','C'],
@@ -1665,7 +1665,7 @@ async function runOneClickDocking() {
     } catch (e) {
         alert("Docking failed: " + e.message);
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = "⚡ Dock with GNINA"; }
+        if (btn) { btn.disabled = false; btn.textContent = " Dock with GNINA"; }
     }
 }
 
@@ -1767,7 +1767,7 @@ function toggle3DStyle(styleType) {
     console.log(`Changed 3Dmol style to: ${styleType}`);
 }
 
-// ── Design Score Widget ────────────────────────────────────────────
+//  Design Score Widget 
 async function updateDesignScore(smiles) {
     if (!smiles) return;
     try {
@@ -1813,7 +1813,7 @@ async function runDeepADMET() {
         });
         const data = await res.json();
         if (!data.ok) {
-            div.innerHTML = `<div style='color:#F59E0B; font-size:0.8rem;'>⚠ ${data.error || "Prediction failed"}</div>`;
+            div.innerHTML = `<div style='color:#F59E0B; font-size:0.8rem;'> ${data.error || "Prediction failed"}</div>`;
             return;
         }
 
@@ -1888,7 +1888,7 @@ async function runMCSAlign() {
         const totalAtoms = data.aligned ? data.aligned.reduce((s, m) => s + m.atoms.length, 0) : 0;
         resultDiv.innerHTML = `
             <div style='background:#F0FDF4;border:1px solid #86EFAC;border-radius:6px;padding:8px;margin-top:4px;'>
-                <div style='font-weight:600;color:#15803D;font-size:11px;'>✓ MCS Alignment Complete</div>
+                <div style='font-weight:600;color:#15803D;font-size:11px;'> MCS Alignment Complete</div>
                 <div style='color:#166534;font-size:11px;margin-top:2px;'>${count} molecules aligned · ${totalAtoms} total atoms</div>
                 <div style='color:#64748B;font-size:10px;margin-top:4px;'>Aligned coordinates returned — ready for 2D overlay rendering.</div>
             </div>
@@ -1985,7 +1985,7 @@ async function submitHPCTask(taskType) {
 
             if (taskMsg) taskMsg.textContent = isSync
                 ? `Running ${label} in-process… ${eta}`
-                : `✓ ${label} queued — ETA ${eta}`;
+                : ` ${label} queued — ETA ${eta}`;
             if (taskIdDiv) taskIdDiv.textContent = data.task_id ? `id: ${data.task_id}` : "";
 
             appendLog("", "checkpoint-success", `[HPC] ${label} ${isSync ? "started (sync)" : "queued"}. ETA ${eta}`);
@@ -2010,7 +2010,7 @@ async function submitHPCTask(taskType) {
             if (badge) { badge.textContent = "Redis unavailable"; }
             appendLog("", "checkpoint-time", `[HPC] ${taskType.replace(/_/g, " ")} requires Redis. ${data.error || ""}`);
         } else {
-            if (taskMsg) taskMsg.textContent = `⚠ ${data.error || "Submission failed"}`;
+            if (taskMsg) taskMsg.textContent = ` ${data.error || "Submission failed"}`;
             appendLog("", "checkpoint-time", `[HPC] Error: ${data.error || "submission failed"}`);
         }
     } catch(e) {
@@ -2045,7 +2045,7 @@ async function pollHPCTask(taskId, label) {
         const data = await res.json();
 
         if (data.status === "SUCCESS") {
-            appendLog("", "checkpoint-success text-emerald-400", `[HPC] ✓ ${label} completed successfully.`);
+            appendLog("", "checkpoint-success text-emerald-400", `[HPC]  ${label} completed successfully.`);
             
             // Format result — smart display per task type
             if (data.result) {
@@ -2069,7 +2069,7 @@ async function pollHPCTask(taskId, label) {
   <div style="color:#38bdf8;margin-bottom:4px;">Force Field: <span style="color:#e2e8f0;font-weight:600;">${ffUsed}</span> &nbsp;|&nbsp; Minimization RMSD: <span style="color:#e2e8f0;font-weight:600;">${rmsdVal} Å</span> &nbsp;|&nbsp; Atoms: <span style="color:#e2e8f0;">${numAtoms}</span></div>
   <div style="color:#94a3b8;margin-bottom:4px;">Mean RMSF: <span style="color:#38bdf8;">${meanRmsf.toFixed(3)} Å</span> &nbsp;|&nbsp; Mean SASA: <span style="color:#38bdf8;">${meanSasa.toFixed(2)} Å²</span> &nbsp;|&nbsp; Partial Charges: <span style="color:#cbd5e1;">Gasteiger-Marsili (PEOE)</span></div>
   <div style="color:#94a3b8;margin-bottom:2px;">MW: <span style="color:#e2e8f0;">${adme.mw ? adme.mw.toFixed(2) : "—"} Da</span> &nbsp; cLogP: <span style="color:#e2e8f0;">${adme.logp !== undefined ? adme.logp.toFixed(2) : "—"}</span> &nbsp; HBD: <span style="color:#e2e8f0;">${adme.hbd ?? "—"}</span> &nbsp; HBA: <span style="color:#e2e8f0;">${adme.hba ?? "—"}</span> &nbsp; TPSA: <span style="color:#e2e8f0;">${adme.tpsa ? adme.tpsa.toFixed(1) : "—"} Å²</span></div>
-  <div style="color:${adme.lipinski_pass ? '#4ade80' : '#f87171'};margin-top:4px;">Lipinski: ${adme.lipinski_pass ? "✓ Pass" : "✗ " + (adme.lipinski_violations || 0) + " violation(s)"} &nbsp;|&nbsp; Veber: ${adme.veber_pass ? "✓ Pass" : "✗ Fail"}</div>
+  <div style="color:${adme.lipinski_pass ? '#4ade80' : '#f87171'};margin-top:4px;">Lipinski: ${adme.lipinski_pass ? " Pass" : " " + (adme.lipinski_violations || 0) + " violation(s)"} &nbsp;|&nbsp; Veber: ${adme.veber_pass ? " Pass" : " Fail"}</div>
   <div style="color:#64748b;margin-top:6px;">Files written: ${Object.values(r.files || {}).join(", ")}</div>
 </div>`;
 

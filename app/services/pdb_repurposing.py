@@ -3,8 +3,8 @@ from typing import List, Dict, Any  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.PDBRepurposing")
 
-# ─── Hardcoded fallback reference set (used when local DB is not built yet) ───
-REFERENCE_DRUGS = [
+#  Hardcoded fallback reference set (used when local DB is not built yet) 
+REFERENCE_DRUGS: List[Dict[str, Any]] = [
     {
         "name": "Aspirin",
         "smiles": "CC(=O)OC1=CC=CC=C1C(=O)O",
@@ -94,7 +94,7 @@ def find_repurposing_targets(query_smiles: str) -> List[Dict[str, Any]]:
     2. If not built → fall back to 10 hardcoded REFERENCE_DRUGS
        (always available, no external dependency)
     """
-    # ── Primary path: local DrugDatabase ──────────────────────────────────────
+    #  Primary path: local DrugDatabase 
     try:
         from app.services.drug_database import fast_repurposing_search, is_available
         if is_available():
@@ -106,7 +106,7 @@ def find_repurposing_targets(query_smiles: str) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.warning(f"DrugDatabase unavailable ({e}) — using hardcoded fallback")
 
-    # ── Fallback: hardcoded REFERENCE_DRUGS ───────────────────────────────────
+    #  Fallback: hardcoded REFERENCE_DRUGS 
     return _fallback_search(query_smiles)
 
 

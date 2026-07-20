@@ -1345,12 +1345,12 @@
 
     </header>
 
-    <!-- ── PAGE SECTIONS ─────────────────────────────────────────── -->
+    <!--  PAGE SECTIONS  -->
     <div class="workspace">
 
-    <!-- ═══════════════════════════════════════════
+    <!-- 
          PAGE 1 — SKETCH (original left-rail + canvas)
-         ═══════════════════════════════════════════ -->
+          -->
     <div class="page-section active" id="page-sketch">
 
         <!-- Left Navigation Rail (Ketcher-Style Toolbar) -->
@@ -1720,7 +1720,7 @@
                                     <button id="btnDockGnina" class="premium-btn" onclick="runOneClickDocking()"
                                             style="background:linear-gradient(135deg,#6366F1,#8B5CF6); padding:0.25rem 0.9rem; font-size:0.75rem; white-space:nowrap;"
                                             title="Dock drawn molecule against loaded PDB target using GNINA">
-                                        ⚡ Dock with GNINA
+                                         Dock with GNINA
                                     </button>
                                 </div>
                             </div>
@@ -1750,7 +1750,7 @@
                 <!-- Chat messages wrapper -->
                 <div class="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-xs text-cyan-900 leading-5 mb-3 max-h-48 overflow-y-auto" id="chatMessages">
                     <div class="chat-message message-system leading-5 break-words">
-                        💡 Describe what you want to see or analyze — e.g. <em>"highlight hydrogen bond donors"</em> or <em>"show the binding pocket surface"</em>.
+                         Describe what you want to see or analyze — e.g. <em>"highlight hydrogen bond donors"</em> or <em>"show the binding pocket surface"</em>.
                     </div>
                     <div id="dynamicChatLog" class="flex flex-col gap-2 mt-2"></div>
                 </div>
@@ -2086,7 +2086,7 @@
          * --------------------------------------------------------------- */
         function renderSmilesDirect(smiles, label) {
             setStatus('Rendering: ' + (label || smiles.slice(0, 40)) + '...');
-            updateBadge('loading', '⏳');
+            updateBadge('loading', '');
             // Delegate to sketch.js's existing SMILES handler
             if (typeof window.submitSmilesFromExternal === 'function') {
                 window.submitSmilesFromExternal(smiles);
@@ -2100,7 +2100,7 @@
                     body: JSON.stringify({ smiles: smiles })
                 }).then(r => r.json()).then(d => {
                     if (d.ok) {
-                        setStatus('✓ Rendered: ' + (label || smiles.slice(0, 30)), '#10B981');
+                        setStatus(' Rendered: ' + (label || smiles.slice(0, 30)), '#10B981');
                         updateBadge('smiles', 'SMILES');
                         
                         // Update 2D canvas coordinates and right-side panels
@@ -2127,11 +2127,11 @@
                         // Dispatch custom event for backward compatibility
                         window.dispatchEvent(new CustomEvent('externalSmiles', { detail: { smiles } }));
                     } else {
-                        setStatus('✗ ' + (d.error || 'Failed to render'), '#F43F5E');
+                        setStatus(' ' + (d.error || 'Failed to render'), '#F43F5E');
                         updateBadge('', '');
                     }
                 }).catch(err => {
-                    setStatus('✗ Network error', '#F43F5E');
+                    setStatus(' Network error', '#F43F5E');
                 });
             }
         }
@@ -2153,15 +2153,15 @@
                     renderSmilesDirect(val);
                 } else {
                     // Drug name lookup
-                    updateBadge('loading', '⏳');
+                    updateBadge('loading', '');
                     setStatus('Looking up "' + val + '"...');
 
                     const r = await fetch('/api/drug/lookup?name=' + encodeURIComponent(val));
                     const d = await r.json();
 
                     if (d.ok && d.smiles) {
-                        const src = d.source === 'local' ? '🗄 local DB' : '🌐 PubChem';
-                        setStatus('✓ Found: ' + (d.name || val) + ' — ' + src, '#10B981');
+                        const src = d.source === 'local' ? ' local DB' : ' PubChem';
+                        setStatus(' Found: ' + (d.name || val) + ' — ' + src, '#10B981');
                         
                         // CRITICAL: Replace the input box with the actual SMILES.
                         // If we don't do this, the canvas auto-sync 1.2s later will see "aspirin" 
@@ -2171,12 +2171,12 @@
                         
                         renderSmilesDirect(d.smiles, d.name || val);
                     } else {
-                        setStatus('✗ Not found: ' + (d.error || 'unknown'), '#F43F5E');
+                        setStatus(' Not found: ' + (d.error || 'unknown'), '#F43F5E');
                         updateBadge('', '');
                     }
                 }
             } catch (e) {
-                setStatus('✗ Network error — check server', '#F43F5E');
+                setStatus(' Network error — check server', '#F43F5E');
                 updateBadge('', '');
             } finally {
                 btn.disabled = false;

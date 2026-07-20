@@ -41,10 +41,10 @@ def measure(label, fn, runs=3):
         mn  = min(times)
         avg = sum(times) / len(times)
         mx  = max(times)
-        print(f"  {'✓':<3} {label:<38}  min={mn:6.1f}ms  avg={avg:6.1f}ms  max={mx:6.1f}ms")
+        print(f"  {'':<3} {label:<38}  min={mn:6.1f}ms  avg={avg:6.1f}ms  max={mx:6.1f}ms")
         return result
     except Exception as e:
-        print(f"  {'✗':<3} {label:<38}  ERROR: {e}")
+        print(f"  {'':<3} {label:<38}  ERROR: {e}")
         return None
 
 
@@ -54,7 +54,7 @@ print("  KineticSketch AI — Pipeline Benchmark")
 print(f"  Test molecule: Aspirin  ({TEST_SMILES})")
 print("=" * 58)
 
-# ── 1. SMILES Parsing ────────────────────────────────────────
+#  1. SMILES Parsing 
 print(f"\n{SEP}")
 print("  1.  SMILES Validation & Sanitization")
 print(SEP)
@@ -65,7 +65,7 @@ mol = measure(
     fn=lambda: Chem.MolFromSmiles(TEST_SMILES)
 )
 
-# ── 2. 3D Conformer Embedding ────────────────────────────────
+#  2. 3D Conformer Embedding 
 print(f"\n{SEP}")
 print("  2.  3D Coordinate Embedding")
 print(SEP)
@@ -77,7 +77,7 @@ mol_3d = measure(
     fn=lambda: optimize_conformer_3d(Chem.AddHs(Chem.MolFromSmiles(TEST_SMILES)))
 )
 
-# ── 3. MDRepoPredictor GNN Inference ────────────────────────
+#  3. MDRepoPredictor GNN Inference 
 print(f"\n{SEP}")
 print("  3.  MDRepoPredictor GNN Inference")
 print(SEP)
@@ -111,7 +111,7 @@ if gnn_result is not None:
     print(f"      Output: {mol_3d.GetNumAtoms()} atoms | "
           f"mean RMSF 10ns={rmsf_10ns:.3f} Å  1µs={rmsf_1us:.3f} Å")
 
-# ── 4. ADME Profiling ────────────────────────────────────────
+#  4. ADME Profiling 
 print(f"\n{SEP}")
 print("  4.  ADME Drug-Likeness Profiling")
 print(SEP)
@@ -125,10 +125,10 @@ adme = measure(
 )
 if adme and adme.get("ok"):
     print(f"      Output: MW={adme['mw']:.1f} Da  LogP={adme['logp']:.2f}  "
-          f"Lipinski={'✓' if adme['lipinski_pass'] else '✗'}  "
-          f"Veber={'✓' if adme['veber_pass'] else '✗'}")
+          f"Lipinski={'' if adme['lipinski_pass'] else ''}  "
+          f"Veber={'' if adme['veber_pass'] else ''}")
 
-# ── 5. Morgan Similarity Search ──────────────────────────────
+#  5. Morgan Similarity Search 
 print(f"\n{SEP}")
 print("  5.  Morgan Similarity Search")
 print(SEP)
@@ -142,7 +142,7 @@ repurpose = measure(
 if repurpose:
     print(f"      Output: {len(repurpose)} similar drugs found")
 
-# ── 6. Complete Sync Cycle ───────────────────────────────────
+#  6. Complete Sync Cycle 
 print(f"\n{SEP}")
 print("  6.  Complete Sync Cycle (End-to-End)")
 print(SEP)
@@ -166,7 +166,7 @@ def full_pipeline():
 
 measure("Full pipeline (all modules)", fn=full_pipeline)
 
-# ── Summary ──────────────────────────────────────────────────
+#  Summary 
 print()
 print("=" * 58)
 print("  Benchmark complete.")

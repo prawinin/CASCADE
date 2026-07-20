@@ -19,7 +19,7 @@ import logging  # noqa: E402
 import argparse  # noqa: E402
 import warnings  # noqa: E402
 
-# ── ROCm GFX override (RDNA2 / RX 6500 series) ────────────────────────────────
+#  ROCm GFX override (RDNA2 / RX 6500 series) 
 if "HSA_OVERRIDE_GFX_VERSION" not in os.environ:
     os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
 
@@ -42,7 +42,7 @@ DATA_DIR     = os.path.join(PROJECT_ROOT, "data")
 FPF_ZIP      = os.path.join(DATA_DIR, "FastProtFlex.zip")
 
 
-# ── Device ────────────────────────────────────────────────────────────────────
+#  Device 
 
 def get_device():
     import torch
@@ -54,7 +54,7 @@ def get_device():
     return torch.device("cpu")
 
 
-# ── Seed SMILES ───────────────────────────────────────────────────────────────
+#  Seed SMILES 
 
 SEED_SMILES = [
     "CC(=O)Oc1ccccc1C(=O)O", "CC(C)Cc1ccc(cc1)C(C)C(=O)O",
@@ -73,7 +73,7 @@ SEED_SMILES = [
 ]
 
 
-# ── Synthetic RMSF labels ─────────────────────────────────────────────────────
+#  Synthetic RMSF labels 
 
 def compute_multitask_labels(mol):
     """Generates synthetic multi-task labels for training."""
@@ -92,7 +92,7 @@ def compute_multitask_labels(mol):
     for atom in mol.GetAtoms():
         i, sym, deg = atom.GetIdx(), atom.GetSymbol(), atom.GetDegree()
 
-        # ── RMSF labels (same logic as before) ──
+        #  RMSF labels (same logic as before) 
         if i in ar:
             base = 0.08 + random.gauss(0, 0.02)
         elif i in ra:
@@ -113,7 +113,7 @@ def compute_multitask_labels(mol):
         r1u.append(round(base * (1.5 + random.gauss(0, 0.2)), 4))
         r_cont.append(round(base * (1.0 + random.gauss(0, 0.3)), 4))
 
-        # ── SASA labels (heuristic: exposed atoms have higher SASA) ──
+        #  SASA labels (heuristic: exposed atoms have higher SASA) 
         if sym == "H":
             sasa_val = 5.0 + random.gauss(0, 1.0)
         elif deg <= 1:
@@ -124,11 +124,11 @@ def compute_multitask_labels(mol):
             sasa_val = 15.0 + random.gauss(0, 4.0)
         sasa_labels.append(max(0.0, round(sasa_val, 3)))
 
-        # ── B-factor labels (correlate with RMSF) ──
+        #  B-factor labels (correlate with RMSF) 
         bf = base * 8.0 * (3.14159**2) + random.gauss(0, 2.0)  # B = 8π²<u²>
         bf_labels.append(max(0.0, round(bf, 3)))
 
-        # ── Gasteiger charge labels (element-based heuristic) ──
+        #  Gasteiger charge labels (element-based heuristic) 
         charge_map = {"C": 0.0, "H": 0.1, "N": -0.3, "O": -0.4, "S": -0.1, "P": 0.3, "F": -0.2, "Cl": -0.15, "Br": -0.1}
         ch = charge_map.get(sym, 0.0) + random.gauss(0, 0.05)
         charge_labels.append(round(ch, 4))
@@ -136,7 +136,7 @@ def compute_multitask_labels(mol):
     return r10, r1u, r_cont, sasa_labels, bf_labels, charge_labels
 
 
-# ── Synthetic dataset generation/caching ─────────────────────────────────────
+#  Synthetic dataset generation/caching 
 
 def generate_synthetic(n=150000):
     import json
@@ -196,7 +196,7 @@ def generate_synthetic(n=150000):
     return data
 
 
-# ── FastProtFlex real data ────────────────────────────────────────────────────
+#  FastProtFlex real data 
 
 def load_fastprotflex(max_files=3771, max_atoms=1200):
     import zipfile
@@ -251,7 +251,7 @@ def load_fastprotflex(max_files=3771, max_atoms=1200):
     return data
 
 
-# ── Dataset: pre-converts everything to CPU tensors at init ──────────────────
+#  Dataset: pre-converts everything to CPU tensors at init 
 
 class RMSFDataset:
     def __init__(self, samples):
@@ -292,7 +292,7 @@ class RMSFDataset:
         return self.coords_t[idx], self.nf_t[idx], self.target_t[idx]
 
 
-# ── Padded collator ───────────────────────────────────────────────────────────
+#  Padded collator 
 
 def collate_padded(batch):
     import torch
@@ -310,7 +310,7 @@ def collate_padded(batch):
     return torch.stack(cl), torch.stack(nl), torch.stack(tl), torch.stack(ml)
 
 
-# ── Shared multi-task loss helper ─────────────────────────────────────────────
+#  Shared multi-task loss helper 
 
 def _compute_multitask_loss(pred_dict: dict, T_d, M_d, crit):
     """
@@ -342,7 +342,7 @@ def _compute_multitask_loss(pred_dict: dict, T_d, M_d, crit):
     return loss_rmsf + 0.5 * loss_sasa + 0.5 * loss_bf + loss_ch + 0.3 * loss_hl
 
 
-# ── Training loop ─────────────────────────────────────────────────────────────
+#  Training loop 
 
 def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
           resume=False, embed_dim=256, num_layers=4, num_gammas=4,
@@ -392,7 +392,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
                 ckpt = torch.load(WEIGHTS_PATH, map_location=device, weights_only=False)
             sd = ckpt["state_dict"] if isinstance(ckpt, dict) and "state_dict" in ckpt else ckpt
             raw_model.load_state_dict(sd, strict=False)
-            logger.info("  ✓ Checkpoint resumed")
+            logger.info("   Checkpoint resumed")
         except Exception as e:
             logger.warning(f"  Resume failed: {e} — starting fresh")
     else:
@@ -402,7 +402,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
     model = raw_model
     try:
         model = torch.compile(raw_model, dynamic=True)
-        logger.info("  ✓ torch.compile(dynamic=True) applied — first epoch will be slower (compilation)")
+        logger.info("   torch.compile(dynamic=True) applied — first epoch will be slower (compilation)")
     except Exception as e:
         logger.warning(f"  torch.compile not available: {e}")
 
@@ -412,7 +412,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
     use_amp = device.type == "cuda"
     scaler  = torch.amp.GradScaler("cuda") if use_amp else None
     if use_amp:
-        logger.info("  ✓ AMP (mixed precision) enabled")
+        logger.info("   AMP (mixed precision) enabled")
 
     best = float("inf")
     hist = {"train_loss": [], "val_loss": []}
@@ -420,7 +420,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
 
     accum_steps = 4
     for ep in range(1, epochs + 1):
-        # ── Train ────────────────────────────────────────────────────────────
+        #  Train 
         model.train()
         eloss, nb = 0.0, 0
         opt.zero_grad(set_to_none=True)
@@ -454,7 +454,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
         sched.step()
         at = eloss / max(1, nb)
 
-        # ── Validate ─────────────────────────────────────────────────────────
+        #  Validate 
         model.eval()
         vl2, vn = 0.0, 0
         with torch.no_grad():
@@ -476,7 +476,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
         hist["train_loss"].append(at)
         hist["val_loss"].append(av)
 
-        # ── Save best (always use raw unwrapped model's state_dict) ──────────
+        #  Save best (always use raw unwrapped model's state_dict) 
         if av < best:
             best = av
             os.makedirs(MODELS_DIR, exist_ok=True)
@@ -500,7 +500,7 @@ def train(samples, epochs=300, lr=1e-3, batch_size=128, val_split=0.1,
     return best
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+#  Entry point 
 
 def main():
     ap = argparse.ArgumentParser(description="Train MDRepoPredictor GNN")

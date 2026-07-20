@@ -216,101 +216,22 @@ def get_autocomplete_suggestions(prefix: str, limit: int = 10) -> List[Dict[str,
     return suggestions[:limit]
 
 
-def fast_repurposing_search(
-    query_smiles: str,
-    top_k: int = 10,
-    min_similarity: float = 0.10
-) -> List[Dict[str, Any]]:
-    """
-    Fast vectorized Tanimoto similarity search across all drugs in the fingerprint matrix.
-
-    Uses numpy dot-product formula:
-        Tanimoto(A, B) = |A ∩ B| / |A ∪ B|
-                       = dot(A, B) / (|A|² + |B|² - dot(A, B))
-
-    Args:
-        query_smiles: SMILES string of the query molecule
-        top_k: Maximum number of results to return
-        min_similarity: Minimum Tanimoto threshold (default 0.10)
-
-    Returns:
-        List of result dicts with drug info + similarity score + PDB targets
-    """
-    # Lazy load fingerprints
-    if not _load_fingerprints():
-        return []
-
-    conn = _get_conn()
-    if conn is None:
-        return []
-
-    # Generate query fingerprint
-    try:
-        from rdkit import Chem
-        from rdkit.Chem import AllChem
-        mol = Chem.MolFromSmiles(query_smiles)
-        if mol is None:
-            return []
-        fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
-        query_vec = np.array(fp, dtype=np.float32)   # shape (2048,)
-    except Exception as e:
-        logger.error(f"Fingerprint generation failed: {e}")
-        return []
-
-    # Calculate query bits once
-    query_bits = query_vec.sum()
-    
-    # Chunked Tanimoto to prevent massive OS thrashing from mmap
-    # If we do _fp_matrix @ query_vec, NumPy tries to read the entire 22GB file into RAM.
-    # Processing in chunks of 10,000 keeps memory strictly bounded to ~80MB.
-    CHUNK_SIZE = 10000
-    N = _fp_matrix.shape[0]
-    tanimoto = np.zeros(N, dtype=np.float32)
-    
-    for start_idx in range(0, N, CHUNK_SIZE):
-        end_idx = min(start_idx + CHUNK_SIZE, N)
-        
-        # Load just this small chunk into RAM
-        chunk = _fp_matrix[start_idx:end_idx] 
-        
-        # Compute Tanimoto for the chunk
-        dots = chunk @ query_vec
-        ref_bits = chunk.sum(axis=1)
-        unions = query_bits + ref_bits - dots
-        
-        # Avoid division by zero
-        tanimoto[start_idx:end_idx] = np.where(unions > 0, dots / unions, 0.0)
-
-    # Filter + rank
-    mask = tanimoto >= min_similarity
-    if not mask.any():
-        return []
-
-    indices = np.where(mask)[0]
-    scores = tanimoto[indices]
-    sorted_idx = np.argsort(-scores)[:top_k]               # descending order
-
+def _build_repurposing_results(conn, sorted_idx, indices, scores, top_k: int) -> List[Dict[str, Any]]:
     results = []
     for i in sorted_idx:
         drug_id = int(_fp_drug_ids[indices[i]])
         similarity = float(scores[i])
 
         try:
-            # Fetch drug info + PDB targets from SQLite
-            drug_row = conn.execute(
-                "SELECT id, inn, smiles, approved_by FROM drugs WHERE id = ?",
-                (drug_id,)
-            ).fetchone()
+            drug_row = conn.execute("SELECT id, inn, smiles, approved_by FROM drugs WHERE id = ?", (drug_id,)).fetchone()
             if not drug_row:
                 continue
 
             target_rows = conn.execute(
-                """SELECT pdb_id, target_name, gene, chain_id, ligand_id
-                   FROM drug_targets WHERE drug_id = ? LIMIT 3""",
+                "SELECT pdb_id, target_name, gene, chain_id, ligand_id FROM drug_targets WHERE drug_id = ? LIMIT 3",
                 (drug_id,)
             ).fetchall()
 
-            # Estimate binding affinity (heuristic scaling — not trained)
             affinity_kcal = -(similarity * 9.5 + 2.0)
 
             if target_rows:
@@ -326,7 +247,6 @@ def fast_repurposing_search(
                         "approved_by": drug_row["approved_by"] or "Unknown"
                     })
             else:
-                # Drug has no PDB targets recorded — still show the similarity match
                 results.append({
                     "matched_drug": drug_row["inn"] or f"DrugID-{drug_id}",
                     "pdb_id": "N/A",
@@ -341,9 +261,59 @@ def fast_repurposing_search(
             logger.debug(f"Result fetch error for drug_id {drug_id}: {e}")
             continue
 
-    # Re-sort by similarity (results from multiple targets may be interleaved)
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return results[:top_k]
+
+
+def fast_repurposing_search(
+    query_smiles: str,
+    top_k: int = 10,
+    min_similarity: float = 0.10
+) -> List[Dict[str, Any]]:
+    """
+    Fast vectorized Tanimoto similarity search across all drugs in the fingerprint matrix.
+    """
+    if not _load_fingerprints():
+        return []
+
+    conn = _get_conn()
+    if conn is None:
+        return []
+
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem
+        mol = Chem.MolFromSmiles(query_smiles)
+        if mol is None:
+            return []
+        fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+        query_vec = np.array(fp, dtype=np.float32)
+    except Exception as e:
+        logger.error(f"Fingerprint generation failed: {e}")
+        return []
+
+    query_bits = query_vec.sum()
+    CHUNK_SIZE = 10000
+    N = _fp_matrix.shape[0]
+    tanimoto = np.zeros(N, dtype=np.float32)
+    
+    for start_idx in range(0, N, CHUNK_SIZE):
+        end_idx = min(start_idx + CHUNK_SIZE, N)
+        chunk = _fp_matrix[start_idx:end_idx] 
+        dots = chunk @ query_vec
+        ref_bits = chunk.sum(axis=1)
+        unions = query_bits + ref_bits - dots
+        tanimoto[start_idx:end_idx] = np.where(unions > 0, dots / unions, 0.0)
+
+    mask = tanimoto >= min_similarity
+    if not mask.any():
+        return []
+
+    indices = np.where(mask)[0]
+    scores = tanimoto[indices]
+    sorted_idx = np.argsort(-scores)[:top_k]
+
+    return _build_repurposing_results(conn, sorted_idx, indices, scores, top_k)
 
 
 def get_db_stats() -> Dict[str, int]:

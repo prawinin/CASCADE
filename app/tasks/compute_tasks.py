@@ -2,7 +2,7 @@ import os  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
 import logging  # noqa: E402
-from typing import Dict, Any, Protocol, Optional  # noqa: E402
+from typing import Dict, Any, Protocol, Optional, TypedDict, List  # noqa: E402
 
 # Setup python path so RDKit, torch and other local modules import properly
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,8 +18,16 @@ from app.tasks.celery_app import celery_app  # noqa: E402
 logger = logging.getLogger("KineticSketch.Tasks")
 
 # Strategy Pattern for Compute Backend
+class InteractionTaskResult(TypedDict):
+    ligand_resname: str
+    pocket_pdb_id: str
+    status: str
+    interactions: List[Dict[str, Any]]
+    ligand_2d: Optional[Dict[str, Any]]
+    plot_svg: Optional[str]
+
 class MDResult:
-    def __init__(self, ok: bool, message: str, files: Dict[str, str], duration_seconds: float, plot_svg: str = None):
+    def __init__(self, ok: bool, message: str, files: Dict[str, str], duration_seconds: float, plot_svg: Optional[str] = None):
         self.ok = ok
         self.message = message
         self.files = files
@@ -254,19 +262,28 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = No
             self.update_state(state="PROGRESS", meta={"percent": 15, "message": f"Found target {pdb_id} ({valid_target['target_name']})."})
         else:
             pdb_id = "1OPJ"
+            
+    # Guarantee pdb_id is a string at this point
+    final_pdb_id = str(pdb_id) if pdb_id else "1OPJ"
 
-    filepath = fetch_pdb_file(pdb_id)
+    filepath = fetch_pdb_file(final_pdb_id)
     self.update_state(state="PROGRESS", meta={"percent": 30, "message": "Parsing PDB structure details..."})
     struct = parse_pdb_structure(filepath)
     
     if ligand_resname == "SKETCH":
-        self.update_state(state="PROGRESS", meta={"percent": 45, "message": f"Auto-docking sketched molecule into {pdb_id}..."})
+        self.update_state(state="PROGRESS", meta={"percent": 45, "message": f"Auto-docking sketched molecule into {final_pdb_id}..."})
         dock_res = dock_molecule(ligand_sdf_path="molecule.sdf", receptor_pdb_path=filepath, exhaustiveness=2, num_modes=1)
         if dock_res.get("ok") and dock_res.get("poses"):
             shutil.copy(dock_res["poses"][0]["sdf_file"], "molecule.sdf")
 
-    self.update_state(state="PROGRESS", meta={"percent": 65, "message": f"Extracting pocket residues for {ligand_resname}..."})
-    ligand_atoms, pocket_residues = extract_pocket_residues(struct, ligand_resname, ligand_chain, ligand_seq)
+    try:
+        ligand_atoms, pocket_residues = extract_pocket_residues(
+            struct, ligand_resname, 
+            ligand_chain if ligand_chain else None, 
+            ligand_seq if ligand_seq else None
+        )
+    except Exception:
+        ligand_atoms, pocket_residues = [], []
     
     self.update_state(state="PROGRESS", meta={"percent": 80, "message": "Mapping physical interaction criteria..."})
     profile = detect_interactions(ligand_atoms, pocket_residues)
@@ -276,29 +293,8 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = No
     ligand_2d = None
     if mol:
         mol = generate_2d_coords(mol)
-        conf = mol.GetConformer(0)
-        coords = []
-        for i, atom in enumerate(mol.GetAtoms()):
-            pos = conf.GetAtomPosition(i)
-            coords.append({
-                "id": i + 1,
-                "x": round(pos.x, 4),
-                "y": round(pos.y, 4),
-                "element": atom.GetSymbol()
-            })
-        bonds = []
-        for bond in mol.GetBonds():
-            bt = bond.GetBondType()
-            b_type = 1
-            if bt == Chem.BondType.DOUBLE:
-                b_type = 2
-            elif bt == Chem.BondType.TRIPLE:
-                b_type = 3
-            bonds.append({
-                "source": bond.GetBeginAtomIdx() + 1,
-                "target": bond.GetEndAtomIdx() + 1,
-                "type": b_type
-            })
+        from app.services.cheminformatics import mol_to_json_graph
+        coords, bonds = mol_to_json_graph(mol)
         ligand_2d = {"atoms": coords, "bonds": bonds}
         
     serializable_profile = []

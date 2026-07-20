@@ -10,7 +10,7 @@ from typing import Dict, Any  # noqa: E402
 logger = logging.getLogger("KineticSketch.DesignScore")
 
 
-# ── Per-criterion scoring helpers ──────────────────────────────────────────────
+#  Per-criterion scoring helpers 
 
 def _score_lipinski(mw: float, logp: float, hbd: int, hba: int) -> Dict[str, Any]:
     """Lipinski Rule-of-5 compliance (25 points max, -6.25 per violation)."""
@@ -91,7 +91,7 @@ def _grade(score: float):
     return "F", "#EF4444"
 
 
-# ── Public API ─────────────────────────────────────────────────────────────────
+#  Public API 
 
 def calculate_design_score(smiles: str) -> Dict[str, Any]:
     """

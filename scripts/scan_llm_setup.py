@@ -7,7 +7,6 @@ Provides personalized step-by-step installation instructions for PyMOL AI integr
 """
 
 import sys
-import os
 import platform
 import subprocess
 import json
@@ -27,9 +26,9 @@ CYAN = "36"
 BOLD = "1"
 
 def print_header(title: str):
-    print("\n" + colored("═" * 68, CYAN))
+    print("\n" + colored("" * 68, CYAN))
     print(colored(f"  {title}", BOLD))
-    print(colored("═" * 68, CYAN))
+    print(colored("" * 68, CYAN))
 
 def check_http_endpoint(url: str, timeout: float = 2.0) -> tuple[bool, dict]:
     """Probes an HTTP endpoint for JSON response."""
@@ -97,12 +96,12 @@ def get_system_specs() -> dict:
     try:
         res = subprocess.run(["lspci"], capture_output=True, text=True)
         if res.returncode == 0:
-            lines = [l for l in res.stdout.split("\n") if "VGA" in l or "3D" in l or "Display" in l]
-            if any("Radeon" in l or "AMD" in l or "Advanced Micro Devices" in l for l in lines):
+            lines = [line for line in res.stdout.split("\n") if "VGA" in line or "3D" in line or "Display" in line]
+            if any("Radeon" in line or "AMD" in line or "Advanced Micro Devices" in line for line in lines):
                 specs["gpu_type"] = "AMD Radeon"
                 specs["gpu_details"] = lines[0] if lines else "AMD GPU"
                 return specs
-            elif any("NVIDIA" in l for l in lines):
+            elif any("NVIDIA" in line for line in lines):
                 specs["gpu_type"] = "NVIDIA GPU"
                 specs["gpu_details"] = lines[0] if lines else "NVIDIA GPU"
                 return specs
@@ -216,7 +215,7 @@ def main():
 
     # Step 1: System Specs
     specs = get_system_specs()
-    print(colored("► System Hardware Profile:", BOLD))
+    print(colored(" System Hardware Profile:", BOLD))
     print(f"  • Operating System: {specs['os']} ({specs['arch']} / {specs['release']})")
     print(f"  • System Memory:   {specs['ram_gb']} GB RAM")
     print(f"  • Graphics/Compute: {specs['gpu_type']} — {specs['gpu_details']}")
@@ -229,7 +228,7 @@ def main():
     ollama_has_qwen = False
 
     if not services:
-        print(colored("  ⚠ No active local LLM servers detected on standard ports.", YELLOW))
+        print(colored("   No active local LLM servers detected on standard ports.", YELLOW))
     else:
         for s in services:
             badge = colored(" [RECOMMENDED] ", GREEN) if s["recommended"] else ""
@@ -251,21 +250,21 @@ def main():
     print_header("KineticSketch PyMOL AI Setup Guidance")
 
     if ollama_active and ollama_has_qwen:
-        print(colored("  ✓ EXCELLENT SETUP DETECTED!", GREEN))
+        print(colored("   EXCELLENT SETUP DETECTED!", GREEN))
         print("  Ollama is running with compatible coding models (Qwen2.5-Coder or Llama3).")
         print("  KineticSketch will automatically connect to Ollama on http://localhost:11434.")
         print("\n  To test in KineticSketch:")
         print("  Switch to '3D View' tab → type in PyMOL AI box: 'show surface, color red'")
 
     elif ollama_active:
-        print(colored("  ✓ Ollama is running, but no recommended code/PyMOL model was found.", YELLOW))
+        print(colored("   Ollama is running, but no recommended code/PyMOL model was found.", YELLOW))
         print("\n  Run the following command to download the recommended lightweight model:")
         print(colored("    ollama pull qwen2.5-coder:7b", CYAN))
         print("  Or for low VRAM systems (< 6GB):")
         print(colored("    ollama pull llama3.2:3b", CYAN))
 
     else:
-        print(colored("  ► Step-by-Step Installation Instructions for your system:", BOLD))
+        print(colored("   Step-by-Step Installation Instructions for your system:", BOLD))
         print(f"  (System: {specs['os']} | RAM: {specs['ram_gb']} GB | GPU: {specs['gpu_type']})\n")
 
         if specs['os'] == "Linux":
@@ -290,7 +289,7 @@ def main():
             print("  2. Open Command Prompt / PowerShell and pull the model:")
             print(colored("     ollama pull qwen2.5-coder:7b", CYAN))
 
-    print("\n" + colored("═" * 68, CYAN) + "\n")
+    print("\n" + colored("" * 68, CYAN) + "\n")
 
 if __name__ == "__main__":
     main()

@@ -26,7 +26,7 @@ import time
 import argparse
 import webbrowser
 
-# ── Paths ────────────────────────────────────────────────────────────────────
+#  Paths 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 APP_DIR  = os.path.join(ROOT_DIR, "app")
 
@@ -34,7 +34,7 @@ for p in (ROOT_DIR, APP_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-# ── Defaults ─────────────────────────────────────────────────────────────────
+#  Defaults 
 DEFAULT_HOST       = os.getenv("HOST", "127.0.0.1")
 DEFAULT_PORT       = int(os.getenv("PORT", 5000))
 REDIS_HOST         = "127.0.0.1"
@@ -42,14 +42,14 @@ REDIS_PORT         = 6379
 REDIS_STARTUP_WAIT = 5.0   # seconds to wait for Redis to accept connections
 FLASK_STARTUP_WAIT = 30.0  # seconds to wait for Flask to be ready
 
-# ── Process registry ─────────────────────────────────────────────────────────
+#  Process registry 
 _procs: dict[str, subprocess.Popen] = {}   # name → process
 _we_started: set[str] = set()              # names we launched (not pre-existing)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # Helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
     try:
@@ -112,9 +112,9 @@ def _signal_handler(signum, frame) -> None:
     sys.exit(0)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # Service starters
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def start_redis() -> bool:
     """Ensure Redis is running. Returns True if ready."""
@@ -143,7 +143,7 @@ def start_redis() -> bool:
         _log("ERROR: Redis did not become ready in time.")
         return False
 
-    _log(f"✓ Redis ready on port {REDIS_PORT}")
+    _log(f" Redis ready on port {REDIS_PORT}")
     return True
 
 
@@ -182,7 +182,7 @@ def start_celery() -> bool:
         _log("ERROR: Celery worker exited immediately — check app/tasks/celery_app.py")
         return False
 
-    _log(f"✓ Celery worker running (PID {proc.pid})")
+    _log(f" Celery worker running (PID {proc.pid})")
     return True
 
 
@@ -214,7 +214,7 @@ def start_flask(host: str, port: int) -> bool:
         _log("ERROR: Flask did not start within 30 seconds.")
         return False
 
-    _log(f"✓ Flask ready → http://{'localhost' if host in ('0.0.0.0','') else host}:{port}")
+    _log(f" Flask ready → http://{'localhost' if host in ('0.0.0.0','') else host}:{port}")
     return True
 
 
@@ -224,9 +224,9 @@ def _find_binary(name: str) -> str | None:
     return shutil.which(name)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # Main
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="KineticSketch unified launcher")
@@ -244,7 +244,7 @@ def main() -> None:
 
     url = f"http://{'localhost' if args.host in ('0.0.0.0', '') else args.host}:{args.port}"
 
-    # ── Already fully running? ───────────────────────────────────────────────
+    #  Already fully running? 
     if _port_open("127.0.0.1", args.port):
         _log(f"Server already running → {url}")
         if not args.no_browser:
@@ -252,16 +252,16 @@ def main() -> None:
         return
 
     print()
-    print("  ╔═══════════════════════════════════════╗")
-    print("  ║        KineticSketch AI  🧬           ║")
-    print("  ╚═══════════════════════════════════════╝")
+    print("  ")
+    print("          KineticSketch AI             ")
+    print("  ")
     print()
 
-    # ── 1. Redis ─────────────────────────────────────────────────────────────
+    #  1. Redis 
     if not start_redis():
         _log("Continuing without Redis — async HPC tasks will be unavailable.")
 
-    # ── 2. Celery ────────────────────────────────────────────────────────────
+    #  2. Celery 
     if not args.no_celery and _redis_ping():
         if not start_celery():
             _log("Continuing without Celery — async HPC tasks will be unavailable.")
@@ -270,20 +270,20 @@ def main() -> None:
     else:
         _log("Celery skipped — Redis is not available.")
 
-    # ── 3. Flask ─────────────────────────────────────────────────────────────
+    #  3. Flask 
     if not start_flask(args.host, args.port):
         _shutdown_all()
         sys.exit(1)
 
     print()
-    _log(f"🚀  All services running — open: {url}")
+    _log(f"  All services running — open: {url}")
     print()
 
-    # ── 4. Open browser ──────────────────────────────────────────────────────
+    #  4. Open browser 
     if not args.no_browser:
         webbrowser.open(url)
 
-    # ── 5. Wait — block until Flask exits or we're killed ────────────────────
+    #  5. Wait — block until Flask exits or we're killed 
     flask_proc = _procs.get("flask")
     try:
         if flask_proc:
