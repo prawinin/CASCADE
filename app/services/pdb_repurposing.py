@@ -144,6 +144,8 @@ def _fallback_search(query_smiles: str) -> List[Dict[str, Any]]:
 
         if similarity > 0.1:
             for target in ref["targets"]:
+                if target["pdb_id"] == "N/A":
+                    continue
                 affinity_kcal = -(similarity * 9.5 + 2.0)
                 results.append({
                     "matched_drug": ref["name"],

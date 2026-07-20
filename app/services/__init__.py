@@ -6,7 +6,9 @@ from .cheminformatics import (  # noqa: E402
     generate_2d_coords,
     canvas_json_to_rdkit_mol,
     canvas_json_to_2d_optimized,
-    canvas_json_to_smiles
+    canvas_json_to_smiles,
+    compute_conformer_rmsd,
+    compute_gasteiger_charges
 )
 from .models import MDRepoPredictor, get_one_hot_nodes  # noqa: E402
 from .visualizer import query_ollama_for_pymol, execute_pymol_commands, get_pymol_process  # noqa: E402
@@ -47,5 +49,7 @@ __all__ = [
     "log_action",
     "start_session",
     "end_session",
-    "calculate_design_score"
+    "calculate_design_score",
+    "compute_conformer_rmsd",
+    "compute_gasteiger_charges",
 ]

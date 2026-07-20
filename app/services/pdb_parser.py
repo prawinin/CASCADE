@@ -81,32 +81,50 @@ def extract_pocket_residues(
         pocket_residues: list of Bio.PDB.Residue objects representing the pocket
     """
     # 1. Locate the ligand
+    ligand_atoms = []
     ligand_residue = None
-    for model in structure:
-        for chain in model:
-            for residue in chain:
-                resname = residue.get_resname().strip()
-                res_id = residue.get_id()
-                
-                # Check match criteria
-                if resname == ligand_resname.upper():
-                    if ligand_chain is not None and chain.get_id() != ligand_chain:
-                        continue
-                    if ligand_seq is not None and res_id[1] != ligand_seq:
-                        continue
-                    ligand_residue = residue
+    if ligand_resname == "SKETCH":
+        import os
+        from rdkit import Chem
+        from Bio.PDB import PDBParser
+        if os.path.exists("molecule.sdf"):
+            mol = Chem.SDMolSupplier("molecule.sdf")[0]
+            if mol:
+                Chem.MolToPDBFile(mol, "temp_sketch.pdb")
+                temp_parser = PDBParser(QUIET=True)
+                temp_struct = temp_parser.get_structure("sketch", "temp_sketch.pdb")
+                ligand_atoms = list(temp_struct.get_atoms())
+                if os.path.exists("temp_sketch.pdb"):
+                    os.remove("temp_sketch.pdb")
+        if not ligand_atoms:
+            raise ValueError("No sketched molecule found. Please run 3D optimization first.")
+    else:
+        ligand_residue = None
+        for model in structure:
+            for chain in model:
+                for residue in chain:
+                    resname = residue.get_resname().strip()
+                    res_id = residue.get_id()
+                    
+                    # Check match criteria
+                    if resname == ligand_resname.upper():
+                        if ligand_chain is not None and chain.get_id() != ligand_chain:
+                            continue
+                        if ligand_seq is not None and res_id[1] != ligand_seq:
+                            continue
+                        ligand_residue = residue
+                        break
+                if ligand_residue:
                     break
             if ligand_residue:
                 break
-        if ligand_residue:
-            break
+                
+        if ligand_residue is None:
+            raise ValueError(f"Ligand '{ligand_resname}' not found in structure.")
             
-    if ligand_residue is None:
-        raise ValueError(f"Ligand '{ligand_resname}' not found in structure.")
-        
-    ligand_atoms = list(ligand_residue.get_atoms())
-    if not ligand_atoms:
-        raise ValueError(f"Ligand residue '{ligand_resname}' contains no atoms.")
+        ligand_atoms = list(ligand_residue.get_atoms())
+        if not ligand_atoms:
+            raise ValueError(f"Ligand residue '{ligand_resname}' contains no atoms.")
         
     # 2. Gather all other atoms in the structure for neighbor search
     all_atoms = []

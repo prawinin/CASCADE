@@ -158,7 +158,7 @@ async function triggerChatSend() {
         }
         // Apply the generated commands to the live 3Dmol.js viewer
         if (data.ok && data.command) {
-            applyPyMOLTo3Dmol(data.command);
+            applyAICommandTo3Dmol(data.command);
         }
     } catch (e) {
         if (chatLog) {
@@ -174,11 +174,11 @@ async function triggerChatSend() {
 }
 
 // ==========================================
-// PyMOL Command → 3Dmol.js Live Translator
+// Molecular AI Command → 3Dmol.js Live Translator
 // ==========================================
-function applyPyMOLTo3Dmol(commandText) {
+function applyAICommandTo3Dmol(commandText) {
     if (!glViewer) {
-        console.warn("applyPyMOLTo3Dmol: 3D viewer not initialised yet.");
+        console.warn("applyAICommandTo3Dmol: 3D viewer not initialised yet.");
         return;
     }
 
@@ -261,7 +261,7 @@ function applyPyMOLTo3Dmol(commandText) {
     }
 
     glViewer.render();
-    console.log("3Dmol.js updated from PyMOL commands:", commandText);
+    console.log("3Dmol.js updated from AI assistant command:", commandText);
 }
 
 // Apply full analysis API response to the UI
@@ -345,6 +345,7 @@ window.addEventListener('load', () => {
         panX = canvas.width / 2;
         panY = canvas.height / 2;
         redraw(); // single call — draws grid + clears properly
+        if (typeof initCanvasEvents === 'function') initCanvasEvents();
     }
     // Initialize history stack
     initHistory();
@@ -616,7 +617,8 @@ function redraw() {
 }
 
 // Handle mouse canvas actions — all coordinates converted to world space
-if (canvas) {
+function initCanvasEvents() {
+    if (!canvas) return;
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault();
         const rect = canvas.getBoundingClientRect();
@@ -1915,6 +1917,12 @@ async function submitHPCTask(taskType) {
 
     function appendLog(icon, cls, text) {
         if (!logBox) return;
+        // Auto-expand the log body so results are always visible
+        if (logBody && logBody.style.display === 'none') {
+            logBody.style.display = 'block';
+            const chevron = document.querySelector('.hpc-terminal-hdr i');
+            if (chevron) chevron.className = 'fa-solid fa-chevron-up';
+        }
         const ts = new Date().toLocaleTimeString("en-GB", {hour12: false});
         logBox.innerHTML += `<div class="checkpoint-log-line"><span class="${cls}">[${ts}]</span> ${text}</div>`;
         if (logBody) logBody.scrollTop = 99999;
@@ -1927,15 +1935,34 @@ async function submitHPCTask(taskType) {
 
     const pdbInput = document.getElementById("pdbIdInput");
     const ligandSelect = document.getElementById("ligandSelect");
-    const pdbId = pdbInput ? pdbInput.value.trim().toUpperCase() : "";
+    const ffSelect = document.getElementById("forceFieldSelect");
+    let pdbId = pdbInput ? pdbInput.value.trim().toUpperCase() : "";
+    let forceField = ffSelect ? ffSelect.value : "MMFF94";
+
+    let resname = "LIG";
+    let chain = null;
+    let seq = null;
+
+    if (!pdbId) {
+        resname = "SKETCH";
+        chain = null;
+        seq = null;
+    } else if (ligandSelect && ligandSelect.value) {
+        const parts = ligandSelect.value.split("|");
+        resname = parts[0] || "LIG";
+        chain = parts[1] || null;
+        seq = parts[2] ? parseInt(parts[2]) : null;
+    }
 
     const paramsMap = {
-        "optimize_3d": { smiles },
+        "optimize_3d": { smiles, force_field: forceField },
         "md_simulation": { sdf_path: "molecule.sdf", n_steps: 5000 },
         "interaction_profile": {
             smiles,
-            pdb_id: pdbId || "1OPJ",
-            ligand_resname: ligandSelect ? ligandSelect.value.split("|")[0] || "LIG" : "LIG"
+            pdb_id: pdbId || null,
+            ligand_resname: resname,
+            ligand_chain: chain,
+            ligand_seq: seq
         }
     };
 
@@ -1963,11 +1990,17 @@ async function submitHPCTask(taskType) {
 
             appendLog("", "checkpoint-success", `[HPC] ${label} ${isSync ? "started (sync)" : "queued"}. ETA ${eta}`);
 
-            // Auto-dismiss spinner after ETA
-            const ms = (parseInt(eta) || 15) * 1000 + 2000;
-            setTimeout(() => {
-                if (statusDiv) statusDiv.classList.add("hidden");
-            }, ms);
+            if (data.task_id && !isSync) {
+                // Start polling for async Celery tasks
+                setTimeout(() => pollHPCTask(data.task_id, label), 2000);
+            } else if (isSync) {
+                // Sync path — show completion message after ETA
+                const ms = (parseInt(eta) || 15) * 1000 + 2000;
+                setTimeout(() => {
+                    if (statusDiv) statusDiv.classList.add("hidden");
+                    appendLog("", "checkpoint-success text-emerald-400", `[HPC] ${label} completed. Check Conformers / 3D View tabs for results.`);
+                }, ms);
+            }
 
         } else if (data.requires_redis) {
             if (statusDiv) statusDiv.classList.add("hidden");
@@ -1988,6 +2021,104 @@ async function submitHPCTask(taskType) {
 
 
 // Probe Redis health on page load and update the badge
+async function pollHPCTask(taskId, label) {
+    const statusDiv = document.getElementById("hpcTaskStatus");
+    const taskMsg = document.getElementById("hpcTaskMsg");
+    const logBox = document.getElementById("dynamicCheckpointLogs");
+    const logBody = document.getElementById("checkpointBody");
+
+    function appendLog(icon, cls, text) {
+        if (!logBox) return;
+        // Auto-expand the log body so results are always visible
+        if (logBody && logBody.style.display === 'none') {
+            logBody.style.display = 'block';
+            const chevron = document.querySelector('.hpc-terminal-hdr i');
+            if (chevron) chevron.className = 'fa-solid fa-chevron-up';
+        }
+        const ts = new Date().toLocaleTimeString("en-GB", {hour12: false});
+        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="${cls}">[${ts}]</span> ${text}</div>`;
+        if (logBody) logBody.scrollTop = 99999;
+    }
+
+    try {
+        const res = await fetch(`/api/tasks/status/${taskId}`);
+        const data = await res.json();
+
+        if (data.status === "SUCCESS") {
+            appendLog("", "checkpoint-success text-emerald-400", `[HPC] ✓ ${label} completed successfully.`);
+            
+            // Format result — smart display per task type
+            if (data.result) {
+                const r = data.result;
+                let resultHtml = "";
+
+                if (r.adme && r.predictions) {
+                    // optimize_3d result
+                    const adme = r.adme;
+                    const preds = r.predictions;
+                    const rmsfArr = preds.rmsf || [];
+                    const sasaArr = preds.sasa || [];
+                    const numAtoms = rmsfArr.length || 0;
+                    const meanRmsf = numAtoms > 0 ? rmsfArr.reduce((s, a) => s + (Array.isArray(a) ? a[0] : (typeof a === 'number' ? a : 0)), 0) / numAtoms : 0;
+                    const meanSasa = numAtoms > 0 ? sasaArr.reduce((s, val) => s + (typeof val === 'number' ? val : 0), 0) / numAtoms : 0;
+                    const ffUsed = r.force_field || "MMFF94";
+                    const rmsdVal = r.rmsd_angstrom !== undefined ? r.rmsd_angstrom.toFixed(4) : "—";
+
+                    resultHtml = `<div style="background:#020617;padding:10px 12px;border-radius:6px;margin-top:6px;border:1px solid #1e293b;font-size:10px;">
+  <div style="color:#a3e635;font-weight:600;margin-bottom:6px;">&#9889; 3D Conformer &amp; GNN Predictions</div>
+  <div style="color:#38bdf8;margin-bottom:4px;">Force Field: <span style="color:#e2e8f0;font-weight:600;">${ffUsed}</span> &nbsp;|&nbsp; Minimization RMSD: <span style="color:#e2e8f0;font-weight:600;">${rmsdVal} Å</span> &nbsp;|&nbsp; Atoms: <span style="color:#e2e8f0;">${numAtoms}</span></div>
+  <div style="color:#94a3b8;margin-bottom:4px;">Mean RMSF: <span style="color:#38bdf8;">${meanRmsf.toFixed(3)} Å</span> &nbsp;|&nbsp; Mean SASA: <span style="color:#38bdf8;">${meanSasa.toFixed(2)} Å²</span> &nbsp;|&nbsp; Partial Charges: <span style="color:#cbd5e1;">Gasteiger-Marsili (PEOE)</span></div>
+  <div style="color:#94a3b8;margin-bottom:2px;">MW: <span style="color:#e2e8f0;">${adme.mw ? adme.mw.toFixed(2) : "—"} Da</span> &nbsp; cLogP: <span style="color:#e2e8f0;">${adme.logp !== undefined ? adme.logp.toFixed(2) : "—"}</span> &nbsp; HBD: <span style="color:#e2e8f0;">${adme.hbd ?? "—"}</span> &nbsp; HBA: <span style="color:#e2e8f0;">${adme.hba ?? "—"}</span> &nbsp; TPSA: <span style="color:#e2e8f0;">${adme.tpsa ? adme.tpsa.toFixed(1) : "—"} Å²</span></div>
+  <div style="color:${adme.lipinski_pass ? '#4ade80' : '#f87171'};margin-top:4px;">Lipinski: ${adme.lipinski_pass ? "✓ Pass" : "✗ " + (adme.lipinski_violations || 0) + " violation(s)"} &nbsp;|&nbsp; Veber: ${adme.veber_pass ? "✓ Pass" : "✗ Fail"}</div>
+  <div style="color:#64748b;margin-top:6px;">Files written: ${Object.values(r.files || {}).join(", ")}</div>
+</div>`;
+
+
+                } else if (r.interactions !== undefined) {
+                    // interaction_profile result
+                    const total = r.interactions.length;
+                    const byType = {};
+                    r.interactions.forEach(i => { byType[i.type] = (byType[i.type] || 0) + 1; });
+                    const breakdown = Object.entries(byType).map(([t, c]) => `${t}: <span style="color:#38bdf8;">${c}</span>`).join(" &nbsp;|&nbsp; ");
+                    resultHtml = `<div style="background:#020617;padding:10px 12px;border-radius:6px;margin-top:6px;border:1px solid #1e293b;font-size:10px;">
+  <div style="color:#a3e635;font-weight:600;margin-bottom:6px;">&#128279; Interaction Profile</div>
+  <div style="color:#94a3b8;">Total contacts: <span style="color:#38bdf8;font-weight:600;">${total}</span></div>
+  <div style="color:#94a3b8;margin-top:4px;">${breakdown || "No interactions detected"}</div>
+  ${total > 0 ? `<div style="color:#64748b;margin-top:6px;">Top contacts shown in the 3D View panel. Switch to 3D View → Interaction Profile tab to see the full table.</div>` : ""}
+</div>`;
+
+                } else if (r.message) {
+                    // md_simulation result
+                    const filesLabel = Object.keys(r.files || {}).length > 0 ? ` &nbsp;|&nbsp; Files: ${Object.values(r.files).join(", ")}` : "";
+                    resultHtml = `<div style="background:#020617;padding:10px 12px;border-radius:6px;margin-top:6px;border:1px solid #1e293b;font-size:10px;">
+  <div style="color:#a3e635;font-weight:600;margin-bottom:6px;">&#128187; OpenMM MD Simulation</div>
+  <div style="color:#e2e8f0;">${r.message}</div>
+  <div style="color:#64748b;margin-top:4px;">Duration: ${r.duration_seconds ? r.duration_seconds.toFixed(1) + "s" : "—"}${filesLabel}</div>
+  ${r.plot_svg ? `<div style="margin-top:8px;">${r.plot_svg}</div>` : ""}
+</div>`;
+
+                } else {
+                    // Generic fallback
+                    resultHtml = `<pre style="background:#020617;padding:8px;border-radius:4px;margin-top:4px;color:#38bdf8;font-size:10px;max-height:200px;overflow:auto;border:1px solid #1e293b;">${JSON.stringify(r, null, 2)}</pre>`;
+                }
+                appendLog("", "", resultHtml);
+            }
+            if (statusDiv) statusDiv.classList.add("hidden");
+
+        } else if (data.status === "FAILURE") {
+            appendLog("", "checkpoint-time text-rose-400", `[HPC] ${label} failed: ${data.error || "Unknown error"}`);
+            if (statusDiv) statusDiv.classList.add("hidden");
+        } else {
+            // Still running or pending
+            if (taskMsg) taskMsg.textContent = `Processing ${label}…`;
+            setTimeout(() => pollHPCTask(taskId, label), 2000);
+        }
+    } catch (e) {
+        appendLog("", "checkpoint-time text-rose-400", `[HPC] Error polling task ${taskId}: ${e.message}`);
+        setTimeout(() => pollHPCTask(taskId, label), 4000); // Backoff
+    }
+}
+
 async function probeRedisHealth() {
     const badge = document.getElementById("redisBadge");
     const warn = document.getElementById("redisOfflineWarning");

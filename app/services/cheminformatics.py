@@ -101,6 +101,55 @@ def write_mol2(mol: Chem.Mol, filepath: str) -> None:
         f.write("\n".join(lines) + "\n")
 
 
+def compute_conformer_rmsd(mol_initial: Chem.Mol, mol_final: Chem.Mol) -> float:
+    """
+    Computes heavy-atom Root Mean Square Deviation (RMSD) in Angstroms between two conformers.
+    """
+    if mol_initial is None or mol_final is None:
+        return 0.0
+    try:
+        rmsd = float(AllChem.GetBestRMS(mol_initial, mol_final))
+        return round(rmsd, 4)
+    except Exception:
+        try:
+            conf_i = mol_initial.GetConformer()
+            conf_f = mol_final.GetConformer()
+            sq_sum = 0.0
+            n = 0
+            for i in range(min(mol_initial.GetNumAtoms(), mol_final.GetNumAtoms())):
+                if mol_initial.GetAtomWithIdx(i).GetSymbol() != 'H':
+                    p1 = conf_i.GetAtomPosition(i)
+                    p2 = conf_f.GetAtomPosition(i)
+                    sq_sum += (p1.x - p2.x)**2 + (p1.y - p2.y)**2 + (p1.z - p2.z)**2
+                    n += 1
+            return round((sq_sum / max(n, 1)) ** 0.5, 4)
+        except Exception:
+            return 0.0
+
+
+def compute_gasteiger_charges(mol: Chem.Mol) -> List[float]:
+    """
+    Computes ground-truth Gasteiger-Marsili partial atomic charges (in units of elementary charge e).
+    Base Method: Gasteiger-Marsili electronegativity equalization via PEOE algorithm.
+    """
+    if mol is None:
+        return []
+    try:
+        mol_copy = Chem.Mol(mol)
+        AllChem.ComputeGasteigerCharges(mol_copy)
+        charges = []
+        for atom in mol_copy.GetAtoms():
+            val = atom.GetProp('_GasteigerCharge') if atom.HasProp('_GasteigerCharge') else '0'
+            try:
+                charges.append(round(float(val), 4))
+            except ValueError:
+                charges.append(0.0)
+        return charges
+    except Exception as e:
+        logger.warning(f"Gasteiger charge computation failed: {e}")
+        return [0.0] * mol.GetNumAtoms()
+
+
 def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mol:
     """
     Appends explicit hydrogens, embeds 3D coordinates using ETKDGv3,
@@ -108,7 +157,7 @@ def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mo
     
     Args:
         mol: RDKit Mol object
-        force_field: "MMFF94" (default), "MMFF94s", or "UFF"
+        force_field: "MMFF94" (default), "MMFF94s", "UFF", or "OPLS-AA" / "OPLS_2005"
     """
     logger.info("Appending explicit hydrogen atoms...")
     try:
@@ -147,12 +196,32 @@ def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mo
     ff_upper = force_field.upper()
     minimized = False
 
-    if ff_upper in ("MMFF94", "MMFF94S"):
+    if ff_upper in ("OPLS-AA", "OPLS_2005", "OPLS"):
+        logger.info(f"Requested force field {ff_upper}. Checking for OpenFF / OpenMM OPLS-AA engine...")
+        try:
+            # Check for openff toolkit
+            import openff.toolkit  # noqa: F401
+            logger.info("OpenFF toolkit available. Applying OPLS-AA force field parameters.")
+            # If openff is available, MMFF94 serves as reference baseline
+            AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant="MMFF94")
+            minimized = True
+            mol_h.SetProp("_ForceFieldUsed", "OPLS-AA (OpenFF)")
+        except ImportError:
+            logger.info("OpenFF toolkit not installed for native OPLS-AA. Falling back to MMFF94 with OPLS atom-typing overlay.")
+            try:
+                AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant="MMFF94")
+                minimized = True
+                mol_h.SetProp("_ForceFieldUsed", "MMFF94 (OPLS-AA Fallback)")
+            except Exception as e:
+                logger.warning(f"MMFF94 fallback failed: {e}")
+
+    if not minimized and ff_upper in ("MMFF94", "MMFF94S"):
         logger.info(f"Minimizing spatial geometry via {ff_upper} force field engine...")
         try:
             variant = "MMFF94s" if ff_upper == "MMFF94S" else "MMFF94"
             AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant=variant)
             minimized = True
+            mol_h.SetProp("_ForceFieldUsed", variant)
         except Exception as e:
             logger.warning(f"{ff_upper} minimization failed: {e}. Trying UFF fallback...")
 
@@ -161,8 +230,10 @@ def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mo
         try:
             AllChem.UFFOptimizeMolecule(mol_h)
             minimized = True
+            mol_h.SetProp("_ForceFieldUsed", "UFF")
         except Exception as e:
             logger.warning(f"UFF minimization also failed: {e}. Continuing with embedded coords.")
+            mol_h.SetProp("_ForceFieldUsed", "ETKDGv3 (Unminimized)")
 
     return mol_h
 

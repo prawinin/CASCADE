@@ -282,11 +282,13 @@
             animation: borderSlideIn 0.2s ease;
         }
 
-        /* Tooltip */
+        /* Tooltip — default: right side (left sidebar) */
         .rail-btn::after {
             content: attr(data-tooltip);
             position: absolute;
             left: 52px;
+            top: 50%;
+            transform: translateY(-50%);
             background: var(--text-primary);
             color: var(--text-inverse);
             padding: 0.25rem 0.55rem;
@@ -298,11 +300,19 @@
             pointer-events: none;
             transition: opacity 0.15s ease;
             box-shadow: var(--shadow-md);
-            z-index: 100;
+            z-index: 1000;
         }
 
         .rail-btn:hover::after {
             opacity: 1;
+        }
+
+        /* Tooltip override for canvas-header (top-right area): show below */
+        .canvas-header .rail-btn::after {
+            left: auto;
+            right: 0;
+            top: calc(100% + 6px);
+            transform: none;
         }
 
         /* Element tooltip (same positioning) */
@@ -1243,7 +1253,7 @@
         @media (max-width: 1100px) { .fw-grid-3 { grid-template-columns: 1fr 1fr; } }
         @media (max-width: 700px) { .fw-grid-3 { grid-template-columns: 1fr; } }
 
-        /* 3D View page: main 3D area + narrow PyMOL sidebar */
+        /* 3D View page: main 3D area + AI Assistant sidebar */
         #page-3d {
             flex-direction: row;
         }
@@ -1670,7 +1680,7 @@
                                 </div>
                                 <div class="ml-3">
                                     <p class="text-sm font-medium text-blue-800">
-                                        <strong>Interactive Workspace:</strong> Use the <strong>PyMOL Assistant</strong> on the right to dynamically modify this 3D structure. Try typing conversational commands like <span class="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs text-blue-900">"show spheres"</span> or <span class="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs text-blue-900">"color cyan"</span>.
+                                        <strong>Interactive Workspace:</strong> Use the <strong>Molecular AI Assistant</strong> on the right to describe visualization changes in plain English — e.g. <span class="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs text-blue-900">"show spheres"</span> or <span class="bg-blue-100 px-1 py-0.5 rounded font-mono text-xs text-blue-900">"color by element"</span>.
                                     </p>
                                 </div>
                             </div>
@@ -1685,39 +1695,36 @@
                         </div>
 
                         <!-- PDB Target Selector Bar -->
-                        <div class="pdb-bar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; padding:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:var(--radius-md);">
-                            <div style="display:flex; align-items:center; gap:0.4rem;">
-                                <label for="pdbIdInput" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">PDB ID:</label>
+                        <div class="pdb-bar" style="display:flex; flex-direction:column; gap:0.5rem; padding:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); border-radius:var(--radius-md);">
+                            <!-- Row 1: PDB fetch / upload -->
+                            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:nowrap;">
+                                <label for="pdbIdInput" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); white-space:nowrap;">PDB ID:</label>
                                 <input type="text" id="pdbIdInput" class="premium-input" placeholder="e.g. 1OPJ" style="width:70px; padding:0.25rem 0.5rem; font-size:0.75rem;" />
-                                <button class="premium-btn" onclick="fetchPdbTarget()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Fetch</button>
-                            </div>
-                            
-                            <span style="font-size:0.75rem; color:var(--text-tertiary);">or</span>
-                            
-                            <div style="display:flex; align-items:center; gap:0.4rem;">
-                                <input type="file" id="pdbFileInput" style="display:flex;" onchange="uploadPdbFile(event)" />
-                                <button class="premium-btn-secondary" onclick="document.getElementById('pdbFileInput').click()" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); color:var(--text-secondary);">
+                                <button class="premium-btn" onclick="fetchPdbTarget()" style="padding:0.25rem 0.6rem; font-size:0.75rem; white-space:nowrap;">Fetch</button>
+                                <span style="font-size:0.75rem; color:var(--text-tertiary);">or</span>
+                                <input type="file" id="pdbFileInput" style="display:none;" onchange="uploadPdbFile(event)" />
+                                <button class="premium-btn-secondary" onclick="document.getElementById('pdbFileInput').click()" style="padding:0.25rem 0.6rem; font-size:0.75rem; background:var(--bg-card); border:1px solid var(--border-primary); color:var(--text-secondary); white-space:nowrap;">
                                     <i class="fa-solid fa-upload"></i> Upload PDB
                                 </button>
                             </div>
-
-                            <!-- Target Ligands Dropdown -->
-                            <div id="ligandSelectWrapper" style="display:flex; align-items:center; gap:0.4rem; margin-left:auto;">
-                                <label for="ligandSelect" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary);">Select Ligand:</label>
-                                <select id="ligandSelect" class="premium-input" style="padding:0.2rem 0.5rem; font-size:0.75rem; width:130px;">
-                                    <option value="">-- Choose --</option>
-                                </select>
-                                <button class="premium-btn" onclick="computeInteractions()" style="padding:0.25rem 0.6rem; font-size:0.75rem;">Profile</button>
+                            <!-- Row 2: Ligand select + Profile + Dock -->
+                            <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:nowrap;">
+                                <div id="ligandSelectWrapper" style="display:flex; align-items:center; gap:0.4rem;">
+                                    <label for="ligandSelect" style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); white-space:nowrap;">Select Ligand:</label>
+                                    <select id="ligandSelect" class="premium-input" style="padding:0.2rem 0.5rem; font-size:0.75rem; width:130px;">
+                                        <option value="">-- Choose --</option>
+                                    </select>
+                                    <button class="premium-btn" onclick="computeInteractions()" style="padding:0.25rem 0.6rem; font-size:0.75rem; white-space:nowrap;">Profile</button>
+                                </div>
+                                <div id="gninaDockToolbar" style="display:flex; align-items:center; margin-left:auto;">
+                                    <button id="btnDockGnina" class="premium-btn" onclick="runOneClickDocking()"
+                                            style="background:linear-gradient(135deg,#6366F1,#8B5CF6); padding:0.25rem 0.9rem; font-size:0.75rem; white-space:nowrap;"
+                                            title="Dock drawn molecule against loaded PDB target using GNINA">
+                                        ⚡ Dock with GNINA
+                                    </button>
+                                </div>
                             </div>
-
-                            <!-- GNINA Dock Button — always visible once PDB is loaded -->
-                            <div id="gninaDockToolbar" style="display:flex; align-items:center; gap:0.4rem; margin-left:auto;">
-                                <button id="btnDockGnina" class="premium-btn" onclick="runOneClickDocking()"
-                                        style="background: linear-gradient(135deg, #6366F1, #8B5CF6); padding:0.25rem 0.75rem; font-size:0.75rem;"
-                                        title="Dock drawn molecule against loaded PDB target using GNINA">
-                                    ⚡ Dock with GNINA
-                                </button>
-                            </div>
+                        </div>
                         </div>
                     </div>
                     
@@ -1728,22 +1735,28 @@
                 </div>
             </div>
                 </div>
-<!-- Right Sidebar: PyMOL Chat -->
+<!-- Right Sidebar: Molecular AI Assistant -->
                 <div style="width:380px; flex-shrink:0; display:flex; flex-direction:column; overflow-y:auto;">
-                    <!-- Panel 1: PyMOL Assistant Chat Component -->
+                    <!-- Panel 1: Molecular AI Assistant Chat -->
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
-                <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal mb-3">PyMOL Assistant</header>
+                <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal mb-2 flex items-center gap-2">
+                    <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#06b6d4,#6366f1);flex-shrink:0;">
+                        <i class="fa-solid fa-robot" style="font-size:11px;color:#fff;"></i>
+                    </span>
+                    Molecular AI Assistant
+                </header>
+                <p style="font-size:0.7rem;color:var(--text-tertiary);margin-bottom:0.6rem;line-height:1.4;">Powered by your local LLM. Ask about visualization, structure, or properties in plain English.</p>
                 
-                <!-- Instructional callout / Chat messages wrapper -->
+                <!-- Chat messages wrapper -->
                 <div class="rounded-md border border-cyan-200 bg-cyan-50 px-3 py-2.5 text-xs text-cyan-900 leading-5 mb-3 max-h-48 overflow-y-auto" id="chatMessages">
                     <div class="chat-message message-system leading-5 break-words">
-                        Describe your desired 3D visualization and I'll generate the corresponding PyMOL commands.
+                        💡 Describe what you want to see or analyze — e.g. <em>"highlight hydrogen bond donors"</em> or <em>"show the binding pocket surface"</em>.
                     </div>
                     <div id="dynamicChatLog" class="flex flex-col gap-2 mt-2"></div>
                 </div>
 
                 <div class="chat-input-bar flex items-center gap-2">
-                    <input type="text" id="visible_chat_prompt" class="min-w-0 flex-1 h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 leading-5 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" placeholder="Type PyMOL visual commands..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
+                    <input type="text" id="visible_chat_prompt" class="min-w-0 flex-1 h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 leading-5 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" placeholder="Ask the AI assistant..." onkeydown="if(event.key === 'Enter') triggerChatSend()" />
                     <button class="premium-btn shrink-0 h-9 px-3 rounded-md bg-cyan-600 text-sm font-medium text-white leading-5 hover:bg-cyan-700 disabled:opacity-50" onclick="triggerChatSend()">Send</button>
                 </div>
             </section>
@@ -1834,13 +1847,21 @@
                         OpenMM MD Simulation
                         <span class="text-slate-400 text-[10px] ml-1">~1 min</span>
                     </button>
-                    <button onclick="submitHPCTask('optimize_3d')"
-                        class="rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 flex items-center gap-1.5 transition-colors shadow-sm"
-                        style="cursor:pointer;">
-                        <i class="fa-solid fa-atom text-green-500" style="font-size:11px;"></i>
-                        3D Conformer Optimization
-                        <span class="text-slate-400 text-[10px] ml-1">~10 sec</span>
-                    </button>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="submitHPCTask('optimize_3d')"
+                            class="rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 flex items-center gap-1.5 transition-colors shadow-sm"
+                            style="cursor:pointer;">
+                            <i class="fa-solid fa-atom text-green-500" style="font-size:11px;"></i>
+                            3D Conformer Optimization
+                            <span class="text-slate-400 text-[10px] ml-1">~10 sec</span>
+                        </button>
+                        <select id="forceFieldSelect" class="rounded-md border border-slate-200 bg-white text-slate-700 text-[11px] py-1 px-2 shadow-sm focus:outline-none" title="Select Force Field Engine">
+                            <option value="MMFF94" selected>FF: MMFF94</option>
+                            <option value="MMFF94s">FF: MMFF94s</option>
+                            <option value="UFF">FF: UFF</option>
+                            <option value="OPLS-AA">FF: OPLS-AA (OpenFF)</option>
+                        </select>
+                    </div>
                     <button onclick="submitHPCTask('interaction_profile')"
                         class="rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 flex items-center gap-1.5 transition-colors shadow-sm"
                         style="cursor:pointer;">
@@ -1864,9 +1885,9 @@
                 <div class="hpc-terminal" id="hpcTerminalContainer" style="display:flex; flex-direction:column; background:#0f172a; border-radius:8px; border:1px solid #1e293b; overflow:hidden;">
                     <div class="hpc-terminal-hdr" onclick="const body = document.getElementById('checkpointBody'); const isHidden = body.style.display === 'none'; body.style.display = isHidden ? 'block' : 'none'; this.querySelector('i').className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';" style="background:#1e293b; padding:8px 12px; border-bottom:1px solid #334155; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
                         <span class="text-xs font-medium text-slate-200">Activity Log</span>
-                        <button style="color:#94a3b8; background:none; border:none; padding:0; font-size:12px;"><i class="fa-solid fa-chevron-down"></i></button>
+                        <button style="color:#94a3b8; background:none; border:none; padding:0; font-size:12px;"><i class="fa-solid fa-chevron-up"></i></button>
                     </div>
-                    <div class="hpc-terminal-body" id="checkpointBody" style="display:none; padding:12px; max-height:500px; overflow-y:auto; font-family:monospace; font-size:11px; color:#cbd5e1;">
+                    <div class="hpc-terminal-body" id="checkpointBody" style="display:block; padding:12px; max-height:500px; overflow-y:auto; font-family:monospace; font-size:11px; color:#cbd5e1;">
                         <div id="dynamicCheckpointLogs" class="flex flex-col gap-1">
                             <div class="checkpoint-log-line"><span class="checkpoint-time text-emerald-400">[READY]</span> Workspace ready for analysis.</div>
                         </div>
@@ -1879,7 +1900,7 @@
 
     <!-- Script section for Canvas 2D Interaction -->
     <script src="/static/interaction_viewer.js"></script>
-    <script src="/static/sketch.js?v=13"></script>
+    <script src="/static/sketch.js?v=20"></script>
 
     <!-- Unified Smart Input Logic -->
     <script>
