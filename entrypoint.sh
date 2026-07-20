@@ -1,13 +1,11 @@
 #!/bin/bash
-# 1. Start Redis in the background
-redis-server --daemonize yes
+set -e
 
-# 2. Start Celery worker in the background
-celery -A app.tasks.celery_app worker --loglevel=info --concurrency=1 &
+# Port configuration
+PORT=${PORT:-7860}
+HOST=${HOST:-0.0.0.0}
 
-# 3. Start the Flask App on port 7860 (Hugging Face expects port 7860)
-export PORT=7860
-export HOST=0.0.0.0
-export REDIS_URL=redis://localhost:6379/0
+echo "Starting KineticSketch WSGI production server on ${HOST}:${PORT}..."
 
-python kinetic_sketch.py
+# Exec gunicorn as PID 1 for proper Docker signal handling
+exec gunicorn --bind "${HOST}:${PORT}" --workers 2 --threads 2 --timeout 120 app.main:flask_app

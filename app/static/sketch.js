@@ -22,7 +22,105 @@ function logAction(actionType, actionData) {
     }).catch(() => {});  // Fire and forget
 }
 
-document.addEventListener("DOMContentLoaded", initActionLogger);
+
+window.currentUserId = null;
+window.currentJobId = crypto.randomUUID();
+
+async function checkAuth() {
+    try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+            const data = await res.json();
+            window.currentUserId = data.user.id;
+            const lrBtn = document.getElementById("loginRegisterBtn");
+            const uDisp = document.getElementById("authUsernameDisplay");
+            const loBtn = document.getElementById("logoutBtn");
+            if(lrBtn) lrBtn.style.display = "none";
+            if(uDisp) {
+                uDisp.textContent = `User: ${data.user.username}`;
+                uDisp.style.display = "block";
+            }
+            if(loBtn) loBtn.style.display = "block";
+        }
+    } catch (e) {
+        console.warn("Not logged in");
+    }
+}
+
+let isLoginMode = true;
+window.showLoginModal = function() {
+    const modal = document.getElementById("loginModal");
+    if(modal) modal.style.display = "flex";
+    const err = document.getElementById("authError");
+    if(err) err.style.display = "none";
+};
+window.hideLoginModal = function() {
+    const modal = document.getElementById("loginModal");
+    if(modal) modal.style.display = "none";
+};
+window.toggleAuthMode = function() {
+    isLoginMode = !isLoginMode;
+    const title = document.getElementById("authTitle");
+    const btn = document.getElementById("authSubmitBtn");
+    const link = document.getElementById("authToggleLink");
+    if(title) title.textContent = isLoginMode ? "Login" : "Register";
+    if(btn) btn.textContent = isLoginMode ? "Login" : "Register";
+    if(link) link.textContent = isLoginMode ? "Need an account? Register" : "Have an account? Login";
+};
+window.submitAuth = async function() {
+    const u = document.getElementById("authUsername").value;
+    const p = document.getElementById("authPassword").value;
+    const endpoint = isLoginMode ? "/api/auth/login" : "/api/auth/register";
+    try {
+        const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({username: u, password: p})
+        });
+        const data = await res.json();
+        if (res.ok) {
+            if (isLoginMode) {
+                hideLoginModal();
+                checkAuth();
+            } else {
+                // Registration successful, switch to login
+                toggleAuthMode();
+                const err = document.getElementById("authError");
+                if (err) {
+                    err.textContent = "Registration successful—please log in.";
+                    err.style.color = "green";
+                    err.style.display = "block";
+                }
+            }
+        } else {
+            const err = document.getElementById("authError");
+            if(err) {
+                err.textContent = data.error || "Authentication failed";
+                err.style.display = "block";
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    }
+};
+window.logout = async function() {
+    try {
+        await fetch("/api/auth/logout", {method: "POST"});
+        window.currentUserId = null;
+        window.currentJobId = crypto.randomUUID();
+        const lrBtn = document.getElementById("loginRegisterBtn");
+        const uDisp = document.getElementById("authUsernameDisplay");
+        const loBtn = document.getElementById("logoutBtn");
+        if(lrBtn) lrBtn.style.display = "block";
+        if(uDisp) uDisp.style.display = "none";
+        if(loBtn) loBtn.style.display = "none";
+    } catch(e) {}
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+    initActionLogger();
+    checkAuth();
+});
 
 // React Input Value Setter Utility
 function setReactInputValue(containerId, value) {
@@ -94,14 +192,14 @@ async function triggerSmilesPasted() {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ smiles: smilesVal })
+            body: JSON.stringify({ smiles: smilesVal, job_id: window.currentJobId })
         });
         const data = await response.json();
         applyAnalysisResponse(data);
         console.log("SMILES analysis response:", data);
         if (data.ok) {
             try {
-                const sdfRes = await fetch("/static/molecule.sdf");
+                const sdfRes = await fetch(`/api/download/${window.currentJobId}/sdf`);
                 const sdfData = await sdfRes.text();
                 render3DModel(sdfData);
             } catch (err) {
@@ -144,7 +242,7 @@ async function triggerChatSend() {
         const response = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: chatVal })
+            body: JSON.stringify({ prompt: chatVal, job_id: window.currentJobId })
         });
         const data = await response.json();
         if (chatLog) {
@@ -173,9 +271,7 @@ async function triggerChatSend() {
     }
 }
 
-// ==========================================
 // Molecular AI Command → 3Dmol.js Live Translator
-// ==========================================
 function applyAICommandTo3Dmol(commandText) {
     if (!glViewer) {
         console.warn("applyAICommandTo3Dmol: 3D viewer not initialised yet.");
@@ -351,9 +447,7 @@ window.addEventListener('load', () => {
     initHistory();
 });
 
-// ==========================================
 // 2D Molecular Sketcher Canvas Engine (HTML5)
-// ==========================================
 // Canvas and context — initialized in window 'load' handler above
 let canvas = null;
 let ctx = null;
@@ -874,9 +968,7 @@ function loadCanvasData(data) {
     triggerDebounced3DSync();    // Sync 3D viewer for the loaded structure
 }
 
-// ==========================================
 // Phase 1.1: Undo/Redo History Stack Logic
-// ==========================================
 function initHistory() {
     historyStack = [JSON.stringify({ atoms: [], bonds: [], nextAtomId: 1 })];
     historyIndex = 0;
@@ -954,9 +1046,7 @@ document.addEventListener('keydown', e => {
     }
 });
 
-// ==========================================
 // Phase 1.3: Structural Ring Templates
-// ==========================================
 const RING_TEMPLATES = {
     //  6-membered carbocyclics 
     benzene: {
@@ -1161,9 +1251,7 @@ function injectRingTemplate(templateName) {
     pushPayload();
 }
 
-// ==========================================
 // Phase 2.1: Automated 2D Geometry Optimization
-// ==========================================
 async function triggerOptimize2D() {
     if (atoms.length === 0) return;
     
@@ -1181,7 +1269,7 @@ async function triggerOptimize2D() {
         const response = await fetch("/api/optimize_2d", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: (payload.job_id = window.currentJobId, JSON.stringify(payload))
         });
         const data = await response.json();
         if (data.ok && data.canvas_payload) {
@@ -1201,9 +1289,7 @@ async function triggerOptimize2D() {
     }
 }
 
-// ==========================================
 // Phase 4: Real-Time ADME Dashboard
-// ==========================================
 let admeTimeout = null;
 
 function triggerDebouncedADME() {
@@ -1211,9 +1297,7 @@ function triggerDebouncedADME() {
     admeTimeout = setTimeout(runADMEEvaluation, 800);
 }
 
-// ==========================================
 // Live 2D → 3D Sync (auto-render on draw)
-// ==========================================
 let sync3DTimeout = null;
 
 function triggerDebounced3DSync() {
@@ -1234,7 +1318,7 @@ async function runLive3DSync() {
         const response = await fetch('/api/analyze_smiles', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ smiles })
+            body: JSON.stringify({ smiles, job_id: window.currentJobId })
         });
         const data = await response.json();
         if (!data.ok) return;
@@ -1248,7 +1332,7 @@ async function runLive3DSync() {
         }
 
         // Fetch freshly-written SDF (cache-busted) and re-render 3D viewer
-        const sdfRes = await fetch('/static/molecule.sdf?t=' + Date.now());
+        const sdfRes = await fetch(`/api/download/${window.currentJobId}/sdf?t=${Date.now()}`);
         const sdfData = await sdfRes.text();
         render3DModel(sdfData);
 
@@ -1277,7 +1361,7 @@ async function getActiveSmiles() {
         const res = await fetch("/api/canvas_to_smiles", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
+            body: (payload.job_id = window.currentJobId, JSON.stringify(payload))
         });
         const data = await res.json();
         if (data.ok && data.smiles) {
@@ -1304,7 +1388,7 @@ async function runADMEEvaluation() {
         const res = await fetch("/api/descriptors", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ smiles })
+            body: JSON.stringify({ smiles, job_id: window.currentJobId })
         });
         const data = await res.json();
         if (data.ok) {
@@ -1448,9 +1532,7 @@ function renderADMEProfile(data) {
     `;
 }
 
-// ==========================================
 // Phase 3: PDB Target & Interaction Profiling
-// ==========================================
 let activePdbId = "";
 let activeLigands = [];
 
@@ -1502,6 +1584,7 @@ async function uploadPdbFile(event) {
     formData.append("file", file);
     
     try {
+        formData.append('job_id', window.currentJobId);
         const res = await fetch("/api/pdb/upload", {
             method: "POST",
             body: formData
@@ -1587,7 +1670,8 @@ async function computeInteractions() {
                 pdb_id: activePdbId,
                 ligand_resname: resname,
                 ligand_chain: chain,
-                ligand_seq: seq
+                ligand_seq: seq,
+                job_id: window.currentJobId
             })
         });
         const data = await response.json();
@@ -1636,7 +1720,7 @@ async function runOneClickDocking() {
             body: JSON.stringify({
                 pdb_id: pdbId,
                 ligand_resname: ligandResname,
-                ligand_sdf_path: "molecule.sdf"
+                job_id: window.currentJobId
             })
         });
         const data = await response.json();
@@ -1655,7 +1739,7 @@ async function runOneClickDocking() {
             
             // Load best docked pose into 3D viewer
             if (data.output_sdf) {
-                const sdfRes = await fetch(`/static/${data.output_sdf}`);
+                const sdfRes = await fetch(`/api/download/${window.currentJobId}/docked_poses_sdf`);
                 const sdfText = await sdfRes.text();
                 render3DModel(sdfText);
             }
@@ -1669,9 +1753,7 @@ async function runOneClickDocking() {
     }
 }
 
-// ==========================================
 // Global 6-Tab Switching Logic
-// ==========================================
 function switchGlobalTab(tabId) {
     document.querySelectorAll('.gnav-btn').forEach(b => b.classList.remove('active'));
     const btn = document.getElementById('gnav-' + tabId);
@@ -1688,9 +1770,7 @@ function switchGlobalTab(tabId) {
     }
 }
 
-// ==========================================
 // PubChem API Compound Resolver & Search
-// ==========================================
 async function triggerPubChemSearch() {
     const searchVal = document.getElementById("pubchem_search_input").value.trim();
     if (!searchVal) return;
@@ -1728,11 +1808,9 @@ async function triggerPubChemSearch() {
     }
 }
 
-// ==========================================
 // 3D Conformer File Downloader Utility
-// ==========================================
 function downloadStructure(format) {
-    const url = `/static/molecule.${format}`;
+    const url = `/api/download/${window.currentJobId}/${format}`;
     const link = document.createElement("a");
     link.href = url;
     link.download = `kinetic_sketch_conformer.${format}`;
@@ -1742,9 +1820,7 @@ function downloadStructure(format) {
     console.log(`Downloading optimized 3D coordinate conformer in .${format} format.`);
 }
 
-// ==========================================
 // 3D Visualizer Style Toggles (3Dmol.js)
-// ==========================================
 function toggle3DStyle(styleType) {
     if (!glViewer) {
         console.warn("toggle3DStyle: 3D viewer is not initialized.");
@@ -1774,7 +1850,7 @@ async function updateDesignScore(smiles) {
         const res = await fetch("/api/design_score", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ smiles })
+            body: JSON.stringify({ smiles, job_id: window.currentJobId })
         });
         const data = await res.json();
         const scoreWidget = document.getElementById("designScoreWidget");
@@ -1794,9 +1870,7 @@ async function updateDesignScore(smiles) {
     } catch (e) { /* silent */ }
 }
 
-// ==========================================
 // Phase N+1: Deep ADMET Neural Network
-// ==========================================
 async function runDeepADMET() {
     const smiles = await getActiveSmiles();
     const div = document.getElementById("dynamicADMET");
@@ -1809,7 +1883,7 @@ async function runDeepADMET() {
         const res = await fetch("/api/admet", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ smiles })
+            body: JSON.stringify({ smiles, job_id: window.currentJobId })
         });
         const data = await res.json();
         if (!data.ok) {
@@ -1857,9 +1931,7 @@ async function runDeepADMET() {
     }
 }
 
-// ==========================================
 // Phase N+2: MCS Align
-// ==========================================
 async function runMCSAlign() {
     const textarea = document.getElementById("mcsSmilesList");
     const resultDiv = document.getElementById("mcsAlignResult");
@@ -1876,7 +1948,7 @@ async function runMCSAlign() {
         const res = await fetch("/api/mcs_align", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ smiles_list: lines })
+            body: JSON.stringify({ smiles_list: lines, job_id: window.currentJobId })
         });
         const data = await res.json();
         if (!data.ok) {
@@ -1904,9 +1976,7 @@ async function runMCSAlign() {
     }
 }
 
-// ==========================================
 // Phase N+3: HPC Async Task Submission
-// ==========================================
 async function submitHPCTask(taskType) {
     const smiles = await getActiveSmiles();
     const statusDiv = document.getElementById("hpcTaskStatus");
@@ -1974,7 +2044,7 @@ async function submitHPCTask(taskType) {
         const res = await fetch("/api/tasks/submit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ task_type: taskType, params: paramsMap[taskType] })
+            body: JSON.stringify({ task_type: taskType, params: paramsMap[taskType], job_id: window.currentJobId })
         });
         const data = await res.json();
 
@@ -2091,7 +2161,7 @@ async function pollHPCTask(taskId, label) {
                     // md_simulation result
                     const filesLabel = Object.keys(r.files || {}).length > 0 ? ` &nbsp;|&nbsp; Files: ${Object.values(r.files).join(", ")}` : "";
                     resultHtml = `<div style="background:#020617;padding:10px 12px;border-radius:6px;margin-top:6px;border:1px solid #1e293b;font-size:10px;">
-  <div style="color:#a3e635;font-weight:600;margin-bottom:6px;">&#128187; OpenMM MD Simulation</div>
+  <div style="color:#a3e635;font-weight:600;margin-bottom:6px;">&#128187; MD Workflow Demonstration</div>
   <div style="color:#e2e8f0;">${r.message}</div>
   <div style="color:#64748b;margin-top:4px;">Duration: ${r.duration_seconds ? r.duration_seconds.toFixed(1) + "s" : "—"}${filesLabel}</div>
   ${r.plot_svg ? `<div style="margin-top:8px;">${r.plot_svg}</div>` : ""}

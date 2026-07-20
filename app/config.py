@@ -48,6 +48,7 @@ class Config:
 
     # Async Queue (Celery/Redis)
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    MODEL_DEVICE = os.getenv("MODEL_DEVICE", "cpu").lower()
 
     # Caching
     PDB_CACHE_TTL = int(os.getenv("PDB_CACHE_TTL", 3600))  # 1 hour in seconds
@@ -86,6 +87,9 @@ class Config:
 
         if cls.OLLAMA_TIMEOUT < 1 or cls.OLLAMA_TIMEOUT > 300:
             errors.append(f"OLLAMA_TIMEOUT must be 1-300s, got {cls.OLLAMA_TIMEOUT}")
+
+        if cls.MODEL_DEVICE not in ("cpu", "cuda", "auto"):
+            errors.append("MODEL_DEVICE must be one of: cpu, cuda, auto")
 
         return len(errors) == 0, errors
 

@@ -285,8 +285,8 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
     Checkpoint format (legacy): raw state_dict from old single-layer architecture.
         Falls back to embed_dim=32, num_layers=1 for compatibility.
 
-    Applies torch.compile(mode='reduce-overhead') for ~25-35% inference
-    speedup on PyTorch 2.x (skips silently on older versions or compile errors).
+    Uses the device selected through MODEL_DEVICE. CPU is the safe default;
+    GPU selection must be explicitly enabled for a qualified deployment.
     """
     global _predictor_instance, _predictor_device
 
@@ -294,9 +294,25 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
         return _predictor_instance
 
     if device is None:
-        if torch.cuda.is_available():
-            device = torch.device("cuda:0")
-            logger.info(f"MDRepoPredictor: GPU — {torch.cuda.get_device_name(0)}")
+        requested_device = os.getenv("MODEL_DEVICE", "cpu").strip().lower()
+        if requested_device not in {"cpu", "cuda", "auto"}:
+            raise ValueError("MODEL_DEVICE must be one of: cpu, cuda, auto")
+
+        use_cuda = requested_device == "cuda" or (
+            requested_device == "auto" and torch.cuda.is_available()
+        )
+        if use_cuda:
+            if not torch.cuda.is_available():
+                raise RuntimeError("MODEL_DEVICE=cuda was requested but CUDA/ROCm is unavailable")
+            try:
+                _ = torch.randn(1, device="cuda:0")
+                device = torch.device("cuda:0")
+                logger.info(f"MDRepoPredictor: GPU — {torch.cuda.get_device_name(0)}")
+            except Exception as e:
+                if requested_device == "cuda":
+                    raise RuntimeError(f"Configured GPU is unusable: {e}") from e
+                logger.warning(f"GPU auto-detection failed: {e}. Falling back to CPU.")
+                device = torch.device("cpu")
         else:
             device = torch.device("cpu")
             logger.info("MDRepoPredictor: CPU mode")
@@ -313,33 +329,45 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
     }
     state_dict = None
 
-    if os.path.exists(WEIGHTS_PATH):
-        try:
-            try:
-                checkpoint = torch.load(WEIGHTS_PATH, map_location=device, weights_only=True)
-            except Exception as e:
-                logger.error(f"Failed to load checkpoint with weights_only=True: {e}")
-                raise
-            if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-                model_config.update(checkpoint.get("config", {}))
-                state_dict = checkpoint["state_dict"]
-                logger.info(f" Checkpoint config: {model_config}")
-            else:
-                # Legacy raw state_dict (old Fedora-era single-layer model)
-                state_dict = checkpoint
-                model_config["embed_dim"] = 32
-                model_config["num_layers"] = 1
-                model_config["num_gammas"] = 1
-                logger.warning(
-                    "Legacy checkpoint detected (old single-layer architecture). "
-                    "Re-train with the new script for full quality."
-                )
-        except Exception as e:
-            logger.warning(f"Could not load checkpoint ({e}) — using random init")
+    import hashlib
+
+    if not os.path.exists(WEIGHTS_PATH):
+        raise FileNotFoundError(
+            f"Trained weights checkpoint not found at {WEIGHTS_PATH}. "
+            "Please train the model first."
+        )
+
+    # SHA-256 Verification
+    sha256_hash = hashlib.sha256()
+    with open(WEIGHTS_PATH, "rb") as f:
+        for byte_block in iter(lambda: f.read(65536), b""):
+            sha256_hash.update(byte_block)
+    chk_hash = sha256_hash.hexdigest()
+    expected_hash = "f9d35a9adccf8756db869ae7dba94c04d7025470efbd6a2550a232bca8b8c030"
+    if chk_hash != expected_hash:
+        raise ValueError(
+            f"Checkpoint SHA-256 mismatch! Got: {chk_hash}, expected: {expected_hash}. "
+            "Checkpoint may be corrupted or modified."
+        )
+
+    try:
+        checkpoint = torch.load(WEIGHTS_PATH, map_location=device, weights_only=True)
+    except Exception as e:
+        logger.error(f"Failed to load checkpoint with weights_only=True: {e}")
+        raise RuntimeError(f"Failed to load model weights: {e}")
+
+    if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+        model_config.update(checkpoint.get("config", {}))
+        state_dict = checkpoint["state_dict"]
+        logger.info(f" Checkpoint config: {model_config}")
     else:
+        # Legacy raw state_dict
+        state_dict = checkpoint
+        model_config["embed_dim"] = 32
+        model_config["num_layers"] = 1
+        model_config["num_gammas"] = 1
         logger.warning(
-            f"No trained weights at {WEIGHTS_PATH}. "
-            "Run: python scripts/train_mdrepo.py --phase all"
+            "Legacy checkpoint detected (old single-layer architecture)."
         )
 
     model = MDRepoPredictor(**model_config)
@@ -387,10 +415,35 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
                 f"loaded={len(loaded_keys)}/{len(model.state_dict())} keys"
             )
         except Exception as e:
-            logger.error(f"Weight load failed: {e} — random init")
+            logger.error(f"Weight load failed: {e}")
+            raise RuntimeError(f"Weight load failed: {e}")
 
     model = model.to(device)
     model.eval()
+
+    # Known-answer startup test
+    test_pos = torch.zeros(5, 3, device=device)
+    for idx in range(5):
+        test_pos[idx, 0] = float(idx)
+    test_feats = torch.zeros(5, 13, device=device)
+    test_feats[:, 1] = 1.0  # carbon
+    try:
+        with torch.no_grad():
+            preds = model(test_pos, test_feats)
+        if preds["rmsf"].shape != (5, 3):
+            raise RuntimeError("RMSF shape mismatch")
+        if preds["sasa"].shape != (5,):
+            raise RuntimeError("SASA shape mismatch")
+        if preds["bfactor"].shape != (5,):
+            raise RuntimeError("B-factor shape mismatch")
+        if preds["charge"].shape != (5,):
+            raise RuntimeError("Charge shape mismatch")
+        if not isinstance(preds["homo_lumo_gap"].item(), float):
+            raise RuntimeError("HOMO-LUMO gap type mismatch")
+        logger.info("Deterministic known-answer startup test passed successfully.")
+    except Exception as e:
+        logger.error(f"Known-answer startup test failed: {e}")
+        raise RuntimeError(f"Model startup test failed: {e}")
 
     # NOTE: torch.compile is intentionally disabled for inference.
     # Reasons:

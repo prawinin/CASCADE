@@ -152,7 +152,7 @@ def _fallback_search(query_smiles: str) -> List[Dict[str, Any]]:
                     "pdb_id": target["pdb_id"],
                     "target_name": target["name"],
                     "similarity": similarity,
-                    "binding_probability": f"{similarity * 100:.1f}%",
+                    "similarity_percentage": f"{similarity * 100:.1f}%",
                     "affinity_estimate": f"{affinity_kcal:.2f} kcal/mol",
                     "function": target["function"],
                     "approved_by": "Reference"

@@ -1,6 +1,6 @@
 import logging  # noqa: E402
 import numpy as np  # noqa: E402
-from typing import List, Dict, Any, Tuple, TypedDict, Optional  # noqa: E402
+from typing import List, Dict, Any, Tuple, TypedDict  # noqa: E402
 from Bio.PDB import Residue, Atom  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.InteractionProfiler")

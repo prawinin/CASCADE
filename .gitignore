@@ -1,53 +1,58 @@
-# =====================================================================
-# KINETICKSKETCH AI - GITIGNORE CONFIGURATION
-# =====================================================================
-
-# Python Byte-compiled / optimized / DLL files
+# Python artifacts
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.egg-info/
+build/
+dist/
 
-# Virtual Environments & Packages
-venv/
+# Virtual environments and local configuration
 .venv/
+venv/
 env/
-.env/
 ENV/
-env.bak/
-venv.bak/
-
-# Local Environment Configurations
 .env
-.env*.local
+.env.*
+!.env.example
 .flaskenv
 
-# Jupyter Notebook & Caches
-.ipynb_checkpoints
+# Test, type-checker, and coverage caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.cache
+.hypothesis/
+.tox/
+.nox/
+.cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
-# IDEs, Editors, & Metadata
+# Notebook, editor, and operating-system files
+.ipynb_checkpoints/
 .idea/
 .vscode/
+.settings/
 *.swp
 *.swo
-.project
-.pydevproject
-.settings/
-
-# OS-specific Files
+*~
 .DS_Store
-.DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
-ehthumbs.db
 Thumbs.db
 
-# Dynamic Conformation Conformer Coordinate Exports
+# Runtime jobs, uploads, caches, and mutable application data
+jobs/
+scratch/
+data/
+temp/
+tmp/
+*.pid
+*.log
+workspace_progress.json
 molecule.sdf
 molecule.xyz
 molecule.mol2
@@ -55,28 +60,51 @@ test_molecule.sdf
 test_molecule.xyz
 test_molecule.mol2
 
-# Dynamic Runtime Checkpoint Databases & Logs
-workspace_progress.json
-*.log
-pip-log.txt
-.opencode
-
-# Non-production Developer Documentation (Keep Local Only)
-DEPLOYMENT.md
-TESTING.md
-COMPLETION_SUMMARY.md
-
-# Data folder — all files are large and should never be committed (3.7 GB+)
-data/
-
-# Runtime scratch files (PDB cache, temp outputs)
-scratch/
-
-# Model Weights & Training History
+# Local model artifacts and experiment outputs
 app/models/*.pt
+app/models/*.pth
+app/models/*.ckpt
+app/models/*.onnx
 app/models/*.json
+!app/models/.gitkeep
+wandb/
+runs/
+lightning_logs/
+tensorboard/
+*.tfevents.*
+*.prof
+*.lprof
+memory_profile*.dat
 
-# Local cloudflared binaries/downloads
+# Repository analysis and generated reports
+.emerge.yml
+emerge-export/
+dependency-graph.html
+kinetic_sketch_git.cc.json.gz
+*.cc.json.gz
+repo-files.txt
+repomix-output.*
+codecharta-analysis/
+.scannerwork/
+semgrep*.json
+bandit*.json
+sonar-report.*
+pdf-forge-exports/
+
+# Temporary repair and debugging scripts
+/fix_*.py
+/patch_*.py
+/test_schema.py
+
+# Local binaries and downloaded installers
 cloudflared
 cloudflared.deb
 gnina
+
+# Local-only notes
+DEPLOYMENT.md
+TESTING.md
+COMPLETION_SUMMARY.md
+PRODUCTION_READINESS_CHECKLIST.md
+Project_KineticSketch.md
+Project_kinetic_sketch.pdf

@@ -28,6 +28,12 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    beat_schedule={
+        "storage-cleanup-hourly": {
+            "task": "app.tasks.compute_tasks.storage_cleanup_task",
+            "schedule": 3600.0,
+        },
+    }
 )
 
 if __name__ == "__main__":

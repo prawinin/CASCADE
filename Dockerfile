@@ -26,11 +26,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install runtime dependencies + redis-server
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     curl \
-    redis-server \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built wheels from builder stage
@@ -52,7 +50,7 @@ USER appuser
 
 # Health check endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:7860/health || exit 1
+    CMD curl -f http://localhost:7860/health/ready || exit 1
 
 # Expose port
 EXPOSE 7860

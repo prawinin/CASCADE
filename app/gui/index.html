@@ -1319,6 +1319,13 @@
             <h1>Kinetic<span>Sketch</span></h1>
         </div>
 
+        <div style="flex: 1;"></div>
+        <div id="authMenu" style="display: flex; gap: 0.5rem; align-items: center; font-size: 0.8rem; margin-right: 1.5rem;">
+            <button onclick="showLoginModal()" class="premium-btn" style="padding: 0.35rem 0.85rem;" id="loginRegisterBtn">Login / Register</button>
+            <span id="authUsernameDisplay" style="display: none; font-weight: 600; color: var(--accent-blue);"></span>
+            <button onclick="logout()" class="premium-btn-secondary" style="display: none; padding: 0.35rem 0.85rem;" id="logoutBtn">Logout</button>
+        </div>
+
         <!-- Global 6-Tab Navigation -->
         <nav class="global-nav" aria-label="Main navigation">
             <button class="gnav-btn active" id="gnav-sketch" onclick="switchGlobalTab('sketch')">
@@ -1844,7 +1851,7 @@
                         class="rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium py-1.5 px-3 flex items-center gap-1.5 transition-colors shadow-sm"
                         style="cursor:pointer;">
                         <i class="fa-solid fa-wave-square text-blue-500" style="font-size:11px;"></i>
-                        OpenMM MD Simulation
+                        OpenMM MD Workflow (Demo)
                         <span class="text-slate-400 text-[10px] ml-1">~1 min</span>
                     </button>
                     <div class="flex items-center gap-1.5">
@@ -1859,7 +1866,6 @@
                             <option value="MMFF94" selected>FF: MMFF94</option>
                             <option value="MMFF94s">FF: MMFF94s</option>
                             <option value="UFF">FF: UFF</option>
-                            <option value="OPLS-AA">FF: OPLS-AA (OpenFF)</option>
                         </select>
                     </div>
                     <button onclick="submitHPCTask('interaction_profile')"
@@ -1896,6 +1902,23 @@
 
 
         </div><!-- end page-compute -->
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="loginModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 2rem; border-radius: 8px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+            <h2 id="authTitle" style="font-size: 1.2rem; font-weight: 700; margin-bottom: 1rem; color: #1E293B;">Login</h2>
+            <div id="authError" style="color: #DC2626; font-size: 0.8rem; margin-bottom: 1rem; display: none;"></div>
+            <input type="text" id="authUsername" placeholder="Username" class="premium-input" style="margin-bottom: 0.5rem;" />
+            <input type="password" id="authPassword" placeholder="Password" class="premium-input" style="margin-bottom: 1rem;" />
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                <button onclick="submitAuth()" id="authSubmitBtn" class="premium-btn" style="flex: 1;">Login</button>
+                <button onclick="hideLoginModal()" class="premium-btn-secondary">Cancel</button>
+            </div>
+            <div style="text-align: center; font-size: 0.8rem;">
+                <a href="#" onclick="toggleAuthMode(); return false;" id="authToggleLink" style="color: var(--accent-blue); text-decoration: none;">Need an account? Register</a>
+            </div>
+        </div>
     </div>
 
     <!-- Script section for Canvas 2D Interaction -->
@@ -2092,47 +2115,6 @@
                 window.submitSmilesFromExternal(smiles);
             } else if (typeof window.handleExternalSmiles === 'function') {
                 window.handleExternalSmiles(smiles);
-            } else {
-                // Fallback: POST to analyze_smiles endpoint
-                fetch('/api/analyze_smiles', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ smiles: smiles })
-                }).then(r => r.json()).then(d => {
-                    if (d.ok) {
-                        setStatus(' Rendered: ' + (label || smiles.slice(0, 30)), '#10B981');
-                        updateBadge('smiles', 'SMILES');
-                        
-                        // Update 2D canvas coordinates and right-side panels
-                        if (typeof window.applyAnalysisResponse === 'function') {
-                            window.applyAnalysisResponse(d);
-                        }
-                        
-                        // Execute ADME evaluation
-                        if (typeof window.runADMEEvaluation === 'function') {
-                            window.runADMEEvaluation();
-                        }
-                        
-                        // Fetch and render the 3D structural model
-                        fetch('/static/molecule.sdf?t=' + Date.now())
-                            .then(res => res.text())
-                            .then(sdfData => {
-                                if (typeof window.render3DModel === 'function') {
-                                    window.render3DModel(sdfData);
-                                }
-                            }).catch(err => {
-                                console.error('Failed to fetch molecule.sdf for 3D render:', err);
-                            });
-                            
-                        // Dispatch custom event for backward compatibility
-                        window.dispatchEvent(new CustomEvent('externalSmiles', { detail: { smiles } }));
-                    } else {
-                        setStatus(' ' + (d.error || 'Failed to render'), '#F43F5E');
-                        updateBadge('', '');
-                    }
-                }).catch(err => {
-                    setStatus(' Network error', '#F43F5E');
-                });
             }
         }
 

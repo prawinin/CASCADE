@@ -1,248 +1,92 @@
----
-title: KineticSketch
-emoji: 🧬
-colorFrom: blue
-colorTo: indigo
-sdk: gradio
-app_file: app.py
-pinned: false
-license: cc-by-nc-4.0
-short_description: A browser-native molecular dynamics GNN prediction workspace
----
+# KineticSketch
 
-<div align="center">
+KineticSketch is a molecular sketching and analysis project that I built to bring several computational chemistry steps into one browser workspace. A molecule can be drawn on the custom canvas, entered as SMILES, or searched by drug name. The same structure can then be viewed in 3D, checked for common drug-likeness rules, passed through a graph neural network, compared with a local drug database, and studied against a PDB protein structure.
 
+This project was developed by Prawin under the guidance of Dr. Rajiv K. Kar, Assistant Professor, Jyoti and Bhupat Mehta School of Health Sciences & Technology, IIT Guwahati.
 
-# 🧬 KineticSketch AI
+> KineticSketch is a research and learning prototype. The model outputs, docking results, ADMET values, design score, similarity-based estimates, and interaction maps are computational estimates. They are not experimental or clinical results.
 
-### *Computational Chemistry — Fully Offline. Instant. Yours.*
+## Main features
 
-A browser-native molecular dynamics workstation. Draw a drug, get per-atom fluctuation predictions powered by a custom Graph Neural Network trained on **150,000 synthetic structures + 1,319 real protein MD trajectories**. No cloud. No subscriptions. Runs on a single GPU.
+- Custom 2D molecular sketcher with draw, move, erase, zoom, pan, undo/redo, bond orders, and 23 ring/scaffold templates.
+- Input by SMILES or drug name, with local autocomplete and PubChem fallback.
+- RDKit 2D cleanup and ETKDGv3 3D conformer generation.
+- MMFF94, MMFF94s, and UFF force field minimization paths. (OPLS-AA is explicitly disabled/unsupported in the active release).
+- Interactive 3Dmol.js viewer and SDF, XYZ, and MOL2 downloads.
+- PyTorch message-passing neural network for per-atom and molecule-level estimates.
+- Lipinski and Veber checks, live molecular descriptors, and a heuristic design score.
+- ADMET-AI integration with a clearly labelled RDKit heuristic fallback.
+- Local SQLite/FTS5 drug search and Morgan-fingerprint Tanimoto comparison.
+- PDB fetch/upload, ligand selection, and geometry-based interaction profiling.
+- Optional GNINA docking.
+- Ollama-assisted natural-language commands for the 3D viewer.
+- Celery/Redis task submission and activity log.
 
-<p>
-  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/PyTorch-GNN%20%7C%20AMP%20%7C%20ROCm-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" />
-  <img src="https://img.shields.io/badge/RDKit-Cheminformatics-3CB371?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/GPU-AMD%20ROCm%20%2F%20NVIDIA%20CUDA-ED1C24?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/3Dmol.js-WebGL%203D-7B68EE?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Ollama-Local%20LLM-black?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/License-Academic%20Use-lightgrey?style=for-the-badge" />
-</p>
+The detailed explanation of every UI feature, force field, formula, charge method, model layer, and current limitation is in [Project_KineticSketch.md](Project_KineticSketch.md).
 
----
+The reusable internet-hosting, security, storage-lifecycle, testing, monitoring, and release checklist is in [PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md).
 
-*Developed by **Prawin** under the guidance of **Dr. Rajiv K. Kar**, Assistant Professor, Jyoti and Bhupat Mehta School of Health Sciences & Technology, IIT Guwahati.*
+## How the pipeline works
 
-</div>
+1. The canvas graph or SMILES is converted into an RDKit molecule.
+2. RDKit checks the structure and generates clean 2D coordinates.
+3. Explicit hydrogens are added and ETKDGv3 generates a starting 3D conformer.
+4. A force-field path relaxes the geometry.
+5. The structure is written to SDF, XYZ, and MOL2.
+6. Molecular descriptors and drug-likeness rules are calculated.
+7. The GNN uses atom types and pairwise 3D distances to produce learned estimates.
+8. The molecule is compared with local drug fingerprints for possible reference matches.
+9. A selected PDB structure can be inspected for geometric protein-ligand contacts.
 
-## What It Does
+## Important scientific distinctions
 
-KineticSketch AI is a locally-hosted computational chemistry workspace for researchers, medicinal chemists, and students. Submit any molecule — drawn by hand on the built-in canvas, typed as a SMILES string, or looked up by drug name — and the system runs a full cheminformatics + deep learning pipeline in seconds:
+- The main Conformers charge column is a learned GNN output. The background optimization task separately calculates RDKit Gasteiger–Marsili PEOE charges.
+- The learned HOMO–LUMO value is not a new quantum-chemistry calculation.
+- Tanimoto similarity is structural similarity, not a calibrated binding probability.
+- The displayed similarity-based ΔG is a project heuristic, not measured free energy.
+- The current local OpenMM-labelled backend demonstrates task orchestration and returns an example curve; it does not yet run physical MD.
+- The OPLS-AA force field option is explicitly disabled in the engine. Users must select MMFF94, MMFF94s, or UFF.
 
-1. **3D Conformer Generation** — RDKit ETKDGv3 embedding + MMFF94 force-field minimization
-2. **Per-Atom Dynamics Prediction** — Custom-trained GNN predicts RMSF fluctuation at 10 ns and 1 µs timescales
-3. **ADME Drug-Likeness Profiling** — Lipinski Rule of 5, Veber filter, all key descriptors
-4. **Drug Repurposing** — Tanimoto similarity search against 4,099 clinically approved drugs
-5. **AI 3D Visualization** — Natural language control of the WebGL 3D viewer via local LLM
+## Technology used
 
-Everything runs on your own hardware. No external APIs. No subscriptions. No data leaves the machine.
+- Python and Flask
+- RDKit
+- PyTorch
+- BioPython
+- HTML5 Canvas and vanilla JavaScript
+- 3Dmol.js
+- SQLite with FTS5
+- Celery and Redis
+- ADMET-AI when available
+- Ollama when available
+- GNINA when installed separately
 
----
-
-## The Model — MDRepoPredictor
-
-The heart of KineticSketch is a custom **Message Passing Neural Network (MPNN)** architecture trained end-to-end on real and synthetic molecular dynamics data.
-
-### Architecture
-
-| Component | Specification |
-|---|---|
-| **Total Parameters** | **1,228,370** |
-| **Node Input** | 3D Cartesian coordinates `(N × 3)` + one-hot element encoding `(N × 13)` |
-| **Node Embedding** | `Linear(13 → 256)` + LayerNorm + ReLU |
-| **GNN Layers** | **4 × MPNNLayer** with multi-scale Gaussian RBF adjacency |
-| **Gamma Scales (γ)** | **4 learnable γ values** — captures interactions at 0.006 Å⁻² to 0.22 Å⁻² |
-| **Adjacency** | `A[i,j] = exp(−γ_k · d²(i,j))` — rotation & translation invariant |
-| **Global Context** | Per-atom distance to molecular center of mass (Å) |
-| **MLP Head** | `(512+1) → 256 → 128 → 64 → 2` with LayerNorm + Dropout(0.1) |
-| **Output Activation** | Softplus — strictly positive RMSF predictions guaranteed |
-| **Output** | `(N, 2)` — RMSF at **10 ns** and **1 µs** per atom (Å) |
-
-### Invariance
-
-Pairwise squared interatomic distances `d²(i,j)` are intrinsically invariant to any rigid rotation or translation. The model produces byte-identical predictions regardless of how the molecule is oriented in space. This is a hard mathematical guarantee, not a data augmentation trick.
-
-### Training Pipeline
-
-Training ran in two sequential phases on an AMD Radeon RX 6500M GPU using PyTorch ROCm 6.x with `torch.amp` mixed-precision (AMP).
-
-#### Phase A — Synthetic Pre-training
-
-| Parameter | Value |
-|---|---|
-| Dataset | 150,000 synthetically generated molecules |
-| Source | RDKit ETKDGv3 + MMFF94 from 30 seed SMILES |
-| Labels | Rule-based biophysical RMSF (aromatic → rigid, terminal → flexible) |
-| Epochs | 300 |
-| Batch Size | 128 (gradient accumulation × 4 → effective 512) |
-| Optimizer | Adam, lr=1e-3, weight_decay=1e-5 |
-| Scheduler | CosineAnnealingLR (η_min = 1e-5) |
-| Final Val Loss (MSE) | **~0.062** |
-| GPU | AMD Radeon RX 6500M (ROCm 6.x, GFX1030) |
-
-#### Phase B — Real MD Fine-tuning
-
-| Parameter | Value |
-|---|---|
-| Dataset | **1,319 real protein structures** from FastProtFlex (filtered ≤ 1,200 atoms) |
-| Source | PDB structures from RCSB, RMSF from crystallographic B-factors |
-| Atom coverage | ~1.05 million individual atom labels |
-| Epochs | 200 |
-| Batch Size | 1 (protein structures are variable-length) |
-| LR | 1e-4 (10× lower than Phase A — fine-tuning regime) |
-| Scheduler | CosineAnnealingLR (η_min = 1e-6) |
-| Best Val Loss (MSE) | **15.039** |
-| Checkpoint | Saved only when validation improves |
-| GPU | AMD Radeon RX 6500M (ROCm 6.x, GFX1030) |
-| Training Time | ~2 hours 10 minutes |
-
-> **Note on Phase B loss scale:** The larger MSE in Phase B (~15 vs ~0.06 in Phase A) is expected. Phase A uses normalized synthetic RMSF in a narrow range (0.01–0.8 Å). Phase B fine-tunes on raw protein B-factor–derived RMSF values, which span a much wider physical range (0.5–25+ Å). The network is correctly learning the full dynamic range of real proteins.
-
-#### No Quality Loss from Inference Optimizations
-
-`torch.compile` is intentionally **disabled at inference time**. It is only used during training for kernel fusion speed. All inference runs natively on PyTorch eager mode — the predictions are numerically identical to a compiled model. Disabling it at inference eliminates:
-- A 10–15 second JIT stall on the first request
-- CUDA Graph thread-safety errors in Flask worker threads
-
----
-
-## Full Feature Set
-
-### 2D Molecular Sketcher
-A fully custom HTML5 Canvas drawing engine (~1,400 lines of vanilla JavaScript):
-- Draw, Move, and Erase interaction modes
-- Element selection: C, N, O, H, P, S, F, Cl, Br, I, B, Si
-- Bond type cycling: single → double → triple on click
-- One-click ring templates: benzene, cyclohexane, cyclopentane, pyridine
-- Full undo/redo stack (up to 80 states, serialized as JSON)
-- Zoom, pan, and canvas auto-fit
-- RDKit-backed 2D coordinate cleanup (`Compute2DCoords`)
-- Live debounced sync to 3D + ADME panels (800 ms / 1200 ms)
-
-### 3D Conformer Generation
-1. Validates and sanitizes via RDKit `SanitizeMol`
-2. Appends explicit hydrogen atoms (`AddHs`)
-3. Embeds 3D coordinates with **ETKDGv3** (RDKit's Cambridge Structural Database-trained geometry algorithm)
-4. Energy-minimizes with **MMFF94** force field
-5. Exports `.sdf`, `.xyz`, `.mol2`
-
-### WebGL 3D Viewer
-Live rendering via **3Dmol.js** (WebGL). Stick, sphere (CPK), line, and cartoon styles. Interactive rotation/zoom/pan. Auto-renders on each canvas edit or molecule submission.
-
-### ADME Drug-Likeness Profiling
-
-| Property | Filter | Source |
-|---|---|---|
-| Molecular Weight | < 500 Da | Lipinski Rule of 5 |
-| LogP | < 5 | Lipinski Rule of 5 |
-| H-Bond Donors | ≤ 5 | Lipinski Rule of 5 |
-| H-Bond Acceptors | ≤ 10 | Lipinski Rule of 5 |
-| Rotatable Bonds | ≤ 10 | Veber Filter |
-| TPSA | ≤ 140 Ų | Veber Filter |
-
-### Drug Repurposing Engine
-Vectorized Tanimoto similarity search across **2,898,063 known drug compounds**, cross-referenced with **5,576 drug-target PDB associations** (across 5,421 unique PDB targets). Full search completes in under a second. Results include matched drug name, PDB target ID, binding free energy (ΔG), and similarity score.
-
-The fingerprint matrix is loaded via `numpy mmap_mode='r'` — the OS pages in only the rows needed per query, keeping RAM footprint under 100 MB regardless of database size.
-
-### Smart Drug Name Lookup
-Detects SMILES vs. drug name automatically. Resolution order:
-1. Offline synonym vocabulary (brand names → INN)
-2. Local SQLite FTS5 full-text index with autocomplete
-3. PubChem PUG REST API (online fallback only)
-
-### PDB Protein Fetch + Interaction Profiling
-Enter a PDB ID or upload a `.pdb` file. BioPython extracts ligands and detects the binding pocket. Interaction profiler identifies:
-
-| Interaction | Geometry Criterion |
-|---|---|
-| Hydrogen Bond | Donor–acceptor ≤ 3.5 Å + angular geometry |
-| Pi–Pi Stacking | Ring centroid ≤ 5.8 Å; plane angle via SVD (parallel < 35°, T-shape 55–90°) |
-| Cation–Pi | Cation to ring centroid ≤ 6.0 Å |
-| Salt Bridge | Oppositely charged residues ≤ 4.2 Å |
-| Hydrophobic Contact | Aliphatic C–C ≤ 4.5 Å |
-
-### PyMOL AI Assistant (Local LLM)
-A chat interface powered by **Ollama** running **Microsoft Phi** (or any model you configure). Natural language commands (`"show spheres and color nitrogen blue"`) are translated server-side into PyMOL syntax. The frontend `applyPyMOLTo3Dmol()` function maps commands to the 3Dmol.js WebGL API — no PyMOL process runs. Configurable via `OLLAMA_MODEL` in `.env`.
-
----
-
-## Deployment
-
-KineticSketch is designed to run locally or on a shared lab server. It does not send any molecular data to external servers, which makes it suitable for research environments where data privacy matters.
-
-| Environment | Recommended Spec | Notes |
-|---|---|---|
-| **Personal Laptop / Workstation** | Any NVIDIA RTX / AMD Radeon (4 GB+ VRAM) | Full pipeline in < 2s per molecule |
-| **Shared Lab Server** | NVIDIA A10G / RTX 4090 (24 GB) | Multiple users via Gunicorn |
-| **Air-Gapped Intranet** | Any GPU workstation, no internet required | No external API calls at runtime |
-
-For deployment questions or academic collaboration, contact: **prawin@vyapai.tech**
-
----
-
-## Repository Structure
+## Repository structure
 
 ```text
 KineticSketch/
 ├── app/
-│   ├── gui/
-│   │   └── index.html              # Frontend: sketcher, 3D viewer, ADME panel, PyMOL chat
-│   ├── services/
-│   │   ├── checkpoint.py           # Pipeline state serialization
-│   │   ├── cheminformatics.py      # ETKDGv3 embedding, MMFF94, SDF/XYZ/MOL2 export
-│   │   ├── descriptors.py          # Lipinski / Veber / ADME descriptor calculations
-│   │   ├── drug_database.py        # SQLite FTS5 lookup, fingerprint mmap search
-│   │   ├── interaction_profiler.py # H-bond, pi-stacking, salt bridge, hydrophobic
-│   │   ├── models.py               # MDRepoPredictor GNN — 1.2M params, 4 layers, embed_dim=256
-│   │   ├── pdb_parser.py           # BioPython PDB parsing and ligand extraction
-│   │   ├── pdb_repurposing.py      # Morgan fingerprint Tanimoto similarity search
-│   │   └── visualizer.py          # Ollama HTTP client and fallback PyMOL mapper
-│   ├── models/
-│   │   ├── mdrepo_predictor.pt     # Trained GNN weights — Phase A+B (gitignored)
-│   │   └── training_history.json   # Epoch-by-epoch loss logs (gitignored)
-│   ├── static/
-│   │   ├── sketch.js               # 2D canvas engine, undo stack, debounce timers
-│   │   └── interaction_viewer.js   # SVG 2D ligand-protein interaction diagram renderer
-│   ├── config.py                   # Environment-aware centralized config
-│   └── main.py                     # Flask routes and request orchestration
-├── data/
-│   ├── FastProtFlex.zip            # 3,771 PDB structures for MD fine-tuning (gitignored)
-│   ├── drug_database.sqlite        # DrugCentral — 4,099 approved drugs + FTS5 index (gitignored)
-│   └── drug_fingerprints.npz       # Pre-computed Morgan fingerprints for repurposing (gitignored)
+│   ├── gui/index.html              # Complete browser interface
+│   ├── static/sketch.js            # Sketcher and page interactions
+│   ├── static/interaction_viewer.js
+│   ├── services/                   # Chemistry, model, PDB, docking, ADMET services
+│   ├── tasks/                      # Celery task definitions
+│   ├── models/                     # GNN checkpoint and training history
+│   ├── config.py
+│   └── main.py                     # Flask application and API routes
+├── data/                           # Local database, fingerprints, action logs
 ├── scripts/
-│   ├── build_drug_db.py            # Builds drug_database.sqlite + drug_fingerprints.npz
-│   └── train_mdrepo.py             # MDRepoPredictor two-phase training script
-├── run.py                          # Root launcher — sets sys.path and boots main.py
-├── wsgi.py                         # Gunicorn-compatible WSGI entry point
-├── Modelfile                       # Ollama model specification
-├── requirements.txt                # Python CPU dependencies
-├── requirements_amd_rocm63_rdna2.txt # PyTorch ROCm 6.3 + RDNA2 pinned deps
-├── Dockerfile                      # Multi-stage production container
-├── docker-compose.yml              # Flask service orchestration
-└── .env.example                    # Environment configuration template
+│   ├── build_drug_db.py
+│   └── train_mdrepo.py
+├── Project_KineticSketch.md        # Full explanation and live-demo guide
+├── requirements.txt
+├── run.py
+└── wsgi.py
 ```
 
----
+## Setup
 
-## Installation
-
-### Requirements
-- Python 3.10–3.13
-- Linux (Ubuntu 22.04+, Arch, or Manjaro) — macOS supported, Windows via WSL2
-- GPU: NVIDIA (CUDA 11.8+) or AMD (ROCm 6.x) — CPU fallback available
-
-### Setup
+The current reference environment is Fedora Linux with Python 3.13. A virtual environment is recommended.
 
 ```bash
 git clone https://github.com/prawinin/KineticSketch.git
@@ -250,145 +94,125 @@ cd KineticSketch
 
 python3 -m venv .venv
 source .venv/bin/activate
-
-# CPU / NVIDIA CUDA
 pip install -r requirements.txt
-
-# AMD GPU — ROCm 6.3 (tested: RX 6500M, RDNA2)
-# Ensure: HSA_OVERRIDE_GFX_VERSION=10.3.0 for RDNA2 GPUs
-pip install -r requirements_amd_rocm63_rdna2.txt
 ```
 
+The AMD/ROCm dependency notes are in `requirements_amd_rocm63_rdna2.txt`.
+
+Copy the example environment file if configuration is needed:
+
 ```bash
-# Configure environment
 cp .env.example .env
-
-# Key settings to adjust in .env:
-# OLLAMA_ENABLED=1
-# OLLAMA_MODEL=phi3          ← or any model you have in Ollama
-# OLLAMA_API_URL=http://localhost:11434
-# SECRET_KEY=your-secret-key
 ```
 
-```bash
-# Optional: set up local LLM assistant
-ollama pull phi3              # Microsoft Phi-3 (recommended — fast, 3.8B params)
-# OR
-ollama create kinetic-agent -f Modelfile   # Custom KineticSketch Llama 3.2 agent
+Useful settings include:
+
+```env
+HOST=127.0.0.1
+PORT=5000
+REDIS_URL=redis://localhost:6379/0
+OLLAMA_ENABLED=1
+OLLAMA_API_URL=http://localhost:11434
+OLLAMA_MODEL=qwen2.5-coder:7b
+PYMOL_ENABLED=0
 ```
 
-> **Note on Data & Models:** To keep the repository lightweight, we have not uploaded any datasets, pre-computed databases/fingerprints, or the trained GNN model weights (`app/models/mdrepo_predictor.pt`) to this repository. To obtain these files for local execution, please contact: **prawin@vyapai.tech**
+The actual defaults are defined in `app/config.py`. Do not store real secrets in the repository.
 
----
-
-## Running
+## Running the application
 
 ```bash
-# Development
 source .venv/bin/activate
 python run.py
-# Open http://localhost:5000
 ```
+
+Then open:
+
+```text
+http://127.0.0.1:5000
+```
+
+For queued Compute-page operations, Redis and a Celery worker are also required. The exact Celery app is `app.tasks.celery_app:celery_app`.
 
 ```bash
-# Production (Gunicorn — recommended for shared lab use)
-gunicorn wsgi:app --bind 0.0.0.0:5000 --workers 4 --timeout 120
+redis-server
+celery -A app.tasks.celery_app:celery_app worker --loglevel=info
 ```
+
+Without Redis, normal molecule rendering still works and 3D optimization has a local threaded fallback. Queued interaction and MD tasks require Redis/Celery.
+
+## Optional components
+
+### Ollama
+
+Ollama is used to convert plain-English visualization requests into a limited command set. If it is unavailable, a keyword-based fallback is used.
 
 ```bash
-# Docker (production container)
-docker-compose up --build
+ollama pull qwen2.5-coder:7b
 ```
 
----
+### GNINA
 
-## Training Your Own Model
+Place an executable named `gnina` in the project root or set `GNINA_PATH`. Docking is unavailable without it.
 
-The two-phase training pipeline is fully reproducible:
+### Local data and checkpoint
 
-```bash
-# Phase A — synthetic pre-training (150,000 molecules, ~5 hrs on RTX 3080)
-python scripts/train_mdrepo.py \
-    --phase a \
-    --epochs 300 \
-    --samples 150000 \
-    --batch-size 128
+The current working repository contains:
 
-# Phase B — real MD fine-tuning (requires FastProtFlex.zip in data/)
-python scripts/train_mdrepo.py \
-    --phase b \
-    --epochs 200 \
-    --batch-size 1 \
-    --max-atoms 1200 \
-    --resume
-```
+- `data/drug_database.sqlite` with 2,898,063 drug rows and 5,576 drug-target rows;
+- `data/drug_fingerprints.npz`; and
+- `app/models/mdrepo_predictor.pt`.
 
-Weights are saved to `app/models/mdrepo_predictor.pt` whenever validation loss improves. Training auto-resumes from the latest checkpoint with `--resume`.
+These are large/generated research assets, so availability may differ between distributions of the repository. Their source and redistribution permissions should be checked before publishing them.
 
-> **Note on Training Data:** The training datasets (including `FastProtFlex.zip`) are not uploaded to this repository. To request access to the dataset, please email: **prawin@vyapai.tech**
+## Main API endpoints
 
----
-
-## API Reference
-
-| Method | Endpoint | Description |
+| Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/` | Main application UI |
-| `GET` | `/health` | Server and service health check |
-| `POST` | `/api/analyze_smiles` | Full pipeline: SMILES → 3D conformer → RMSF predictions |
-| `POST` | `/api/canvas_to_smiles` | Canvas atom/bond JSON → canonical SMILES |
-| `POST` | `/api/descriptors` | ADME descriptor calculation |
-| `POST` | `/api/optimize_2d` | Recompute 2D canvas coordinates via RDKit |
-| `POST` | `/api/chat` | Natural language → PyMOL command via local LLM |
-| `GET` | `/api/drug/lookup?name=` | Drug name → SMILES (offline-first) |
-| `GET` | `/api/drug/autocomplete?prefix=` | Live drug name autocomplete |
-| `GET` | `/api/pdb/fetch?pdb_id=` | Download PDB structure + extract ligands |
-| `POST` | `/api/pdb/upload` | Upload local `.pdb` file |
-| `POST` | `/api/interactions` | Full non-covalent interaction profile |
-| `POST` | `/api/mcs_align` | Maximum Common Substructure alignment |
+| GET | `/` | Main interface |
+| GET | `/health` | Service and database health |
+| POST | `/api/analyze_smiles` | Run the main molecular pipeline |
+| POST | `/api/canvas_to_smiles` | Convert canvas graph to SMILES |
+| POST | `/api/optimize_2d` | Clean 2D coordinates |
+| POST | `/api/descriptors` | Calculate molecular descriptors |
+| GET | `/api/drug/lookup` | Resolve a drug name |
+| GET | `/api/drug/autocomplete` | Local name suggestions |
+| GET | `/api/pdb/fetch` | Fetch a PDB and list ligands |
+| POST | `/api/pdb/upload` | Securely upload a local PDB/ENT/PDB.GZ file |
+| POST | `/api/interactions` | Generate an interaction profile |
+| POST | `/api/dock` | Run GNINA docking |
+| POST | `/api/admet` | Run ADMET model/fallback |
+| POST | `/api/mcs_align` | Generate MCS-aligned coordinates |
+| POST | `/api/tasks/submit` | Submit a compute task |
+| GET | `/api/tasks/status/<id>` | Read task status/result (enforces task ownership) |
+| DELETE | `/api/tasks/cancel/<id>` | Revoke a queued task (enforces task ownership) |
+| GET | `/api/download/<job_id>/<file_type>` | Download job artifacts securely |
 
----
+## Security and Production Architecture
 
-## Configuration Reference
+- **Isolated Job Workspaces:** Per-user and per-job directory isolation (`jobs/<user-id>/<job-id>/`) with strict UUID path canonicalization to prevent traversal attacks.
+- **Fail-Closed GNN Loading:** SHA-256 weight hash validation with automatic abort on checkpoint mismatch or corruption.
+- **Authentication & Ownership:** Session security flags, rate-limited login, and SQLite task ownership mapping.
+- **Container Hardening:** Isolated internal service ports (Redis, PyMOL, Ollama) and shared persistent volumes.
 
-| Variable | Default | Description |
-|---|---|---|
-| `HOST` | `0.0.0.0` | Flask bind host |
-| `PORT` | `5000` | Flask bind port |
-| `SECRET_KEY` | — | Flask session signing key (required in production) |
-| `OLLAMA_API_URL` | `http://localhost:11434` | Ollama service endpoint |
-| `OLLAMA_MODEL` | `phi3` | LLM model name for the PyMOL assistant |
-| `OLLAMA_ENABLED` | `1` | Toggle AI assistant on/off |
-| `OLLAMA_TIMEOUT` | `15` | Request timeout in seconds |
-| `PYMOL_ENABLED` | `0` | Set to `1` if a real PyMOL process is running |
-| `MOLECULE_SIZE_LIMIT` | `200` | Max atoms accepted by the 3D pipeline |
-| `SMILES_LENGTH_LIMIT` | `2000` | Max SMILES string length |
-| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`) |
+## Training
 
----
+The model architecture is in `app/services/models.py`, and the training program is in `scripts/train_mdrepo.py`.
 
-## Security
+```bash
+python scripts/train_mdrepo.py --help
+```
 
-- **XSS Prevention:** `html.escape()` applied to all user strings before HTML rendering
-- **SMILES Validation:** RDKit `SanitizeMol` rejects malformed structures before reaching the GPU
-- **Input Limits:** 200 atom cap, 2000 character SMILES cap, 4-character alphanumeric PDB ID validation
-- **Timeout Enforcement:** All external HTTP calls (Ollama, PubChem, RCSB) have explicit timeouts
-- **No Data Egress:** No molecular data is sent to any external server at runtime
+The model loader fails closed if trained weights are corrupt or missing, ensuring only verified model weights are used for inference.
 
----
+## Known limitations
+
+- Research prototype; not validated for clinical use.
+- The OpenMM-labelled local backend is currently a demonstration and does not yet run physical MD simulations.
+- OPLS-AA is explicitly disabled and unavailable.
+- MCS coordinates are generated, but the overlay is not drawn yet.
+- External dependencies (PubChem, RCSB, GNINA) require network access or local binaries.
 
 ## License
 
-This project is released under an **Academic Use License** — see [LICENSE](LICENSE).
-
-You are free to use, run, and study this software for personal learning and academic research. If you use it in a paper or presentation, please credit the authors. Commercial use requires written permission.
-
----
-
-<div align="center">
-
-*KineticSketch AI — Molecular Dynamics Intelligence, Fully Offline.*
-
-**Developed by Prawin** | *Under the guidance of Dr. Rajiv K. Kar, IIT Guwahati*
-
-</div>
+See [LICENSE](LICENSE). External libraries, datasets, PDB structures, model assets, and drug-database content may have their own licenses and attribution requirements.

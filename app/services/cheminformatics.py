@@ -1,5 +1,7 @@
 import logging  # noqa: E402
-from typing import List  # noqa: E402
+import os  # noqa: E402
+import uuid  # noqa: E402
+from typing import List, Optional  # noqa: E402
 from rdkit import Chem  # noqa: E402
 from rdkit.Chem import AllChem  # noqa: E402
 
@@ -8,14 +10,14 @@ logger = logging.getLogger("KineticSketch.Cheminformatics")
 def write_mol2(mol: Chem.Mol, filepath: str) -> None:
     """
     Custom compliant Tripos MOL2 writer.
-    
+
     Constructs Tripos @<TRIPOS>MOLECULE, ATOM, and BOND blocks.
     Maps hybridization and atomic symbols to Tripos atom types.
-    
+
     Args:
         mol: RDKit Mol object with 3D conformer
         filepath: Path where MOL2 file will be written
-    
+
     Returns:
         None (writes file to disk)
     """
@@ -36,11 +38,11 @@ def write_mol2(mol: Chem.Mol, filepath: str) -> None:
         atom = mol.GetAtomWithIdx(i)
         symbol = atom.GetSymbol()
         pos = conf.GetAtomPosition(i)
-        
+
         # Determine standard Tripos atom typing based on hybridization
         hyb = atom.GetHybridization()
         tripos_type = symbol
-        
+
         if symbol == 'C':
             if hyb == Chem.HybridizationType.SP3:
                 tripos_type = "C.3"
@@ -154,7 +156,7 @@ def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mo
     """
     Appends explicit hydrogens, embeds 3D coordinates using ETKDGv3,
     and minimizes spatial geometry using the specified force field.
-    
+
     Args:
         mol: RDKit Mol object
         force_field: "MMFF94" (default), "MMFF94s", "UFF", or "OPLS-AA" / "OPLS_2005"
@@ -181,7 +183,7 @@ def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mo
             embed_status = AllChem.EmbedMolecule(mol_h, randomSeed=42)
         except Exception as e:
             logger.warning(f"Basic embedding failed with exception: {e}")
-            
+
         if embed_status == -1:
             logger.warning("All coordinate embedding algorithms failed. Using robust linear chain layout fallback.")
             try:
@@ -194,26 +196,10 @@ def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mo
 
     # Force field minimization with fallback chain: requested → MMFF94 → UFF
     ff_upper = force_field.upper()
-    minimized = False
-
     if ff_upper in ("OPLS-AA", "OPLS_2005", "OPLS"):
-        logger.info(f"Requested force field {ff_upper}. Checking for OpenFF / OpenMM OPLS-AA engine...")
-        try:
-            # Check for openff toolkit
-            import openff.toolkit  # noqa: F401
-            logger.info("OpenFF toolkit available. Applying OPLS-AA force field parameters.")
-            # If openff is available, MMFF94 serves as reference baseline
-            AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant="MMFF94")
-            minimized = True
-            mol_h.SetProp("_ForceFieldUsed", "OPLS-AA (OpenFF)")
-        except ImportError:
-            logger.info("OpenFF toolkit not installed for native OPLS-AA. Falling back to MMFF94 with OPLS atom-typing overlay.")
-            try:
-                AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant="MMFF94")
-                minimized = True
-                mol_h.SetProp("_ForceFieldUsed", "MMFF94 (OPLS-AA Fallback)")
-            except Exception as e:
-                logger.warning(f"MMFF94 fallback failed: {e}")
+        raise ValueError("OPLS-AA force field engine is currently unsupported/disabled")
+
+    minimized = False
 
     if not minimized and ff_upper in ("MMFF94", "MMFF94S"):
         logger.info(f"Minimizing spatial geometry via {ff_upper} force field engine...")
@@ -241,21 +227,21 @@ def optimize_conformer_3d(mol: Chem.Mol, force_field: str = "MMFF94") -> Chem.Mo
 def write_all_conformers(mol_h: Chem.Mol, sdf_path: str, xyz_path: str, mol2_path: str) -> None:
     """
     Writes the optimized conformer coordinates out to .sdf, .xyz, and .mol2 files.
-    
+
     Exports the 3D structure in three widely-compatible formats for downstream
     visualization and analysis.
-    
+
     Args:
         mol_h: RDKit Mol object with explicit hydrogens and 3D coordinates
         sdf_path: Path to write SDF (Structure Data Format) file
         xyz_path: Path to write XYZ file
         mol2_path: Path to write MOL2 (Tripos) file
-    
+
     Returns:
         None (writes files to disk)
     """
     logger.info("Streaming conformer coordinates to files...")
-    
+
     # 1. SDF file writer
     try:
         writer = Chem.SDWriter(sdf_path)
@@ -264,7 +250,7 @@ def write_all_conformers(mol_h: Chem.Mol, sdf_path: str, xyz_path: str, mol2_pat
         logger.info(f"Wrote SDF file: {sdf_path}")
     except Exception as e:
         logger.error(f"Failed to write SDF: {e}")
-    
+
     # 2. XYZ file writer
     try:
         conf = mol_h.GetConformer()
@@ -278,14 +264,14 @@ def write_all_conformers(mol_h: Chem.Mol, sdf_path: str, xyz_path: str, mol2_pat
         logger.info(f"Wrote XYZ file: {xyz_path}")
     except Exception as e:
         logger.error(f"Failed to write XYZ: {e}")
-            
+
     # 3. MOL2 custom Tripos writer
     try:
         write_mol2(mol_h, mol2_path)
         logger.info(f"Wrote MOL2 file: {mol2_path}")
     except Exception as e:
         logger.error(f"Failed to write MOL2: {e}")
-    
+
     logger.info("Successfully exported conformer to SDF, XYZ, and Tripos MOL2.")
 
 
@@ -363,26 +349,26 @@ def canvas_json_to_rdkit_mol(canvas_json: dict) -> Chem.Mol:
     """
     rw_mol = Chem.RWMol()
     atom_id_to_idx = {}
-    
+
     # Add atoms
     for atom in canvas_json.get("atoms", []):
         el = atom.get("element", "C")
         rd_atom = Chem.Atom(el)
         idx = rw_mol.AddAtom(rd_atom)
         atom_id_to_idx[atom["id"]] = idx
-        
+
     # Add bonds
     for bond in canvas_json.get("bonds", []):
         src_id = bond["source"]
         tgt_id = bond["target"]
         b_type_num = bond.get("type", 1)
-        
+
         if src_id not in atom_id_to_idx or tgt_id not in atom_id_to_idx:
             continue
-            
+
         src_idx = atom_id_to_idx[src_id]
         tgt_idx = atom_id_to_idx[tgt_id]
-        
+
         # Map bond type
         if b_type_num == 1:
             bt = Chem.BondType.SINGLE
@@ -392,10 +378,10 @@ def canvas_json_to_rdkit_mol(canvas_json: dict) -> Chem.Mol:
             bt = Chem.BondType.TRIPLE
         else:
             bt = Chem.BondType.SINGLE
-            
+
         if rw_mol.GetBondBetweenAtoms(src_idx, tgt_idx) is None:
             rw_mol.AddBond(src_idx, tgt_idx, bt)
-            
+
     mol = rw_mol.GetMol()
     try:
         Chem.SanitizeMol(mol)
@@ -406,7 +392,7 @@ def canvas_json_to_rdkit_mol(canvas_json: dict) -> Chem.Mol:
             Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES)
         except Exception as e2:
             logger.error(f"Failed second-level sanitization: {e2}")
-            
+
     return mol
 
 
@@ -418,17 +404,17 @@ def canvas_json_to_2d_optimized(canvas_json: dict) -> dict:
     mol = canvas_json_to_rdkit_mol(canvas_json)
     if mol is None or mol.GetNumAtoms() == 0:
         return {"atoms": [], "bonds": []}
-    
+
     from rdkit.Chem import rdDepictor
     try:
         rdDepictor.Compute2DCoords(mol)
     except Exception as e:
         logger.error(f"Compute2DCoords failed: {e}")
         return canvas_json
-        
+
     conf = mol.GetConformer(0)
     canvas_atoms = []
-    
+
     original_atoms = canvas_json.get("atoms", [])
     for idx, atom_data in enumerate(original_atoms):
         if idx < mol.GetNumAtoms():
@@ -439,14 +425,14 @@ def canvas_json_to_2d_optimized(canvas_json: dict) -> dict:
                 "y": round(pos.y, 4),
                 "element": atom_data.get("element", "C")
             })
-            
+
     canvas_bonds = canvas_json.get("bonds", [])
-    
+
     # Scale factor: RDKit Compute2DCoords returns Angstrom-scale coords (0–5 range).
     # The canvas operates in pixel space, so multiply by 100 to spread atoms visibly,
     # matching the exact scaling used by the main SMILES→canvas pipeline in loadCanvasData.
     SCALE = 100.0
-    
+
     return {
         "atoms": [
             {
@@ -477,14 +463,14 @@ def mol_to_json_graph(mol: Chem.Mol) -> tuple[list[dict], list[dict]]:
     """Converts an RDKit Mol object into JSON graph arrays for the front-end canvas."""
     coords = []
     bonds = []
-    
+
     if mol is None:
         return coords, bonds
-        
+
     try:
         if mol.GetNumConformers() == 0:
             return coords, bonds
-            
+
         conf = mol.GetConformer(0)
         for i, atom in enumerate(mol.GetAtoms()):
             pos = conf.GetAtomPosition(i)
@@ -494,7 +480,7 @@ def mol_to_json_graph(mol: Chem.Mol) -> tuple[list[dict], list[dict]]:
                 "y": round(pos.y, 4),
                 "element": atom.GetSymbol()
             })
-            
+
         for bond in mol.GetBonds():
             bt = bond.GetBondType()
             b_type = 1
@@ -504,7 +490,7 @@ def mol_to_json_graph(mol: Chem.Mol) -> tuple[list[dict], list[dict]]:
                 b_type = 3
             elif bond.GetIsAromatic():
                 b_type = 4
-                
+
             bonds.append({
                 "source": bond.GetBeginAtomIdx() + 1,
                 "target": bond.GetEndAtomIdx() + 1,
@@ -512,5 +498,43 @@ def mol_to_json_graph(mol: Chem.Mol) -> tuple[list[dict], list[dict]]:
             })
     except Exception as e:
         logger.error(f"Error converting mol to JSON graph: {e}")
-        
+
     return coords, bonds
+
+
+def get_or_create_job_dir(user_id: Optional[str], job_id: Optional[str]) -> str:
+    if not job_id:
+        job_id = str(uuid.uuid4())
+    try:
+        uuid.UUID(job_id)
+    except Exception:
+        raise ValueError(f"Invalid job_id format: {job_id}. Must be a valid UUID.")
+
+    u_folder = user_id if user_id else "anonymous"
+    job_dir = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder, job_id))
+    expected_root = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder))
+    if not job_dir.startswith(expected_root):
+        raise ValueError("Path traversal detected in job directory construction.")
+
+    for sub in ["input", "scratch", "outputs"]:
+        os.makedirs(os.path.join(job_dir, sub), exist_ok=True)
+    return job_dir
+
+
+def find_job_dir(user_id: Optional[str], job_id: Optional[str]) -> str:
+    if not job_id:
+        raise ValueError("job_id is required")
+    try:
+        uuid.UUID(job_id)
+    except Exception:
+        raise ValueError(f"Invalid job_id format: {job_id}. Must be a valid UUID.")
+
+    u_folder = user_id if user_id else "anonymous"
+    job_dir = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder, job_id))
+    expected_root = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder))
+    if not job_dir.startswith(expected_root):
+        raise ValueError("Path traversal detected in job directory construction.")
+
+    if not os.path.exists(job_dir):
+        raise FileNotFoundError(f"Job directory not found for job {job_id}")
+    return job_dir

@@ -1,6 +1,7 @@
 import os  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
+import uuid  # noqa: E402
 import logging  # noqa: E402
 from typing import Dict, Any, Protocol, Optional, TypedDict, List  # noqa: E402
 
@@ -52,7 +53,7 @@ class LocalOpenMMBackend:
     """Runs simulated OpenMM directly on this machine's CPU/GPU."""
     def run_md(self, structure_path: str, n_steps: int, task_instance: Any = None) -> MDResult:
         logger.info(f"LocalOpenMMBackend: starting simulation with {n_steps} steps on {structure_path}")
-        
+
         # Simulate progress updates
         for step in range(1, 6):
             percent = int((step / 5) * 100)
@@ -64,7 +65,7 @@ class LocalOpenMMBackend:
                     meta={"percent": percent, "message": message}
                 )
             time.sleep(1) # Simulated compute time
-            
+
         svg = """
         <svg viewBox="0 0 400 150" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;background:#0f172a;border-radius:4px;padding:10px;margin-top:8px;">
             <text x="10" y="20" fill="#94a3b8" font-size="12" font-family="monospace">Potential Energy (kJ/mol)</text>
@@ -76,7 +77,7 @@ class LocalOpenMMBackend:
 
         return MDResult(
             ok=True,
-            message=f"Successfully completed local OpenMM simulation of {n_steps} steps.",
+            message=f"Completed the local MD workflow demonstration with {n_steps} progress steps.",
             files={},
             duration_seconds=5.0,
             plot_svg=svg
@@ -84,9 +85,8 @@ class LocalOpenMMBackend:
 
 class RemoteHTTPBackend:
     """Forwards MD task to a remote HPC cluster via a REST call."""
-    def __init__(self, endpoint: str = "https://hpc-cluster.example.edu/api/submit", auth_token: str = ""):
+    def __init__(self, endpoint: str = "https://hpc-cluster.example.edu/api/submit", auth_token: Optional[str] = None):
         self.endpoint = endpoint
-        # Read auth token from environment — never hardcode credentials
         self.auth_token = auth_token or os.environ.get("HPC_AUTH_TOKEN", "")
 
     def run_md(self, structure_path: str, n_steps: int, task_instance: Any = None) -> MDResult:
@@ -103,7 +103,7 @@ class RemoteHTTPBackend:
                 meta={"percent": 60, "message": "Job queued in remote SLURM manager."}
             )
         time.sleep(1)
-        
+
         return MDResult(
             ok=True,
             message=f"HPC compute job finished successfully on remote host. (Endpoint: {self.endpoint})",
@@ -121,7 +121,7 @@ class CloudLambdaBackend:
                 meta={"percent": 50, "message": "Invoking serverless Lambda container..."}
             )
         time.sleep(1.5)
-        
+
         return MDResult(
             ok=True,
             message="Serverless simulation task completed successfully.",
@@ -143,13 +143,13 @@ def get_compute_backend() -> ComputeBackend:
 
 # Celery Tasks
 @celery_app.task(bind=True)
-def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94") -> Dict[str, Any]:
+def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94", user_id: Optional[str] = None, job_id: Optional[str] = None) -> Dict[str, Any]:
     """
-    Background 3D embedding and force-field geometry optimization (MMFF94 / UFF / OPLS-AA).
+    Background 3D embedding and force-field geometry optimization using MMFF94, MMFF94s, or UFF.
     """
     logger.info(f"Task run_3d_optimization_task started for SMILES: {smiles} with ForceField: {force_field}")
     self.update_state(state="PROGRESS", meta={"percent": 10, "message": "Validating molecule structures..."})
-    
+
     from rdkit import Chem
     from app.services import (
         optimize_conformer_3d,
@@ -161,52 +161,59 @@ def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94") -> 
         compute_gasteiger_charges
     )
     import torch
-    
+
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         raise ValueError(f"Invalid SMILES string: {smiles}")
-        
+
     self.update_state(state="PROGRESS", meta={"percent": 30, "message": f"Generating 3D Coordinates via ETKDGv3 & {force_field}..."})
-    
+
     # Keep pre-minimization copy for RMSD calculation
     mol_h_raw = Chem.AddHs(mol)
     try:
         from rdkit.Chem import AllChem
         AllChem.EmbedMolecule(mol_h_raw, AllChem.ETKDGv3())
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning(f"Pre-minimization conformer embedding failed: {exc}")
 
     mol_h = optimize_conformer_3d(mol, force_field=force_field)
-    
+
     # Calculate minimization RMSD (pre-minimization vs post-minimization)
     min_rmsd = compute_conformer_rmsd(mol_h_raw, mol_h)
     gasteiger_chg = compute_gasteiger_charges(mol_h)
     ff_used = mol_h.GetProp("_ForceFieldUsed") if mol_h.HasProp("_ForceFieldUsed") else force_field
-    
+
+    from app.services.cheminformatics import get_or_create_job_dir
+    u_id = user_id or "anonymous"
+    j_id = job_id or str(uuid.uuid4())
+    job_dir = get_or_create_job_dir(u_id, j_id)
+    out_dir = os.path.join(job_dir, "outputs")
+    os.makedirs(out_dir, exist_ok=True)
+
     self.update_state(state="PROGRESS", meta={"percent": 60, "message": "Writing outputs (SDF/XYZ/MOL2)..."})
-    sdf_path = "molecule.sdf"
-    xyz_path = "molecule.xyz"
-    mol2_path = "molecule.mol2"
+    sdf_path = os.path.join(out_dir, "molecule.sdf")
+    xyz_path = os.path.join(out_dir, "molecule.xyz")
+    mol2_path = os.path.join(out_dir, "molecule.mol2")
     write_all_conformers(mol_h, sdf_path, xyz_path, mol2_path)
-    
+
     self.update_state(state="PROGRESS", meta={"percent": 80, "message": "Running PyTorch fluctuation inference..."})
     conf = mol_h.GetConformer()
     positions = []
     for i in range(mol_h.GetNumAtoms()):
         pos = conf.GetAtomPosition(i)
         positions.append([pos.x, pos.y, pos.z])
-        
+
     pos_tensor = torch.tensor(positions, dtype=torch.float32)
     node_features = get_one_hot_nodes(mol_h)
-    
+
     predictor = MDRepoPredictor()
     predictor.eval()
     with torch.no_grad():
         predictions = predictor(pos_tensor, node_features)
-        
+
     self.update_state(state="PROGRESS", meta={"percent": 95, "message": "Profiling ADME descriptors..."})
     adme_desc = calculate_adme_descriptors(mol_h)
-    
+
     # predictions is a dict of tensors: {rmsf, sasa, bfactor, charge, homo_lumo_gap}
     def _to_list(v):
         """Convert a tensor or scalar to a JSON-serialisable Python type."""
@@ -232,14 +239,13 @@ def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94") -> 
     }
 
 @celery_app.task(bind=True)
-def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = None, ligand_resname: str = "SKETCH", ligand_chain: Optional[str] = None, ligand_seq: Optional[int] = None) -> Dict[str, Any]:
+def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = None, ligand_resname: str = "SKETCH", ligand_chain: Optional[str] = None, ligand_seq: Optional[int] = None, user_id: Optional[str] = None, job_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Background non-covalent ligand-protein interaction profiling.
     """
     logger.info(f"Task run_interaction_profiling_task started for PDB ID: {pdb_id}")
     self.update_state(state="PROGRESS", meta={"percent": 5, "message": "Initializing interaction profile..."})
-    
-    from rdkit import Chem
+
     from app.services import (
         fetch_pdb_file,
         parse_pdb_structure,
@@ -256,38 +262,48 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = No
         self.update_state(state="PROGRESS", meta={"percent": 10, "message": "No PDB selected. Auto-detecting repurposing target..."})
         targets = find_repurposing_targets(smiles)
         valid_target = next((t for t in targets if t.get("pdb_id") and t.get("pdb_id") != "N/A"), None)
-        
+
         if valid_target:
             pdb_id = valid_target["pdb_id"]
             self.update_state(state="PROGRESS", meta={"percent": 15, "message": f"Found target {pdb_id} ({valid_target['target_name']})."})
         else:
             pdb_id = "1OPJ"
-            
+
     # Guarantee pdb_id is a string at this point
     final_pdb_id = str(pdb_id) if pdb_id else "1OPJ"
 
     filepath = fetch_pdb_file(final_pdb_id)
     self.update_state(state="PROGRESS", meta={"percent": 30, "message": "Parsing PDB structure details..."})
     struct = parse_pdb_structure(filepath)
-    
+
+    from app.services.cheminformatics import get_or_create_job_dir
+    u_id = user_id or "anonymous"
+    j_id = job_id or str(uuid.uuid4())
+    job_dir = get_or_create_job_dir(u_id, j_id)
+    out_dir = os.path.join(job_dir, "outputs")
+    os.makedirs(out_dir, exist_ok=True)
+    ligand_sdf_path = os.path.join(out_dir, "molecule.sdf")
+
     if ligand_resname == "SKETCH":
         self.update_state(state="PROGRESS", meta={"percent": 45, "message": f"Auto-docking sketched molecule into {final_pdb_id}..."})
-        dock_res = dock_molecule(ligand_sdf_path="molecule.sdf", receptor_pdb_path=filepath, exhaustiveness=2, num_modes=1)
-        if dock_res.get("ok") and dock_res.get("poses"):
-            shutil.copy(dock_res["poses"][0]["sdf_file"], "molecule.sdf")
+        if os.path.exists(ligand_sdf_path):
+            dock_res = dock_molecule(ligand_sdf_path=ligand_sdf_path, receptor_pdb_path=filepath, exhaustiveness=2, num_modes=1)
+            if dock_res.get("ok") and dock_res.get("poses"):
+                shutil.copy(dock_res["poses"][0]["sdf_file"], os.path.join(out_dir, "docked_poses.sdf"))
 
     try:
         ligand_atoms, pocket_residues = extract_pocket_residues(
-            struct, ligand_resname, 
-            ligand_chain if ligand_chain else None, 
-            ligand_seq if ligand_seq else None
+            struct, ligand_resname,
+            ligand_chain if ligand_chain else None,
+            ligand_seq if ligand_seq else None,
+            sdf_path=ligand_sdf_path
         )
     except Exception:
         ligand_atoms, pocket_residues = [], []
-    
+
     self.update_state(state="PROGRESS", meta={"percent": 80, "message": "Mapping physical interaction criteria..."})
     profile = detect_interactions(ligand_atoms, pocket_residues)
-    
+
     # 2D coordinates layout mapping
     mol = smiles_to_rdkit_mol(smiles)
     ligand_2d = None
@@ -296,7 +312,7 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = No
         from app.services.cheminformatics import mol_to_json_graph
         coords, bonds = mol_to_json_graph(mol)
         ligand_2d = {"atoms": coords, "bonds": bonds}
-        
+
     serializable_profile = []
     for item in profile:
         serializable_profile.append({
@@ -328,10 +344,10 @@ def run_openmm_md_task(self, structure_path: str, n_steps: int) -> Dict[str, Any
     """
     logger.info(f"Task run_openmm_md_task started for {structure_path} with {n_steps} steps.")
     self.update_state(state="PROGRESS", meta={"percent": 5, "message": "Initializing compute backend strategy..."})
-    
+
     backend = get_compute_backend()
     result = backend.run_md(structure_path, n_steps, task_instance=self)
-    
+
     return result.to_dict()
 
 @celery_app.task(bind=True)
@@ -346,7 +362,7 @@ def run_quantum_task(self, smiles: str, method: str) -> Dict[str, Any]:
     time.sleep(1)
     self.update_state(state="PROGRESS", meta={"percent": 80, "message": "Optimizing electronic density matrices..."})
     time.sleep(0.5)
-    
+
     return {
         "ok": True,
         "smiles": smiles,

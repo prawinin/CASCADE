@@ -1,5 +1,4 @@
 import logging  # noqa: E402
-import subprocess  # noqa: E402
 import requests  # noqa: E402
 from typing import Optional  # noqa: E402
 
@@ -13,54 +12,39 @@ from config import get_config  # noqa: E402
 
 config = get_config()
 
-# Global reference to running PyMOL subprocess
-pymol_process: Optional[subprocess.Popen] = None
-
-# Request timeout constants
-# Raised to 60s to accommodate Ollama cold-start model loading latency
 OLLAMA_TIMEOUT = 60.0
 PYMOL_LISTEN_TIMEOUT = float(config.PYMOL_LISTEN_TIMEOUT)
 
-def get_pymol_process() -> Optional[subprocess.Popen]:
-    """
-    Retrieves or spawns the local PyMOL visualizer pipeline.
-    
-    Runs 'pymol -p' to listen to Python commands via stdin.
-    Returns None if PyMOL is not available or fails to spawn.
-    
-    Returns:
-        PyMOL subprocess.Popen object or None if unavailable
-    """
-    global pymol_process
+def get_pymol_process() -> None:
+    """Return no process because visualization is handled by 3Dmol.js."""
     if not config.PYMOL_ENABLED:
         logger.info("PyMOL integration is disabled by configuration.")
         return None
-
-    # Desktop PyMOL subprocess launch removed.
-    # The 3D viewer is now handled entirely by 3Dmol.js in the browser.
-    # This function is kept for API compatibility but always returns None.
     return None
 
 
-def fallback_pymol_mapper(prompt: str) -> str:
+def map_prompt_to_pymol_commands(prompt: str, structure_filename: Optional[str] = None) -> str:
     """
     Double-insurance local translation dictionary.
-    
+
     Invoked if Ollama server is offline or model is not loaded.
     Translates standard molecular instructions directly to PyMOL APIs.
-    
+
     Args:
         prompt: User visualization request in natural language
-    
+        structure_filename: Optional filename of the target structure
+
     Returns:
         String of PyMOL commands, one per line
     """
     prompt_l = prompt.lower()
     commands = []
-    
+
+    target_file = structure_filename if structure_filename else "target_structure.sdf"
+
     # Analyze commands
     if "load" in prompt_l or "open" in prompt_l:
-        commands.append("load molecule.sdf")
+        commands.append(f"load {target_file}")
     if "stick" in prompt_l or "wire" in prompt_l:
         commands.append("show sticks")
         commands.append("hide lines")
@@ -83,14 +67,14 @@ def fallback_pymol_mapper(prompt: str) -> str:
     if "rotate" in prompt_l or "turn" in prompt_l:
         commands.append("turn y, 90")
     if "bg" in prompt_l or "background" in prompt_l:
-        if "white" in prompt_l: 
+        if "white" in prompt_l:
             commands.append("bg_color white")
-        else: 
+        else:
             commands.append("bg_color black")
 
     if not commands:
-        # Default load and sticks
-        commands.extend(["load molecule.sdf", "show sticks", "zoom"])
+        target = structure_filename if structure_filename else "all"
+        commands.extend([f"show sticks {target}", f"zoom {target}"])
 
     return "\n".join(commands)
 
@@ -98,13 +82,13 @@ def fallback_pymol_mapper(prompt: str) -> str:
 def query_ollama_for_pymol(prompt: str) -> str:
     """
     Queries local Ollama qwen2.5-coder:7b server to generate raw PyMOL commands.
-    
+
     Falls back to local fallback_pymol_mapper if offline or fails.
     Enforces strict timeout to prevent UI hangs.
-    
+
     Args:
         prompt: User visualization request in natural language
-    
+
     Returns:
         String of PyMOL commands (either from Ollama or fallback mapper)
     """
@@ -122,7 +106,7 @@ def query_ollama_for_pymol(prompt: str) -> str:
 
     if not config.OLLAMA_ENABLED:
         logger.info("Ollama integration is disabled by configuration. Using local PyMOL mapper.")
-        return fallback_pymol_mapper(prompt)
+        return map_prompt_to_pymol_commands(prompt)
 
     try:
         response = requests.post(  # nosec B113
@@ -152,10 +136,10 @@ def query_ollama_for_pymol(prompt: str) -> str:
             raise Exception(f"HTTP {response.status_code}: {response.text[:200]}")
     except requests.Timeout:
         logger.warning(f"llama.cpp request timed out ({config.OLLAMA_TIMEOUT}s). Using fallback.")
-        return fallback_pymol_mapper(prompt)
+        return map_prompt_to_pymol_commands(prompt)
     except Exception as e:
         logger.warning(f"llama.cpp server unavailable. Triggering fallback. Error: {e}")
-        return fallback_pymol_mapper(prompt)
+        return map_prompt_to_pymol_commands(prompt)
 
 
 def execute_pymol_commands(commands_text: str) -> bool:

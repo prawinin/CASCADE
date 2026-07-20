@@ -9,7 +9,7 @@ Setup: Download gnina binary from https://github.com/gnina/gnina/releases
 
 import os  # noqa: E402
 import logging  # noqa: E402
-import subprocess  # noqa: E402
+import subprocess  # nosec B404
 from typing import Dict, Any, List  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.GNINADocking")
@@ -37,6 +37,7 @@ def dock_molecule(
     exhaustiveness: int = 8,
     num_modes: int = 9,
     cnn_scoring: str = "rescore",  # "none", "rescore", or "refinement"
+    output_dir: str = None,
 ) -> Dict[str, Any]:
     """
     Run GNINA docking of a ligand against a receptor.
@@ -49,6 +50,7 @@ def dock_molecule(
         exhaustiveness: Search exhaustiveness (higher = more thorough but slower)
         num_modes: Number of binding poses to generate
         cnn_scoring: CNN scoring mode — "rescore" uses CNN to re-rank Vina poses
+        output_dir: Isolated output directory
 
     Returns:
         Dict with docking results including poses and scores
@@ -59,8 +61,10 @@ def dock_molecule(
             "error": "GNINA binary not found. Download from https://github.com/gnina/gnina/releases and place in project root."
         }
 
-    output_sdf = os.path.join(DOCKING_OUTPUT_DIR, "docked_poses.sdf")
-    log_path = os.path.join(DOCKING_OUTPUT_DIR, "docking_log.txt")
+    out_dir = output_dir or DOCKING_OUTPUT_DIR
+    os.makedirs(out_dir, exist_ok=True)
+    output_sdf = os.path.join(out_dir, "docked_poses.sdf")
+    log_path = os.path.join(out_dir, "docking_log.txt")
 
     cmd = [
         GNINA_PATH,
@@ -82,7 +86,7 @@ def dock_molecule(
     logger.info(f"Running GNINA: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603
             cmd,
             capture_output=True,
             text=True,

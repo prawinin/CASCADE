@@ -16,7 +16,6 @@
 
 ### Pylint (Deep Code Smell & Architecture Detector)
 **Status:** **Passed (Score: 8.14/10 - "Good" Category)**
-* **Previous State:** 5.99/10
 * **Remediation Details:**
   * **Code Duplication (R0801):** Extracted identical coordinate-parsing and 3D molecule processing logic from `app/main.py` and `app/tasks/compute_tasks.py` into a centralized, modular `cheminformatics.py` service.
   * **Configuration Tuning:** Created a strict `.pylintrc` to ignore expected dynamic web-framework boundaries and decouple script linting from core application metrics.
@@ -34,9 +33,9 @@
 ### Radon (Cyclomatic Complexity)
 **Status:** **Passed (Average Complexity: A/B)**
 * **Remediation Details:**
-  * **`interaction_profiler.py` (Improved from F to B):** Deconstructed the monolithic `detect_interactions` handler into highly modular, decoupled private helper functions (`_find_ligand_rings`, `_find_h_and_halogen_bonds`, etc.).
-  * **`pdb_parser.py` (Improved from D to B):** Streamlined the `extract_pocket_residues` algorithm into cleaner, single-responsibility extraction methods.
-  * **`drug_database.py` (Improved from D to B):** Re-architected `fast_repurposing_search` by extracting result-building loops into modular functions.
+  * **`interaction_profiler.py`:** Deconstructed the monolithic `detect_interactions` handler into highly modular, decoupled private helper functions (`_find_ligand_rings`, `_find_h_and_halogen_bonds`, etc.).
+  * **`pdb_parser.py`:** Streamlined the `extract_pocket_residues` algorithm into cleaner, single-responsibility extraction methods.
+  * **`drug_database.py`:** Re-architected `fast_repurposing_search` by extracting result-building loops into modular functions.
   * **`main.py`:** Simplified `mcs_align` utilizing the shared parsing utilities.
 
 ---
@@ -45,7 +44,6 @@
 
 ### Bandit (Vulnerability Scanner)
 **Status:** **Passed (0 High, 0 Medium, 0 Low)**
-* **Previous State:** 5 Medium Warnings, 8 Low Warnings
 * **Remediation Details:**
   * **[B104] Interface Binding:** Removed the hardcoded open internet bind (`0.0.0.0`) in `app/config.py` in favor of a secure local development bind (`127.0.0.1`).
   * **[B108] Temporary Storage:** Replaced insecure and unportable `/tmp` paths with Python's secure, cross-platform `tempfile.gettempdir()`.
@@ -58,7 +56,6 @@
 
 ### Mypy (Strict Type Checking)
 **Status:** **Passed (Zero Errors)**
-* **Previous State:** 83 Errors
 * **Remediation Details:**
   * Cleaned up extensive `Optional` assignment errors, dict typings, and missing `TypedDict` declarations in the heavy compute tasks.
   * Enforced robust handling of nullable types in `compute_tasks.py` and `pdb_repurposing.py`.

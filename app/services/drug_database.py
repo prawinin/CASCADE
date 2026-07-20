@@ -188,8 +188,8 @@ def get_autocomplete_suggestions(prefix: str, limit: int = 10) -> List[Dict[str,
             ).fetchone()
             if row:
                 suggestions.append({"name": syn, "smiles": row["smiles"]})
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug(f"Synonym lookup failed for {inn}: {exc}")
 
     # 2. Query database for standard INN matches starting with the prefix
     try:
@@ -241,7 +241,7 @@ def _build_repurposing_results(conn, sorted_idx, indices, scores, top_k: int) ->
                         "pdb_id": t["pdb_id"] or "N/A",
                         "target_name": t["target_name"] or t["gene"] or "Unknown target",
                         "similarity": round(similarity, 4),
-                        "binding_probability": f"{similarity * 100:.1f}%",
+                        "similarity_percentage": f"{similarity * 100:.1f}%",
                         "affinity_estimate": f"{affinity_kcal:.2f} kcal/mol",
                         "function": f"Gene: {t['gene'] or 'N/A'} | Chain: {t['chain_id'] or 'N/A'}",
                         "approved_by": drug_row["approved_by"] or "Unknown"
@@ -252,7 +252,7 @@ def _build_repurposing_results(conn, sorted_idx, indices, scores, top_k: int) ->
                     "pdb_id": "N/A",
                     "target_name": "No PDB target recorded",
                     "similarity": round(similarity, 4),
-                    "binding_probability": f"{similarity * 100:.1f}%",
+                    "similarity_percentage": f"{similarity * 100:.1f}%",
                     "affinity_estimate": f"{affinity_kcal:.2f} kcal/mol",
                     "function": "No mechanism-of-action target available",
                     "approved_by": drug_row["approved_by"] or "Unknown"

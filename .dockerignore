@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv/
 env/
 venv/
 ENV/
@@ -26,6 +27,27 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Workspace & Data Storage
+jobs/
+scratch/
+data/users.sqlite
+data/*.sqlite-journal
+data/action_logs/
+molecule.sdf
+molecule.xyz
+molecule.mol2
+workspace_progress.json
+git.log
+tests/
+AUDIT_REPORT.md
+PRODUCTION_READINESS_CHECKLIST.md
+Project_kinetic_sketch.pdf
+.emerge.yml
+emerge-export/
+dependency-graph.html
+kinetic_sketch_git.cc.json.gz
+repo-files.txt
+
 # Git
 .git/
 .gitignore
@@ -47,7 +69,6 @@ pip-delete-this-directory.txt
 htmlcov/
 .tox/
 .hypothesis/
-.pytest_cache/
 
 # Documentation
 docs/_build/
@@ -67,9 +88,6 @@ npm-debug.log
 .env
 .env.local
 .env.*.local
-README.md
-LICENSE
-*.md
 .github/
 
 # Cloudflare Tunnel binaries

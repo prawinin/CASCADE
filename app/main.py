@@ -23,7 +23,7 @@ services_dir = os.path.join(current_dir, "services")
 if services_dir not in sys.path:
     sys.path.insert(0, services_dir)
 
-from config import get_config  # noqa: E402
+from app.config import get_config  # noqa: E402
 
 config = get_config()
 
@@ -93,14 +93,11 @@ except ImportError:
 
 try:
     from taipy.gui import Gui, Html, State
-    from flask import Flask, jsonify, request
 except ImportError:
-    logger.error("Taipy GUI framework not available!")
+    logger.info("Taipy GUI is not installed; using the Flask web interface.")
     Gui = None
     Html = None
     State = None
-    Flask = None
-    jsonify = None
 
 try:
     from tqdm import tqdm
@@ -115,7 +112,7 @@ checkpoint_manager = CheckpointManager()
 # TAIPY GUI REACTIVE VARIABLE BINDINGS
 canvas_payload = "{}"
 smiles_input = ""
-smiles_submit_token = ""
+smiles_submit_token = ""  # nosec B105
 last_smiles_submission_key = ""
 chat_prompt = ""
 chat_log_html = ""
@@ -127,7 +124,7 @@ checkpoint_logs_html = "<div class='checkpoint-log-line'><span class='checkpoint
 def log_checkpoint_to_ui(state: State, message: str, level: str = "success") -> None:
     """
     Appends a formatted log boundary line to the checkpoint GUI viewport.
-    
+
     Args:
         state: Taipy GUI state object
         message: Log message to display
@@ -141,7 +138,7 @@ def log_checkpoint_to_ui(state: State, message: str, level: str = "success") -> 
         color_class = "checkpoint-error"
     elif level == "info":
         color_class = "checkpoint-time"
-    
+
     # Sanitize message to prevent HTML injection
     safe_message = html_module.escape(message)
     line_html = f"<div class='checkpoint-log-line'><span class='checkpoint-time'>[{time_str}]</span> <span class='{color_class}'>{safe_message}</span></div>"
@@ -151,14 +148,14 @@ def log_checkpoint_to_ui(state: State, message: str, level: str = "success") -> 
 def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
     """
     Coordinates conformational optimization and deep learning predictions.
-    
+
     Orchestrates the full pipeline: 3D embedding → MMFF94 minimization →
     file export → PyTorch inference → table rendering.
-    
+
     Args:
         state: Taipy GUI state object
         mol: RDKit Mol object to process
-    
+
     Returns:
         None (updates state variables instead)
     """
@@ -172,45 +169,53 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
         logger.error(f"Failed to generate SMILES: {e}")
         log_checkpoint_to_ui(state, "Error: Invalid molecular structure", "error")
         return
-    
+
     logger.info(f"Initiating modular dynamics pipeline for SMILES: {smiles}")
 
     state.predictions_html = "<div style='color: var(--text-secondary); font-size: 0.95rem;'><i class='fa-solid fa-spinner fa-spin' style='margin-right: 8px;'></i>Running structural dynamics optimization pipeline...</div>"
     state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem;'><i class='fa-solid fa-spinner fa-spin' style='margin-right: 8px;'></i>Searching 5,576 PDB targets...</div>"
 
 
+    u_id = getattr(state, "user_id", None) or "anonymous"
+    j_id = getattr(state, "job_id", None) or str(uuid.uuid4())
+    from app.services.cheminformatics import get_or_create_job_dir
+    from app.services import CheckpointManager
+    job_dir = get_or_create_job_dir(u_id, j_id)
+    out_dir = os.path.join(job_dir, "outputs")
+    os.makedirs(out_dir, exist_ok=True)
+    local_ckpt_mgr = CheckpointManager(os.path.join(out_dir, "workspace_progress.json"))
+    sdf_path = os.path.join(out_dir, "molecule.sdf")
+    xyz_path = os.path.join(out_dir, "molecule.xyz")
+    mol2_path = os.path.join(out_dir, "molecule.mol2")
+
     # Reset progress checkpoint to INITIALIZED
-    checkpoint_manager.save_checkpoint("INIT", {"smiles": smiles})
+    local_ckpt_mgr.save_checkpoint("INIT", {"smiles": smiles})
     log_checkpoint_to_ui(state, f"Starting compilation pipeline for SMILES: {smiles}", "info")
 
     try:
         # Step progress bar sequence for terminal view
         steps = ["Add Hydrogens & Embed", "MMFF94 Optimize", "Write Conformers", "Run Inference"]
         iterator = tqdm(steps, desc="Assembling Conformers") if tqdm is not None else steps
-        
+
         mol_h = None
-        
+
         for idx, step in enumerate(iterator):
             if idx == 0:
                 # 1. 3D Coordinates Conformation Embedding
                 mol_h = optimize_conformer_3d(mol)
-                checkpoint_manager.save_checkpoint("EMBED_3D")
+                local_ckpt_mgr.save_checkpoint("EMBED_3D")
                 log_checkpoint_to_ui(state, "Generated 3D coordinate conformation via ETKDGv3 and appended hydrogens.", "success")
-            
+
             elif idx == 1:
                 # 2. Conformer minimization (MMFF94) is already handled inside optimize_conformer_3d
-                checkpoint_manager.save_checkpoint("MINIMIZE_3D")
+                local_ckpt_mgr.save_checkpoint("MINIMIZE_3D")
                 log_checkpoint_to_ui(state, "Minimized conformer geometry using MMFF94 force field calculations.", "success")
 
             elif idx == 2:
                 # 3. Stream coordinate structures to SDF, XYZ, and Tripos MOL2 formats
-                sdf_path = "molecule.sdf"
-                xyz_path = "molecule.xyz"
-                mol2_path = "molecule.mol2"
-                
                 write_all_conformers(mol_h, sdf_path, xyz_path, mol2_path)
 
-                checkpoint_manager.save_checkpoint("WRITE_FILES", {
+                local_ckpt_mgr.save_checkpoint("WRITE_FILES", {
                     "sdf_path": sdf_path,
                     "xyz_path": xyz_path,
                     "mol2_path": mol2_path
@@ -222,7 +227,7 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
                 if mol_h is None or mol_h.GetNumAtoms() == 0:
                     log_checkpoint_to_ui(state, "Error: Invalid molecule for prediction", "error")
                     return
-                
+
                 conf = mol_h.GetConformer()
                 positions = []
                 for i in range(mol_h.GetNumAtoms()):
@@ -232,7 +237,7 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
                 pos_tensor = torch.tensor(positions, dtype=torch.float32)
                 node_features = get_one_hot_nodes(mol_h)
 
-                checkpoint_manager.save_checkpoint("EXTRACT_TENSORS")
+                local_ckpt_mgr.save_checkpoint("EXTRACT_TENSORS")
                 log_checkpoint_to_ui(
                     state,
                     f"Generated PyTorch tensors: Position shape={list(pos_tensor.shape)}, node features={list(node_features.shape)}",
@@ -246,13 +251,12 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
                     predictor = MDRepoPredictor()
                     predictor.eval()
 
-                # Move tensors to same device as model
                 try:
                     model_device = next(predictor.parameters()).device
                     pos_tensor = pos_tensor.to(model_device)
                     node_features = node_features.to(model_device)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"Could not detect predictor device: {exc}")
 
                 with torch.no_grad():
                     pred_dict = predictor(pos_tensor, node_features)
@@ -260,7 +264,7 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
                     predictions = {k: v.cpu() if isinstance(v, torch.Tensor) else v
                                    for k, v in pred_dict.items()}
 
-                checkpoint_manager.save_checkpoint("RUN_INFERENCE", {
+                local_ckpt_mgr.save_checkpoint("RUN_INFERENCE", {
                     "rmsf": predictions["rmsf"].tolist(),
                     "homo_lumo_gap": float(predictions["homo_lumo_gap"]),
                 })
@@ -268,7 +272,7 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
 
                 # Render multi-task predictions tables
                 render_predictions_table(state, mol_h, predictions)
-                
+
                 # Render dynamic PDB drug repurposing table
                 render_repurposing_table(state, smiles)
 
@@ -281,7 +285,7 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
 def render_predictions_table(state: State, mol: "Chem.Mol", predictions: dict) -> None:
     """
     Formats multi-task neural network predictions into a dynamic premium HTML table.
-    
+
     Args:
         state: Taipy GUI state object
         mol: RDKit Mol object with conformer
@@ -302,7 +306,7 @@ def render_predictions_table(state: State, mol: "Chem.Mol", predictions: dict) -
         f"  <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;'>"
         f"    <div>"
         f"      <span style='font-size:12px; font-weight:700; color:#1E293B;'>Quantum HOMO–LUMO Gap</span>"
-        f"      <span style='font-size:10px; color:#64748B; margin-left:8px; font-family:monospace;'>(GNN Learned Regression | Gasteiger-PM7 equivalent, ±0.5 eV accuracy)</span>"
+        f"      <span style='font-size:10px; color:#64748B; margin-left:8px; font-family:monospace;'>(GNN Learned Regression Prediction)</span>"
         f"    </div>"
         f"    <span style='font-size:15px; font-weight:800; font-family:monospace; color:{hl_color};'>{homo_lumo:.3f} eV</span>"
         f"  </div>"
@@ -320,13 +324,13 @@ def render_predictions_table(state: State, mol: "Chem.Mol", predictions: dict) -
     lines.append("<div style='font-size:10px; color:#64748B; margin-bottom:6px; font-family:monospace;'>Partial charges computed via <strong>Gasteiger-Marsili (PEOE algorithm)</strong> force field model (units: elementary charge e).</div>")
 
     lines.append("<table class='w-full min-w-[720px] table-fixed border-collapse text-xs'>")
-    
+
     # Colgroup
     lines.append("<colgroup>")
     for _ in range(10):  # Atom, El, X, Y, Z, 10ns, 1µs, SASA, B-factor, Charge
         lines.append("  <col />")
     lines.append("</colgroup>")
-    
+
     # Headers
     lines.append("<thead><tr>")
     headers = [
@@ -388,7 +392,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
     """
     Queries PDB repurposing targets using Morgan-Tanimoto similarity
     and formats them as a premium HTML table inside the GUI.
-    
+
     Args:
         state: Taipy GUI state object
         smiles: SMILES string of the molecule to match
@@ -399,12 +403,12 @@ def render_repurposing_table(state: State, smiles: str) -> None:
         logger.error(f"Error querying PDB repurposing targets: {e}")
         state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic; text-align: center; padding: 1rem;'>Unable to query PDB targets. Check logs.</div>"
         return
-    
+
     if not targets:
         state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic; text-align: center; padding: 1rem;'>No high-similarity PDB drug targets identified. Sketched molecule represents a novel chemical fragment!</div>"
         return
 
-    #  Deduplicate: group PDB entries by drug name 
+    #  Deduplicate: group PDB entries by drug name
     drug_cards: dict = {}
     for t in targets:
         key = t.get("matched_drug", "Unknown")
@@ -429,7 +433,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
         key=lambda c: (0 if c["pdbs"] else 1, -c["similarity"])
     )
 
-    #  Build card HTML 
+    #  Build card HTML
     lines: List[str] = []
     lines.append("<div style='display:flex; flex-direction:column; gap:0; padding:0;'>")
 
@@ -522,7 +526,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
         lines.append(
             f"<div style='padding:10px 12px 10px 12px; {border_bottom}'>"
 
-            #  Row 1: drug name + score 
+            #  Row 1: drug name + score
             f"  <div style='display:flex; align-items:flex-start; justify-content:space-between; gap:6px;'>"
             f"    <div style='font-size:12px; font-weight:600; color:#1E293B; "
             f"                line-height:1.35; flex:1; min-width:0; overflow:hidden; "
@@ -536,17 +540,17 @@ def render_repurposing_table(state: State, smiles: str) -> None:
             f"    </span>"
             f"  </div>"
 
-            #  Row 2: similarity bar 
+            #  Row 2: similarity bar
             f"  <div style='margin-top:5px; height:4px; border-radius:2px; background:#E2E8F0; overflow:hidden;'>"
             f"    <div style='width:{min(sim_pct, 100):.1f}%; height:100%; "
             f"               border-radius:2px; background:{bar_color}; "
             f"               transition:width 0.4s ease;'></div>"
             f"  </div>"
 
-            #  Row 3: PDB pills + target name 
+            #  Row 3: PDB pills + target name
             f"  {pdb_section}"
 
-            #  Row 4: affinity + approval badge 
+            #  Row 4: affinity + approval badge
             f"  <div style='display:flex; align-items:center; gap:6px; margin-top:5px; flex-wrap:wrap;'>"
             f"    <span style='font-size:10.5px; color:#64748B; font-family:monospace; "
             f"                 background:#F8FAFC; border:1px solid #E2E8F0; "
@@ -557,7 +561,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
             f"</div>"
         )
 
-    #  Dev Log & Search Computation Breakdown 
+    #  Dev Log & Search Computation Breakdown
     lines.append(
         f"<details style='margin-top:12px; border:1px solid #E2E8F0; border-radius:6px; background:#F8FAFC; padding:8px 12px; font-family:monospace; font-size:11px;'>"
         f"  <summary style='cursor:pointer; color:#0284C7; font-weight:700;'> Drug Discovery Computation Log &amp; Pipeline Breakdown</summary>"
@@ -653,10 +657,10 @@ def process_smiles_submission(state: State, smiles: str, submission_key: Optiona
 def on_chat_send(state: State) -> None:
     """
     Processes chat prompt through visualizer service connection APIs.
-    
+
     Translates user visualization requests to PyMOL commands via Ollama
     (with fallback to local mapper) and pipes to running PyMOL process.
-    
+
     Args:
         state: Taipy GUI state object
     """
@@ -666,7 +670,7 @@ def on_chat_send(state: State) -> None:
 
     # Sanitize and cap prompt length
     prompt = prompt.strip()[:2000]
-    
+
     # Append user bubble (sanitized)
     safe_prompt = html_module.escape(prompt)
     user_bubble = f"<div class='chat-message message-user'>{safe_prompt}</div>"
@@ -697,7 +701,7 @@ def on_chat_send(state: State) -> None:
         logger.info("Generated PyMOL command sequence: %s", commands_text)
         sys_bubble += "</div>"
         state.chat_log_html += sys_bubble
-    
+
     except Exception as e:
         logger.error(f"Error in chat handler: {e}")
         sys_bubble = "<div class='chat-message message-system' style='color: var(--accent-pink);'>Error processing request. Check logs.</div>"
@@ -710,11 +714,11 @@ def on_chat_send(state: State) -> None:
 def on_change(state: State, var_name: str, var_value: Any) -> None:
     """
     Central reactive event listener bridging sketch vectors and pasted SMILES inputs.
-    
+
     Handles two primary reactions:
     1. canvas_payload: RDKit mol reconstruction → pipeline execution
     2. smiles_input: SMILES parsing → 2D layout → pipeline execution
-    
+
     Args:
         state: Taipy GUI state object
         var_name: Name of the variable that changed
@@ -725,12 +729,12 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
             payload = json.loads(var_value)
             atoms = payload.get("atoms", [])
             bonds = payload.get("bonds", [])
-            
+
             # Validate molecule size (max 200 atoms for performance)
             if len(atoms) > 200:
                 log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
                 return
-            
+
             if not atoms:
                 state.smiles_input = ""
                 state.predictions_html = "<div style='color: var(--text-secondary); font-size: 0.95rem; font-style: italic;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div>"
@@ -740,7 +744,7 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
             # Reconstruct RDKit RWmol from canvas coordinates and bonds
             rw_mol = Chem.RWMol()
             atom_map = {}
-            
+
             for atom_data in atoms:
                 el = atom_data.get("element", "C")
                 try:
@@ -756,17 +760,17 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
                 2: Chem.BondType.DOUBLE,
                 3: Chem.BondType.TRIPLE
             }
-            
+
             for bond_data in bonds:
                 src = bond_data.get("source")
                 tgt = bond_data.get("target")
                 b_type = bond_data.get("type", 1)
-                
+
                 if src in atom_map and tgt in atom_map:
                     try:
                         rw_mol.AddBond(
-                            atom_map[src], 
-                            atom_map[tgt], 
+                            atom_map[src],
+                            atom_map[tgt],
                             bond_types.get(b_type, Chem.BondType.SINGLE)
                         )
                     except Exception as e:
@@ -780,13 +784,13 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
             except Exception:
                 log_checkpoint_to_ui(state, "Error: Invalid molecule structure", "error")
                 return
-            
+
             smiles = Chem.MolToSmiles(mol)
             state.smiles_input = smiles
-            
+
             # Execute computational dynamics pipeline
             run_molecular_pipeline(state, mol)
-            
+
         except json.JSONDecodeError as e:
             logger.debug(f"Canvas payload JSON parse error: {e}")
         except Exception as e:
@@ -800,7 +804,7 @@ def on_change(state: State, var_name: str, var_value: Any) -> None:
         process_smiles_submission(state, state.smiles_input, str(var_value))
 
 
-def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
+def build_smiles_response(state: Any, smiles: str, user_id: Optional[str] = None, job_id: Optional[str] = None) -> Dict[str, Any]:
     """Run the SMILES pipeline on a lightweight state object and return serializable output."""
     response_state = state
     if response_state is None:
@@ -811,6 +815,9 @@ def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
             repurposing_html=repurposing_html,
             checkpoint_logs_html=checkpoint_logs_html,
         )
+
+    response_state.user_id = user_id
+    response_state.job_id = job_id
 
     success = process_smiles_submission(
         response_state,
@@ -823,7 +830,7 @@ def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
     except Exception:
         canvas_payload_obj = {}
 
-    return {
+    res = {
         "ok": success,
         "smiles": smiles,
         "canvas_payload": canvas_payload_obj,
@@ -831,22 +838,253 @@ def build_smiles_response(state: Any, smiles: str) -> Dict[str, Any]:
         "repurposing_html": getattr(response_state, "repurposing_html", repurposing_html),
         "checkpoint_logs_html": getattr(response_state, "checkpoint_logs_html", checkpoint_logs_html),
     }
+    if job_id:
+        res["job_id"] = job_id
+    return res
 
-# SERVER RUN ENTRYPOINT
-# Pure Flask app — serves our index.html directly without Taipy's React shell
 import requests  # noqa: E402
-from flask import Flask, jsonify, request, send_from_directory  # noqa: E402
+import sqlite3  # noqa: E402
+import uuid  # noqa: E402
+import hashlib  # noqa: E402
+import hmac  # noqa: E402
+import functools  # noqa: E402
+from datetime import timedelta  # noqa: E402
+from flask import Flask, jsonify, request, send_from_directory, session  # noqa: E402
+
 flask_app = Flask(__name__, static_folder=os.path.join(current_dir, "static"))
+
+secret_key = os.environ.get("FLASK_SECRET_KEY")
+if not secret_key or len(secret_key) < 32:
+    raise RuntimeError("FLASK_SECRET_KEY must be set to a random value of at least 32 characters.")
+
+flask_app.secret_key = secret_key
+flask_app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV", "development") == "production",
+    SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
+
+@flask_app.after_request
+def add_security_headers(response):
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com "
+        "https://cdn.tailwindcss.com https://3dmol.org; style-src 'self' 'unsafe-inline' "
+        "https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data:; "
+        "connect-src 'self'; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com",
+    )
+    if flask_app.config.get("SESSION_COOKIE_SECURE"):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
+# Test dummy
+test_login_attempts = {}
+
+@flask_app.before_request
+def rate_limit_login():
+    if request.path == "/api/auth/login" and request.method == "POST":
+        ip = request.remote_addr
+        if flask_app.config.get("TESTING"):
+            import time
+            now = time.time()
+            attempts = test_login_attempts.get(ip, [])
+            attempts = [t for t in attempts if now - t < 60]
+            test_login_attempts[ip] = attempts
+            if len(attempts) >= 5:
+                return jsonify({"ok": False, "error": "Too many login attempts. Please try again in 1 minute."}), 429
+            attempts.append(now)
+            return
+
+        try:
+            import redis as redis_lib
+            from app.config import get_config
+            url = get_config().REDIS_URL
+            r = redis_lib.from_url(url, socket_connect_timeout=1, socket_timeout=1)
+            key = f"login_rate_{ip}"
+            current = r.get(key)
+            if current and int(current) >= 5:
+                return jsonify({"ok": False, "error": "Too many login attempts. Please try again in 1 minute."}), 429
+            pipe = r.pipeline()
+            pipe.incr(key)
+            pipe.expire(key, 60)
+            pipe.execute()
+        except Exception:
+            return jsonify({"ok": False, "error": "Authentication service unavailable (Redis offline)"}), 503
+
+DB_USERS_PATH = os.path.join(current_dir, "..", "data", "users.sqlite")
+os.makedirs(os.path.dirname(DB_USERS_PATH), exist_ok=True)
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+    return salt.hex() + ":" + pw_hash.hex()
+
+def check_password(password: str, hashed: str) -> bool:
+    try:
+        salt_hex, hash_hex = hashed.split(":")
+        salt = bytes.fromhex(salt_hex)
+        pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+        return hmac.compare_digest(pw_hash.hex(), hash_hex)
+    except Exception:
+        return False
+
+def init_users_db():
+    conn = sqlite3.connect(DB_USERS_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT UNIQUE,
+            password_hash TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS task_ownership (
+            task_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_users_db()
+
+def record_task_ownership(task_id: str, user_id: str):
+    conn = sqlite3.connect(DB_USERS_PATH)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO task_ownership (task_id, user_id) VALUES (?, ?)", (task_id, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_task_owner(task_id: str) -> Optional[str]:
+    conn = sqlite3.connect(DB_USERS_PATH)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id FROM task_ownership WHERE task_id = ?", (task_id,))
+        row = cursor.fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+@flask_app.before_request
+def check_auth():
+    if request.path.startswith("/api/") and not request.path.startswith("/api/auth/") and request.path != "/api/tasks/health":
+        if "user_id" not in session:
+            return jsonify({"ok": False, "error": "Authentication required"}), 401
+
+def login_required(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"ok": False, "error": "Authentication required"}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
+@flask_app.post("/api/auth/register")
+def register():
+    payload = request.get_json(silent=True) or {}
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Username and password are required"}), 400
+
+    if len(username) < 3 or len(username) > 32 or not all(c.isalnum() or c in "_-" for c in username):
+        return jsonify({"ok": False, "error": "Username must be 3-32 alphanumeric, underscore, or hyphen characters"}), 400
+
+    if len(password) < 12:
+        return jsonify({"ok": False, "error": "Password must be at least 12 characters long"}), 400
+
+    conn = sqlite3.connect(DB_USERS_PATH)
+    try:
+        cursor = conn.cursor()
+        pw_hash = hash_password(password)
+        user_id = str(uuid.uuid4())
+        cursor.execute("INSERT INTO users (id, username, password_hash) VALUES (?, ?, ?)", (user_id, username, pw_hash))
+        conn.commit()
+        return jsonify({"ok": True, "message": "User registered successfully"})
+    except sqlite3.IntegrityError:
+        return jsonify({"ok": False, "error": "Username already exists"}), 400
+    finally:
+        conn.close()
+
+@flask_app.post("/api/auth/login")
+def login():
+    payload = request.get_json(silent=True) or {}
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Username and password are required"}), 400
+
+    conn = sqlite3.connect(DB_USERS_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, password_hash FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row and check_password(password, row[1]):
+        session.permanent = True
+        session["user_id"] = row[0]
+        session["username"] = username
+        return jsonify({"ok": True, "message": "Login successful", "user": {"id": row[0], "username": username}})
+
+    return jsonify({"ok": False, "error": "Invalid username or password"}), 401
+
+@flask_app.post("/api/auth/logout")
+def logout():
+    session.clear()
+    return jsonify({"ok": True, "message": "Logged out successfully"})
+
+@flask_app.get("/api/auth/me")
+def me():
+    if "user_id" in session:
+        return jsonify({"ok": True, "user": {"id": session["user_id"], "username": session["username"]}})
+    return jsonify({"ok": False, "error": "Not authenticated"}), 401
+
+@flask_app.get("/api/download/<job_id>/<file_type>")
+def download_job_file(job_id, file_type):
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"ok": False, "error": "Not authenticated"}), 401
+
+    from app.services.cheminformatics import find_job_dir
+    try:
+        job_dir = find_job_dir(user_id, job_id)
+    except ValueError as ve:
+        return jsonify({"ok": False, "error": str(ve)}), 400
+    except FileNotFoundError as fnfe:
+        return jsonify({"ok": False, "error": str(fnfe)}), 404
+
+    file_mapping = {
+        "sdf": ("outputs", "molecule.sdf"),
+        "xyz": ("outputs", "molecule.xyz"),
+        "mol2": ("outputs", "molecule.mol2"),
+        "docked_poses_sdf": ("outputs", "docked_poses.sdf"),
+        "docking_log": ("outputs", "docking_log.txt")
+    }
+
+    if file_type not in file_mapping:
+        return jsonify({"ok": False, "error": "Invalid file type"}), 400
+
+    sub_dir, filename = file_mapping[file_type]
+    directory = os.path.join(job_dir, sub_dir)
+
+    if not os.path.exists(os.path.join(directory, filename)):
+        return jsonify({"ok": False, "error": "File not found"}), 404
+
+    return send_from_directory(directory, filename, as_attachment=False)
 
 gui_dir = os.path.join(current_dir, "gui")
 
 @flask_app.route('/static/<filename>')
 def serve_static_files(filename):
-    # Check if the file is in the workspace root (e.g. molecule.sdf)
-    workspace_file = os.path.join(os.getcwd(), filename)
-    if os.path.exists(workspace_file):
-        return send_from_directory(os.getcwd(), filename)
-    # Otherwise serve from app's static folder
     return send_from_directory(flask_app.static_folder, filename)
 
 # Serve index.html at root
@@ -949,7 +1187,13 @@ def analyze_smiles():
     smiles = str(payload.get("smiles", "")).strip()
     if not smiles:
         return jsonify({"ok": False, "error": "SMILES is required."}), 400
-    response = build_smiles_response(None, smiles)
+
+    user_id = session.get("user_id")
+    job_id = payload.get("job_id") or str(uuid.uuid4())
+    from app.services.cheminformatics import get_or_create_job_dir
+    get_or_create_job_dir(user_id, job_id)
+
+    response = build_smiles_response(None, smiles, user_id=user_id, job_id=job_id)
     status_code = 200 if response.get("ok") else 422
     return jsonify(response), status_code
 
@@ -1012,39 +1256,99 @@ def descriptors():
 @flask_app.post("/api/pdb/upload")
 def pdb_upload():
     """Upload a custom PDB file for local profiling and docking."""
+    import gzip
+    import uuid as _uuid
     from app.services import parse_pdb_structure, get_ligands_in_structure
-    from app.services.pdb_parser import PDB_CACHE_DIR
-    
+    from app.services.cheminformatics import get_or_create_job_dir
+
+    content_length = request.content_length
+    if content_length is not None and content_length > 5 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "File size exceeds limit of 5 MB."}), 413
+
     if "file" not in request.files:
         return jsonify({"ok": False, "error": "No file uploaded"}), 400
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"ok": False, "error": "No file selected"}), 400
-    
-    # Validate file extension
+
+    filename = file.filename
+    if filename.lower().endswith(".pdb.gz"):
+        ext = ".pdb.gz"
+    else:
+        ext = os.path.splitext(filename)[1].lower()
+
     allowed_extensions = {".pdb", ".ent", ".pdb.gz"}
-    ext = os.path.splitext(file.filename)[1].lower()
     if ext not in allowed_extensions:
-        return jsonify({"ok": False, "error": f"Unsupported file type: {ext}. Upload a .pdb file."}), 400
-    
+        return jsonify({"ok": False, "error": f"Unsupported file type: {ext}. Upload a .pdb or .pdb.gz file."}), 400
+
+    max_decompressed_size = 10 * 1024 * 1024
+    content_bytes = b""
     try:
-        # Save to pdb_cache with a sanitized name
-        safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in file.filename)
-        save_path = os.path.join(PDB_CACHE_DIR, safe_name)
-        file.save(save_path)
-        logger.info(f"Custom PDB uploaded: {safe_name} → {save_path}")
-        
+        if ext == ".pdb.gz":
+            try:
+                gzip_file = gzip.GzipFile(fileobj=file.stream)
+                while True:
+                    chunk = gzip_file.read(65536)
+                    if not chunk:
+                        break
+                    content_bytes += chunk
+                    if len(content_bytes) > max_decompressed_size:
+                        return jsonify({"ok": False, "error": "Decompressed file size exceeds limit of 10 MB."}), 400
+            except Exception as ex:
+                return jsonify({"ok": False, "error": f"Failed to decompress file: {ex}"}), 400
+        else:
+            content_bytes = file.read(max_decompressed_size + 1)
+            if len(content_bytes) > max_decompressed_size:
+                return jsonify({"ok": False, "error": "File size exceeds limit of 10 MB."}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Error reading upload stream: {e}"}), 400
+
+    try:
+        content_str = content_bytes.decode("utf-8", errors="ignore")
+        lines = content_str.splitlines()
+
+        pdb_keywords = {"HEADER", "TITLE", "REMARK", "ATOM", "HETATM", "CRYST1", "SEQRES", "HELIX", "SHEET"}
+        is_pdb = any(any(line.startswith(kw) for kw in pdb_keywords) for line in lines[:100])
+        if not is_pdb:
+            return jsonify({"ok": False, "error": "Invalid file content. Not a valid PDB structure file."}), 400
+
+        if len(lines) > 100000:
+            return jsonify({"ok": False, "error": "File contains too many records (max 100,000 allowed)."}), 400
+
+        atom_count = sum(1 for line in lines if line.startswith("ATOM") or line.startswith("HETATM"))
+        if atom_count > 50000:
+            return jsonify({"ok": False, "error": "File contains too many atoms (max 50,000 allowed)."}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Failed to verify file content structure: {e}"}), 400
+
+    try:
+        user_id = session.get("user_id")
+        job_id = request.form.get("job_id") or str(_uuid.uuid4())
+
+        job_dir = get_or_create_job_dir(user_id, job_id)
+
+        base_name = os.path.splitext(os.path.basename(filename))[0]
+        if base_name.lower().endswith(".pdb"):
+            base_name = base_name[:-4]
+
+        safe_name = "".join(c if c.isalnum() or c in "._-" else "_" for c in base_name) + ".pdb"
+        save_path = os.path.join(job_dir, "input", safe_name)
+
+        with open(save_path, "w", encoding="utf-8") as f_out:
+            f_out.write(content_str)
+
+        logger.info(f"Custom PDB uploaded securely: {safe_name} → {save_path} for user {user_id}")
+
         struct = parse_pdb_structure(save_path)
         ligands = get_ligands_in_structure(struct)
-        
-        # Generate a pseudo PDB ID for UI reference
-        pseudo_id = os.path.splitext(safe_name)[0][:8].upper()
-        
+
+        pseudo_id = safe_name[:-4].upper()[:8]
+
         return jsonify({
             "ok": True,
-            "filename": file.filename,
+            "filename": filename,
             "pdb_id": pseudo_id,
-            "saved_path": save_path,
+            "job_id": job_id,
             "ligands": [{"resname": name, "chain": chain, "seq": seq} for name, chain, seq in ligands]
         })
     except Exception as e:
@@ -1057,7 +1361,7 @@ def pdb_fetch():
     pdb_id = request.args.get("pdb_id", "").strip().upper()
     if not pdb_id or len(pdb_id) != 4 or not pdb_id.isalnum():
         return jsonify({"ok": False, "error": "Valid 4-character PDB ID is required."}), 400
-        
+
     try:
         filepath = fetch_pdb_file(pdb_id)
         struct = parse_pdb_structure(filepath)
@@ -1074,9 +1378,9 @@ def pdb_fetch():
 @flask_app.post("/api/interactions")
 def interactions():
     from app.services import (
-        fetch_pdb_file, 
-        parse_pdb_structure, 
-        extract_pocket_residues, 
+        fetch_pdb_file,
+        parse_pdb_structure,
+        extract_pocket_residues,
         detect_interactions,
         smiles_to_rdkit_mol,
         generate_2d_coords
@@ -1092,22 +1396,22 @@ def interactions():
             ligand_seq = int(ligand_seq)
         except ValueError:
             ligand_seq = None
-            
+
     if not smiles or not pdb_id or not ligand_resname:
         return jsonify({"ok": False, "error": "SMILES, pdb_id, and ligand_resname are required."}), 400
-        
+
     try:
         filepath = fetch_pdb_file(pdb_id)
         struct = parse_pdb_structure(filepath)
-        
+
         # Extract pocket around ligand
         ligand_atoms, pocket_residues = extract_pocket_residues(
             struct, ligand_resname, ligand_chain, ligand_seq
         )
-        
+
         # Detect interactions
         profile = detect_interactions(ligand_atoms, pocket_residues)
-        
+
         # Generate 2D coordinates for the ligand smiles to layout the diagram
         mol = smiles_to_rdkit_mol(smiles)
         coords, bonds = [], []
@@ -1115,7 +1419,7 @@ def interactions():
             mol = generate_2d_coords(mol)
             from app.services.cheminformatics import mol_to_json_graph
             coords, bonds = mol_to_json_graph(mol)
-                
+
             # Format interactions for front-end diagram
             serializable_profile = []
             for item in profile:
@@ -1135,12 +1439,12 @@ def interactions():
                     "distance_angstrom": item["distance_angstrom"],
                     "angle_deg": item.get("angle_deg")
                 })
-            
+
             ligand_2d = {"atoms": coords, "bonds": bonds}
         else:
             ligand_2d = None
             serializable_profile = []
-            
+
         return jsonify({
             "ok": True,
             "interactions": serializable_profile,
@@ -1154,26 +1458,35 @@ def interactions():
 def dock():
     """One-click docking: dock drawn molecule against uploaded/fetched PDB target."""
     from app.services import dock_molecule, is_gnina_available, autobox_from_ligand, fetch_pdb_file
-    
+
     if not is_gnina_available():
         return jsonify({"ok": False, "error": "GNINA binary not installed. See /health for setup instructions."}), 503
-    
+
     payload = request.get_json(silent=True) or {}
     pdb_id = str(payload.get("pdb_id", "")).strip().upper()
     ligand_resname = str(payload.get("ligand_resname", "")).strip().upper()
-    ligand_sdf = payload.get("ligand_sdf_path", "molecule.sdf")
-    
-    if not pdb_id:
-        return jsonify({"ok": False, "error": "pdb_id is required"}), 400
-    
+    user_id = session.get("user_id") or "anonymous"
+    job_id = payload.get("job_id")
+    if not job_id:
+        return jsonify({"ok": False, "error": "Active job_id is required"}), 400
+
+    from app.services.cheminformatics import find_job_dir
+    job_dir = find_job_dir(user_id, job_id)
+    if not job_dir:
+        return jsonify({"ok": False, "error": "Job directory not found"}), 404
+
+    ligand_sdf = os.path.join(job_dir, "outputs", "molecule.sdf")
+    if not os.path.exists(ligand_sdf):
+        return jsonify({"ok": False, "error": "Molecule SDF not found in job directory"}), 400
+
     try:
         receptor_path = fetch_pdb_file(pdb_id)
-        
+
         # Auto-calculate box from existing ligand if available
         box_params = {}
         if ligand_resname:
             box_params = autobox_from_ligand(receptor_path, ligand_resname)
-        
+
         result = dock_molecule(
             ligand_sdf_path=ligand_sdf,
             receptor_pdb_path=receptor_path,
@@ -1207,7 +1520,7 @@ def mcs_align():
     smiles_list = payload.get("smiles_list", [])
     if not smiles_list or len(smiles_list) < 2:
         return jsonify({"ok": False, "error": "At least 2 SMILES are required for alignment."}), 400
-        
+
     try:
         mols = []
         for s in smiles_list:
@@ -1215,11 +1528,11 @@ def mcs_align():
             if mol is None:
                 return jsonify({"ok": False, "error": f"Invalid SMILES in list: {s}"}), 400
             mols.append(mol)
-            
+
         from rdkit.Chem import rdDepictor
         for mol in mols:
             rdDepictor.Compute2DCoords(mol)
-            
+
         res = rdFMCS.FindMCS(mols)
         if res.numAtoms == 0:
             aligned_coords = []
@@ -1228,11 +1541,11 @@ def mcs_align():
                 c, b = mol_to_json_graph(mol)
                 aligned_coords.append({"atoms": c, "bonds": b})
             return jsonify({"ok": True, "aligned": aligned_coords})
-            
+
         mcs_query = Chem.MolFromSmarts(res.smartsString)
         ref_mol = mols[0]
         ref_match = ref_mol.GetSubstructMatch(mcs_query)
-        
+
         aligned_coords = []
         from app.services.cheminformatics import mol_to_json_graph
         for i, mol in enumerate(mols):
@@ -1243,10 +1556,10 @@ def mcs_align():
                         rdDepictor.GenerateDepictionMatching2DStructure(mol, ref_mol, acceptFailure=True)
                     except Exception as align_err:
                         logger.warning(f"Matching 2D alignment failed: {align_err}")
-                        
+
             c, b = mol_to_json_graph(mol)
             aligned_coords.append({"atoms": c, "bonds": b})
-            
+
         return jsonify({"ok": True, "aligned": aligned_coords})
     except Exception as e:
         logger.error(f"MCS align error: {e}")
@@ -1271,6 +1584,39 @@ def tasks_health():
     return jsonify({"ok": ok, "broker": "redis", "status": "online" if ok else "offline"}), 200
 
 
+@flask_app.get("/health/live")
+def health_live():
+    return jsonify({"ok": True, "status": "live"})
+
+
+@flask_app.get("/health/ready")
+def health_ready():
+    checks = {"redis": _redis_available(), "database": False, "storage": False, "model": False}
+    try:
+        with sqlite3.connect(DB_USERS_PATH) as conn:
+            conn.execute("SELECT 1").fetchone()
+        checks["database"] = True
+    except Exception as exc:
+        logger.warning(f"Readiness database check failed: {exc}")
+
+    jobs_dir = os.path.abspath(os.path.join(current_dir, "..", "jobs"))
+    try:
+        os.makedirs(jobs_dir, exist_ok=True)
+        checks["storage"] = os.access(jobs_dir, os.W_OK)
+    except OSError:
+        pass
+
+    try:
+        from app.services.models import WEIGHTS_PATH
+        checks["model"] = os.path.isfile(WEIGHTS_PATH) and os.path.getsize(WEIGHTS_PATH) > 0
+    except Exception as exc:
+        logger.warning(f"Readiness model check failed: {exc}")
+
+    ready = all(checks.values())
+    status = 200 if ready else 503
+    return jsonify({"ok": ready, "status": "ready" if ready else "not_ready", "checks": checks}), status
+
+
 @flask_app.post("/api/tasks/submit")
 def tasks_submit():
     from app.tasks.task_schemas import TaskSubmitSchema
@@ -1288,69 +1634,15 @@ def tasks_submit():
     params = validated_data["params"]
     redis_up = _redis_available()
 
-    #  Synchronous fallback for optimize_3d 
-    if task_type == "optimize_3d" and not redis_up:
-        import threading
-        import uuid as _uuid
-        smiles = params.get("smiles", "")
-        force_field = params.get("force_field", "MMFF94")
-        if not smiles:
-            return jsonify({"ok": False, "error": "SMILES required"}), 400
+    user_id = session.get("user_id")
+    job_id = payload.get("job_id") or str(uuid.uuid4())
 
-        fake_id = str(_uuid.uuid4())[:8]
-
-        def _run():
-            try:
-                from rdkit import Chem
-                from app.services import (
-                    optimize_conformer_3d,
-                    write_all_conformers,
-                    calculate_adme_descriptors,
-                    MDRepoPredictor,
-                    get_one_hot_nodes,
-                )
-                import torch
-
-                logger.info(f"[sync] optimize_3d for {smiles} with force_field={force_field}")
-                mol = Chem.MolFromSmiles(smiles)
-                if mol is None:
-                    logger.error("[sync] Invalid SMILES")
-                    return
-
-                mol_h = optimize_conformer_3d(mol, force_field=force_field)
-                write_all_conformers(mol_h, "molecule.sdf", "molecule.xyz", "molecule.mol2")
-
-                conf = mol_h.GetConformer()
-                positions = [[*conf.GetAtomPosition(i)] for i in range(mol_h.GetNumAtoms())]
-                pos_tensor = torch.tensor(positions, dtype=torch.float32)
-                node_features = get_one_hot_nodes(mol_h)
-
-                predictor = MDRepoPredictor()
-                predictor.eval()
-                with torch.no_grad():
-                    predictor(pos_tensor, node_features)
-
-                calculate_adme_descriptors(mol_h)
-                logger.info("[sync] optimize_3d complete")
-            except Exception as ex:
-                logger.error(f"[sync] optimize_3d failed: {ex}")
-
-        threading.Thread(target=_run, daemon=True).start()
-
-        return jsonify({
-            "ok": True,
-            "task_id": f"sync-{fake_id}",
-            "estimated_time": "~15s",
-            "sync": True
-        })
-
-    #  All other tasks require Redis/Celery 
     if not redis_up:
         return jsonify({
             "ok": False,
-            "error": f"'{task_type}' requires the Celery task queue. Start Redis first: redis-server --daemonize yes",
+            "error": "Task orchestration requires the Celery/Redis backend. Start Redis first: redis-server --daemonize yes",
             "requires_redis": True
-        }), 200
+        }), 503
 
     task_id = None
     estimated_time = "~30s"
@@ -1360,7 +1652,9 @@ def tasks_submit():
             from app.tasks import run_3d_optimization_task
             result = run_3d_optimization_task.delay(
                 smiles=params["smiles"],
-                force_field=params.get("force_field", "MMFF94")
+                force_field=params.get("force_field", "MMFF94"),
+                user_id=user_id,
+                job_id=job_id
             )
             task_id = result.id
             estimated_time = "~10s"
@@ -1372,14 +1666,28 @@ def tasks_submit():
                 pdb_id=params["pdb_id"],
                 ligand_resname=params["ligand_resname"],
                 ligand_chain=params.get("ligand_chain"),
-                ligand_seq=params.get("ligand_seq")
+                ligand_seq=params.get("ligand_seq"),
+                user_id=user_id,
+                job_id=job_id
             )
             task_id = result.id
             estimated_time = "~15s"
 
         elif task_type == "md_simulation":
             from app.tasks import run_openmm_md_task
-            structure_path = params.get("sdf_path") or "molecule.sdf"
+            from app.services.cheminformatics import find_job_dir
+            if not job_id:
+                return jsonify({"ok": False, "error": "job_id is required"}), 400
+            try:
+                job_dir_path = find_job_dir(user_id, job_id)
+            except ValueError as ve:
+                return jsonify({"ok": False, "error": str(ve)}), 400
+            except FileNotFoundError as fnfe:
+                return jsonify({"ok": False, "error": str(fnfe)}), 404
+            structure_path = os.path.join(job_dir_path, "outputs", "molecule.sdf")
+            if not os.path.exists(structure_path):
+                return jsonify({"ok": False, "error": "molecule.sdf not found for this job"}), 404
+
             result = run_openmm_md_task.delay(
                 structure_path=structure_path,
                 n_steps=params["n_steps"]
@@ -1387,10 +1695,14 @@ def tasks_submit():
             task_id = result.id
             estimated_time = "~1m"
 
+        if task_id and user_id:
+            record_task_ownership(task_id, user_id)
+
         return jsonify({
             "ok": True,
             "task_id": task_id,
-            "estimated_time": estimated_time
+            "estimated_time": estimated_time,
+            "job_id": job_id
         })
     except Exception as e:
         logger.error(f"Task submission error: {e}")
@@ -1398,20 +1710,27 @@ def tasks_submit():
 
 @flask_app.get("/api/tasks/status/<task_id>")
 def tasks_status(task_id):
+    user_id = session.get("user_id")
+    owner_id = get_task_owner(task_id)
+    if not owner_id or owner_id != user_id:
+        return jsonify({"ok": False, "error": "Access forbidden: you do not own this task"}), 403
+
+    # (Sync task check removed for multi-worker compatibility)
+
     from celery.result import AsyncResult
     from app.tasks import celery_app
-    
+
     try:
         res = AsyncResult(task_id, app=celery_app)
         state = res.state
-        
+
         response_data = {
             "task_id": task_id,
             "status": state,
             "result": None,
             "error": None
         }
-        
+
         if state == "SUCCESS":
             response_data["result"] = res.result
         elif state == "FAILURE":
@@ -1420,7 +1739,7 @@ def tasks_status(task_id):
             meta = res.info or {}
             response_data["percent"] = meta.get("percent", 0)
             response_data["message"] = meta.get("message", "Processing...")
-            
+
         return jsonify(response_data)
     except Exception as e:
         logger.error(f"Task status retrieval error: {e}")
@@ -1428,9 +1747,14 @@ def tasks_status(task_id):
 
 @flask_app.delete("/api/tasks/cancel/<task_id>")
 def tasks_cancel(task_id):
+    user_id = session.get("user_id")
+    owner_id = get_task_owner(task_id)
+    if not owner_id or owner_id != user_id:
+        return jsonify({"ok": False, "error": "Access forbidden: you do not own this task"}), 403
+
     from celery.result import AsyncResult
     from app.tasks import celery_app
-    
+
     try:
         res = AsyncResult(task_id, app=celery_app)
         res.revoke(terminate=True)
@@ -1475,10 +1799,10 @@ if __name__ == "__main__":
     if not is_valid:
         for error in config_errors:
             logger.warning("Configuration warning: %s", error)
-    
+
     if config.PYMOL_ENABLED:
         get_pymol_process()
-        
+
     logger.info(f" * Server starting on http://{config.HOST}:{config.PORT}")
 
     flask_app.run(
@@ -1487,4 +1811,3 @@ if __name__ == "__main__":
         debug=config.DEBUG,
         use_reloader=False,
     )
-
