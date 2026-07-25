@@ -1,17 +1,10 @@
 import os  # noqa: E402
-import sys  # noqa: E402
 import time  # noqa: E402
 import uuid  # noqa: E402
 import logging  # noqa: E402
+import shutil  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
 from typing import Dict, Any, Protocol, Optional, TypedDict, List  # noqa: E402
-
-# Setup python path so RDKit, torch and other local modules import properly
-current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-parent_dir = os.path.dirname(current_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
 
 from app.tasks.celery_app import celery_app  # noqa: E402
 
@@ -147,7 +140,7 @@ def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94", use
     """
     Background 3D embedding and force-field geometry optimization using MMFF94, MMFF94s, or UFF.
     """
-    logger.info(f"Task run_3d_optimization_task started for SMILES: {smiles} with ForceField: {force_field}")
+    logger.info("3D optimization task started with force field %s", force_field)
     self.update_state(state="PROGRESS", meta={"percent": 10, "message": "Validating molecule structures..."})
 
     from rdkit import Chem
@@ -155,7 +148,6 @@ def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94", use
         optimize_conformer_3d,
         write_all_conformers,
         calculate_adme_descriptors,
-        MDRepoPredictor,
         get_one_hot_nodes,
         compute_conformer_rmsd,
         compute_gasteiger_charges
@@ -206,8 +198,11 @@ def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94", use
     pos_tensor = torch.tensor(positions, dtype=torch.float32)
     node_features = get_one_hot_nodes(mol_h)
 
-    predictor = MDRepoPredictor()
-    predictor.eval()
+    from app.services.models import get_predictor
+    predictor = get_predictor()
+    model_device = next(predictor.parameters()).device
+    pos_tensor = pos_tensor.to(model_device)
+    node_features = node_features.to(model_device)
     with torch.no_grad():
         predictions = predictor(pos_tensor, node_features)
 
@@ -232,9 +227,9 @@ def run_3d_optimization_task(self, smiles: str, force_field: str = "MMFF94", use
         "predictions": predictions_serialisable,
         "adme": adme_desc,
         "files": {
-            "sdf": sdf_path,
-            "xyz": xyz_path,
-            "mol2": mol2_path
+            "sdf": "molecule.sdf",
+            "xyz": "molecule.xyz",
+            "mol2": "molecule.mol2"
         }
     }
 
@@ -256,8 +251,6 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = No
     )
     from app.services.pdb_repurposing import find_repurposing_targets
     from app.services.gnina_docking import dock_molecule
-    import shutil
-
     if not pdb_id and ligand_resname == "SKETCH":
         self.update_state(state="PROGRESS", meta={"percent": 10, "message": "No PDB selected. Auto-detecting repurposing target..."})
         targets = find_repurposing_targets(smiles)
@@ -287,9 +280,18 @@ def run_interaction_profiling_task(self, smiles: str, pdb_id: Optional[str] = No
     if ligand_resname == "SKETCH":
         self.update_state(state="PROGRESS", meta={"percent": 45, "message": f"Auto-docking sketched molecule into {final_pdb_id}..."})
         if os.path.exists(ligand_sdf_path):
-            dock_res = dock_molecule(ligand_sdf_path=ligand_sdf_path, receptor_pdb_path=filepath, exhaustiveness=2, num_modes=1)
-            if dock_res.get("ok") and dock_res.get("poses"):
-                shutil.copy(dock_res["poses"][0]["sdf_file"], os.path.join(out_dir, "docked_poses.sdf"))
+            dock_res = dock_molecule(
+                ligand_sdf_path=ligand_sdf_path,
+                receptor_pdb_path=filepath,
+                exhaustiveness=2,
+                num_modes=1,
+                output_dir=out_dir,
+            )
+            if dock_res.get("ok") and dock_res.get("output_sdf"):
+                output_sdf = str(dock_res["output_sdf"])
+                destination = os.path.join(out_dir, "docked_poses.sdf")
+                if os.path.abspath(output_sdf) != os.path.abspath(destination):
+                    shutil.copy(output_sdf, destination)
 
     try:
         ligand_atoms, pocket_residues = extract_pocket_residues(
@@ -371,3 +373,57 @@ def run_quantum_task(self, smiles: str, method: str) -> Dict[str, Any]:
         "dipole_moment_debye": 1.85,
         "total_energy_hartree": -230.1245
     }
+
+
+@celery_app.task(name="app.tasks.compute_tasks.storage_cleanup_task")
+def storage_cleanup_task() -> Dict[str, Any]:
+    """Remove expired job directories from the configured jobs root.
+
+    The task only removes UUID-shaped job directories contained beneath the
+    configured root. Recently modified jobs are left alone, which protects
+    active work without relying on process-local task state.
+    """
+
+    from app.paths import JOBS_DIR
+
+    retention_hours = max(1, int(os.getenv("JOB_RETENTION_HOURS", "72")))
+    cutoff = datetime.now(timezone.utc).timestamp() - retention_hours * 3600
+    jobs_root = JOBS_DIR.resolve(strict=False)
+    removed = 0
+    reclaimed_bytes = 0
+
+    if not jobs_root.is_dir():
+        return {"ok": True, "removed": 0, "reclaimed_bytes": 0}
+
+    for user_dir in jobs_root.iterdir():
+        if not user_dir.is_dir():
+            continue
+        for candidate in user_dir.iterdir():
+            if not candidate.is_dir():
+                continue
+            try:
+                uuid.UUID(candidate.name)
+                resolved = candidate.resolve(strict=True)
+                if not resolved.is_relative_to(jobs_root):
+                    continue
+                latest_mtime = max(
+                    (item.stat().st_mtime for item in resolved.rglob("*") if item.exists()),
+                    default=resolved.stat().st_mtime,
+                )
+                if latest_mtime >= cutoff:
+                    continue
+                size = sum(
+                    item.stat().st_size for item in resolved.rglob("*") if item.is_file()
+                )
+                shutil.rmtree(resolved)
+                removed += 1
+                reclaimed_bytes += size
+            except (OSError, ValueError):
+                logger.warning("Skipped unsafe or unreadable cleanup candidate: %s", candidate)
+
+        try:
+            user_dir.rmdir()
+        except OSError:
+            pass
+
+    return {"ok": True, "removed": removed, "reclaimed_bytes": reclaimed_bytes}

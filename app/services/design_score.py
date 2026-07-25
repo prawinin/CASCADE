@@ -145,4 +145,4 @@ def calculate_design_score(smiles: str) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error("Design score calculation error: %s", e)
-        return {"ok": False, "score": 0, "grade": "F", "color": "#EF4444", "error": str(e)}
+        return {"ok": False, "score": 0, "grade": "F", "color": "#EF4444", "error": "Design score calculation failed"}

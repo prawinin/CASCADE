@@ -4,11 +4,7 @@ from typing import Optional  # noqa: E402
 
 logger = logging.getLogger("KineticSketch.Visualizer")
 
-import sys  # noqa: E402
-import os  # noqa: E402
-# Allow relative importing of config module
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import get_config  # noqa: E402
+from app.config import get_config  # noqa: E402
 
 config = get_config()
 

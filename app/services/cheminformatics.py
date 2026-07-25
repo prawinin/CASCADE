@@ -1,9 +1,9 @@
 import logging  # noqa: E402
-import os  # noqa: E402
 import uuid  # noqa: E402
 from typing import List, Optional  # noqa: E402
 from rdkit import Chem  # noqa: E402
 from rdkit.Chem import AllChem  # noqa: E402
+from app.paths import job_directory
 
 logger = logging.getLogger("KineticSketch.Cheminformatics")
 
@@ -347,18 +347,25 @@ def canvas_json_to_rdkit_mol(canvas_json: dict) -> Chem.Mol:
         "bonds": [{"source": 1, "target": 2, "type": 1}]
     }
     """
+    atoms = canvas_json.get("atoms", [])
+    bonds = canvas_json.get("bonds", [])
+    if not isinstance(atoms, list) or not isinstance(bonds, list):
+        raise ValueError("Canvas atoms and bonds must be arrays")
+    if len(atoms) > 200 or len(bonds) > 600:
+        raise ValueError("Canvas structure exceeds the supported size limit")
+
     rw_mol = Chem.RWMol()
     atom_id_to_idx = {}
 
     # Add atoms
-    for atom in canvas_json.get("atoms", []):
+    for atom in atoms:
         el = atom.get("element", "C")
         rd_atom = Chem.Atom(el)
         idx = rw_mol.AddAtom(rd_atom)
         atom_id_to_idx[atom["id"]] = idx
 
     # Add bonds
-    for bond in canvas_json.get("bonds", []):
+    for bond in bonds:
         src_id = bond["source"]
         tgt_id = bond["target"]
         b_type_num = bond.get("type", 1)
@@ -511,14 +518,11 @@ def get_or_create_job_dir(user_id: Optional[str], job_id: Optional[str]) -> str:
         raise ValueError(f"Invalid job_id format: {job_id}. Must be a valid UUID.")
 
     u_folder = user_id if user_id else "anonymous"
-    job_dir = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder, job_id))
-    expected_root = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder))
-    if not job_dir.startswith(expected_root):
-        raise ValueError("Path traversal detected in job directory construction.")
+    job_dir = job_directory(u_folder, job_id)
 
     for sub in ["input", "scratch", "outputs"]:
-        os.makedirs(os.path.join(job_dir, sub), exist_ok=True)
-    return job_dir
+        (job_dir / sub).mkdir(parents=True, exist_ok=True)
+    return str(job_dir)
 
 
 def find_job_dir(user_id: Optional[str], job_id: Optional[str]) -> str:
@@ -530,11 +534,8 @@ def find_job_dir(user_id: Optional[str], job_id: Optional[str]) -> str:
         raise ValueError(f"Invalid job_id format: {job_id}. Must be a valid UUID.")
 
     u_folder = user_id if user_id else "anonymous"
-    job_dir = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder, job_id))
-    expected_root = os.path.abspath(os.path.join(os.getcwd(), "jobs", u_folder))
-    if not job_dir.startswith(expected_root):
-        raise ValueError("Path traversal detected in job directory construction.")
+    job_dir = job_directory(u_folder, job_id)
 
-    if not os.path.exists(job_dir):
+    if not job_dir.is_dir():
         raise FileNotFoundError(f"Job directory not found for job {job_id}")
-    return job_dir
+    return str(job_dir)

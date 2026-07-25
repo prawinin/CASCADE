@@ -10,12 +10,14 @@ This module loads environment variables and provides defaults for:
 """
 
 import os  # noqa: E402
-import tempfile
+from urllib.parse import urlsplit  # noqa: E402
 from typing import Optional, Dict, Any  # noqa: E402
 from dotenv import load_dotenv  # noqa: E402
+from app.paths import CACHE_DIR, PROJECT_ROOT
+from app.runtime import select_available_port
 
 # Load environment variables from .env file at the root of the project
-load_dotenv()
+load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 
 class Config:
@@ -24,17 +26,18 @@ class Config:
     # Environment
     ENVIRONMENT = os.getenv("FLASK_ENV", "development")
     DEBUG = ENVIRONMENT != "production"
-    SECRET_KEY = os.getenv("SECRET_KEY", "dev-key-change-in-production")
+    SECRET_KEY = os.getenv("FLASK_SECRET_KEY", os.getenv("SECRET_KEY", "dev-key-change-in-production"))
 
     # Server
     HOST = os.getenv("HOST", "127.0.0.1")
-    PORT = int(os.getenv("PORT", 5000))
+    PORT = select_available_port(HOST, requested=os.getenv("PORT"), preferred=7860)
 
     # PyMOL Integration
     PYMOL_SERVER_HOST = os.getenv("PYMOL_SERVER_HOST", "localhost")
     PYMOL_SERVER_PORT = int(os.getenv("PYMOL_SERVER_PORT", 9123))
     PYMOL_LISTEN_TIMEOUT = int(os.getenv("PYMOL_LISTEN_TIMEOUT", 5))
     PYMOL_ENABLED = os.getenv("PYMOL_ENABLED", "1").lower() in ("1", "true", "yes")
+    GNINA_ENABLED = os.getenv("GNINA_ENABLED", "1").lower() in ("1", "true", "yes")
 
     # Ollama AI Integration
     OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
@@ -52,16 +55,28 @@ class Config:
 
     # Caching
     PDB_CACHE_TTL = int(os.getenv("PDB_CACHE_TTL", 3600))  # 1 hour in seconds
-    PDB_CACHE_DIR = os.getenv("PDB_CACHE_DIR", os.path.join(tempfile.gettempdir(), "kinetic_sketch_pdb_cache"))
+    PDB_CACHE_DIR = os.getenv("PDB_CACHE_DIR", str(CACHE_DIR / "pdb_cache"))
 
     # Logging
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
     LOG_FORMAT = os.getenv("LOG_FORMAT", "json")  # "json" or "text"
-    LOG_FILE = os.getenv("LOG_FILE", os.path.join(tempfile.gettempdir(), "kinetic_sketch.log"))
+    LOG_FILE = os.getenv("LOG_FILE", str(CACHE_DIR / "kinetic_sketch.log"))
 
     # Development
     ENABLE_DEBUG_CONSOLE = os.getenv("ENABLE_DEBUG_CONSOLE", "0").lower() in ("1", "true", "yes")
     ENABLE_CORS = os.getenv("ENABLE_CORS", "0").lower() in ("1", "true", "yes")
+    EMBEDDED_MODE = os.getenv("EMBEDDED_MODE", "0").lower() in ("1", "true", "yes")
+    _FRAME_ANCESTORS_RAW = os.getenv("FRAME_ANCESTORS", "'none'").strip() or "'none'"
+    FRAME_ANCESTORS = (
+        "'none'" if _FRAME_ANCESTORS_RAW.lower() in {"none", "'none'"}
+        else _FRAME_ANCESTORS_RAW
+    )
+    REQUIRE_REDIS = os.getenv("REQUIRE_REDIS", "1").lower() in ("1", "true", "yes")
+    REQUIRE_MODEL = os.getenv("REQUIRE_MODEL", "1").lower() in ("1", "true", "yes")
+    REQUIRE_DRUG_DATA = os.getenv("REQUIRE_DRUG_DATA", "0").lower() in ("1", "true", "yes")
+    TRUST_PROXY_HOPS = int(os.getenv("TRUST_PROXY_HOPS", "0"))
+    ACTION_LOGGING_ENABLED = os.getenv("ACTION_LOGGING_ENABLED", "0").lower() in ("1", "true", "yes")
+    REGISTRATION_ENABLED = os.getenv("REGISTRATION_ENABLED", "1").lower() in ("1", "true", "yes")
 
     @classmethod
     def validate(cls) -> tuple[bool, list[str]]:
@@ -90,6 +105,38 @@ class Config:
 
         if cls.MODEL_DEVICE not in ("cpu", "cuda", "auto"):
             errors.append("MODEL_DEVICE must be one of: cpu, cuda, auto")
+
+        if cls.TRUST_PROXY_HOPS < 0 or cls.TRUST_PROXY_HOPS > 10:
+            errors.append("TRUST_PROXY_HOPS must be between 0 and 10")
+
+        frame_ancestors = cls.FRAME_ANCESTORS.split()
+        if not frame_ancestors:
+            errors.append("FRAME_ANCESTORS must not be empty")
+        elif "'none'" in frame_ancestors and frame_ancestors != ["'none'"]:
+            errors.append("FRAME_ANCESTORS 'none' cannot be combined with other sources")
+        else:
+            for source in frame_ancestors:
+                if source in {"'none'", "'self'"}:
+                    continue
+                parsed = urlsplit(source)
+                try:
+                    parsed_port = parsed.port
+                except ValueError:
+                    parsed_port = -1
+                if (
+                    parsed.scheme != "https"
+                    or not parsed.hostname
+                    or parsed.username
+                    or parsed.password
+                    or parsed_port is not None
+                    or parsed.path
+                    or parsed.query
+                    or parsed.fragment
+                ):
+                    errors.append(
+                        "FRAME_ANCESTORS entries must be 'none', 'self', or exact "
+                        f"HTTPS origins without paths; got {source!r}"
+                    )
 
         return len(errors) == 0, errors
 

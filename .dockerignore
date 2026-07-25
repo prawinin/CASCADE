@@ -30,9 +30,14 @@ pip-delete-this-directory.txt
 # Workspace & Data Storage
 jobs/
 scratch/
-data/users.sqlite
-data/*.sqlite-journal
-data/action_logs/
+# Immutable lookup assets are included when the operator copies them before the
+# build. Mutable state and action logs never enter the image.
+data/*
+!data/drug_database.sqlite
+!data/drug_fingerprints.npz
+app/models/*
+!app/models/.gitkeep
+!app/models/mdrepo_predictor.pt
 molecule.sdf
 molecule.xyz
 molecule.mol2
@@ -73,6 +78,8 @@ htmlcov/
 # Documentation
 docs/_build/
 site/
+*.md
+*.pdf
 
 # Temp files
 .tmp/

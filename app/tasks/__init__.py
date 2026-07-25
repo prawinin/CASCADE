@@ -4,6 +4,7 @@ from .compute_tasks import (  # noqa: E402
     run_interaction_profiling_task,
     run_openmm_md_task,
     run_quantum_task,
+    storage_cleanup_task,
     get_compute_backend
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "run_interaction_profiling_task",
     "run_openmm_md_task",
     "run_quantum_task",
+    "storage_cleanup_task",
     "get_compute_backend"
 ]

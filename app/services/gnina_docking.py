@@ -11,18 +11,27 @@ import os  # noqa: E402
 import logging  # noqa: E402
 import subprocess  # nosec B404
 from typing import Dict, Any, List  # noqa: E402
+from app.paths import (
+    DOCKING_OUTPUT_DIR as CONFIGURED_DOCKING_OUTPUT_DIR,
+    GNINA_PATH as CONFIGURED_GNINA_PATH,
+)
 
 logger = logging.getLogger("KineticSketch.GNINADocking")
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GNINA_PATH = os.getenv("GNINA_PATH", os.path.join(_PROJECT_ROOT, "gnina"))
-DOCKING_OUTPUT_DIR = os.path.join(_PROJECT_ROOT, "scratch", "docking_results")
+GNINA_PATH = str(CONFIGURED_GNINA_PATH)
+DOCKING_OUTPUT_DIR = str(CONFIGURED_DOCKING_OUTPUT_DIR)
 os.makedirs(DOCKING_OUTPUT_DIR, exist_ok=True)
 
 
 def is_gnina_available() -> bool:
     """Check if GNINA binary is accessible and executable."""
-    return os.path.isfile(GNINA_PATH) and os.access(GNINA_PATH, os.X_OK)
+    from app.config import get_config
+
+    return (
+        get_config().GNINA_ENABLED
+        and os.path.isfile(GNINA_PATH)
+        and os.access(GNINA_PATH, os.X_OK)
+    )
 
 
 def dock_molecule(
@@ -95,7 +104,7 @@ def dock_molecule(
 
         if result.returncode != 0:
             logger.error(f"GNINA failed: {result.stderr}")
-            return {"ok": False, "error": f"GNINA exited with code {result.returncode}: {result.stderr[:500]}"}
+            return {"ok": False, "error": f"GNINA exited with code {result.returncode}"}
 
         # Parse docking results from log
         poses = _parse_gnina_log(log_path)
@@ -113,7 +122,7 @@ def dock_molecule(
         return {"ok": False, "error": "Docking timed out after 5 minutes"}
     except Exception as e:
         logger.error(f"GNINA docking error: {e}")
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "GNINA docking failed"}
 
 
 def _parse_gnina_log(log_path: str) -> List[Dict[str, Any]]:

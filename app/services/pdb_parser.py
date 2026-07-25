@@ -1,12 +1,18 @@
 import os  # noqa: E402
 import logging  # noqa: E402
+import tempfile  # noqa: E402
+import time  # noqa: E402
+from pathlib import Path  # noqa: E402
 from typing import List, Tuple, Optional  # noqa: E402
 from Bio.PDB import PDBParser, NeighborSearch, Structure, Residue, Atom  # noqa: E402
+from app.config import get_config
+from app.paths import PDB_CACHE_DIR as CONFIGURED_PDB_CACHE_DIR
 
 logger = logging.getLogger("KineticSketch.PDBParser")
 
-PDB_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scratch", "pdb_cache")
+PDB_CACHE_DIR = str(CONFIGURED_PDB_CACHE_DIR)
 os.makedirs(PDB_CACHE_DIR, exist_ok=True)
+MAX_PDB_DOWNLOAD_BYTES = 10 * 1024 * 1024
 
 def fetch_pdb_file(pdb_id: str) -> str:
     """
@@ -17,29 +23,53 @@ def fetch_pdb_file(pdb_id: str) -> str:
     if len(pdb_id) != 4 or not pdb_id.isalnum():
         raise ValueError(f"Invalid PDB ID format: '{pdb_id}'")
 
-    filepath = os.path.join(PDB_CACHE_DIR, f"{pdb_id}.pdb")
-    if os.path.exists(filepath):
+    filepath = Path(PDB_CACHE_DIR) / f"{pdb_id}.pdb"
+    cache_ttl = get_config().PDB_CACHE_TTL
+    if filepath.is_file() and time.time() - filepath.stat().st_mtime <= cache_ttl:
         logger.info(f"Using cached PDB file for {pdb_id}")
-        return filepath
+        return str(filepath)
 
     url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
     # Security: always validate the scheme is https before downloading
     if not url.startswith("https://"):
         raise ValueError(f"Refusing to download from non-HTTPS URL: {url}")
     logger.info(f"Downloading PDB structure from {url}...")
+    temporary_path: Path | None = None
     try:
         import requests
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        with open(filepath, 'wb') as f:
-            f.write(response.content)
+
+        with requests.get(url, timeout=(5, 30), stream=True) as response:
+            response.raise_for_status()
+            content_length = int(response.headers.get("Content-Length", "0") or 0)
+            if content_length > MAX_PDB_DOWNLOAD_BYTES:
+                raise ValueError("PDB response exceeds the 10 MB download limit")
+
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=PDB_CACHE_DIR, prefix=f".{pdb_id}.", suffix=".part", delete=False
+            ) as temporary_file:
+                temporary_path = Path(temporary_file.name)
+                downloaded = 0
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    if not chunk:
+                        continue
+                    downloaded += len(chunk)
+                    if downloaded > MAX_PDB_DOWNLOAD_BYTES:
+                        raise ValueError("PDB response exceeds the 10 MB download limit")
+                    temporary_file.write(chunk)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+
+        if temporary_path is None or temporary_path.stat().st_size == 0:
+            raise ValueError("PDB response was empty")
+        os.replace(temporary_path, filepath)
+        temporary_path = None
         logger.info(f"Saved PDB file to {filepath}")
-        return filepath
+        return str(filepath)
     except Exception as e:
         logger.error(f"Failed to fetch PDB {pdb_id}: {e}")
-        if os.path.exists(filepath):
-            os.remove(filepath)
-        raise RuntimeError(f"Could not download PDB {pdb_id}: {e}")
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise RuntimeError(f"Could not download PDB {pdb_id}") from e
 
 def parse_pdb_structure(filepath: str) -> Structure.Structure:
     """Parses a PDB file using Bio.PDB.PDBParser."""

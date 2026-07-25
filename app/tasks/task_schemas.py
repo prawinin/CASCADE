@@ -1,7 +1,7 @@
 from marshmallow import Schema, fields, validate, ValidationError  # noqa: E402
 
 class Optimize3DParamsSchema(Schema):
-    smiles = fields.Str(required=True, validate=validate.Length(min=1))
+    smiles = fields.Str(required=True, validate=validate.Length(min=1, max=2000))
     force_field = fields.Str(
         required=False,
         load_default="MMFF94",
@@ -10,17 +10,17 @@ class Optimize3DParamsSchema(Schema):
     job_id = fields.Str(required=False, allow_none=True)
 
 class InteractionProfileParamsSchema(Schema):
-    smiles = fields.Str(required=True, validate=validate.Length(min=1))
-    pdb_id = fields.Str(required=False, allow_none=True)
-    ligand_resname = fields.Str(required=True, validate=validate.Length(min=1))
-    ligand_chain = fields.Str(required=False, allow_none=True)
+    smiles = fields.Str(required=True, validate=validate.Length(min=1, max=2000))
+    pdb_id = fields.Str(required=False, allow_none=True, validate=validate.Length(max=8))
+    ligand_resname = fields.Str(required=True, validate=validate.Length(min=1, max=8))
+    ligand_chain = fields.Str(required=False, allow_none=True, validate=validate.Length(max=4))
     ligand_seq = fields.Int(required=False, allow_none=True)
     job_id = fields.Str(required=False, allow_none=True)
 
 class MDSimulationParamsSchema(Schema):
     sdf_path = fields.Str(required=False, allow_none=True)
     smiles = fields.Str(required=False, allow_none=True)
-    n_steps = fields.Int(required=True, validate=validate.Range(min=1))
+    n_steps = fields.Int(required=True, validate=validate.Range(min=1, max=10_000_000))
     job_id = fields.Str(required=False, allow_none=True)
 
 class TaskSubmitSchema(Schema):
@@ -37,10 +37,13 @@ class TaskSubmitSchema(Schema):
         
         try:
             if task_type == "optimize_3d":
-                Optimize3DParamsSchema().load(params)
+                cleaned = Optimize3DParamsSchema().load(params)
             elif task_type == "interaction_profile":
-                InteractionProfileParamsSchema().load(params)
+                cleaned = InteractionProfileParamsSchema().load(params)
             elif task_type == "md_simulation":
-                MDSimulationParamsSchema().load(params)
+                cleaned = MDSimulationParamsSchema().load(params)
+            else:
+                cleaned = {}
+            data["params"] = cleaned
         except ValidationError as err:
             raise ValidationError(err.messages, field_name="params")

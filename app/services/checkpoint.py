@@ -3,6 +3,7 @@ import json  # noqa: E402
 import logging  # noqa: E402
 from datetime import datetime  # noqa: E402
 from typing import Any, Dict, Optional  # noqa: E402
+from app.paths import STATE_DIR
 
 logger = logging.getLogger("KineticSketch.Checkpoint")
 
@@ -12,8 +13,8 @@ class CheckpointManager:
     Writes transitions sequentially to workspace_progress.json.
     Prevents execution cut-offs and enables secondary models to resume compilation.
     """
-    def __init__(self, filepath: str = "workspace_progress.json"):
-        self.filepath = filepath
+    def __init__(self, filepath: Optional[str] = None):
+        self.filepath = filepath or str(STATE_DIR / "workspace_progress.json")
         self.state = self.load_checkpoint()
 
     def load_checkpoint(self) -> Dict[str, Any]:

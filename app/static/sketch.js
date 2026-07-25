@@ -1,6 +1,16 @@
 //  Action Logger 
 let _actionSessionId = null;
 
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "'": "&#39;",
+        '"': "&quot;"
+    })[character]);
+}
+
 async function initActionLogger() {
     try {
         const res = await fetch("/api/action_log/start", { method: "POST" });
@@ -25,6 +35,28 @@ function logAction(actionType, actionData) {
 
 window.currentUserId = null;
 window.currentJobId = crypto.randomUUID();
+window.gninaAvailable = false;
+window.registrationEnabled = true;
+
+async function probeCapabilities() {
+    try {
+        const response = await fetch("/health");
+        const data = await response.json();
+        window.gninaAvailable = data.capabilities?.gnina === true;
+        window.registrationEnabled = data.capabilities?.registration !== false;
+    } catch (_error) {
+        window.gninaAvailable = false;
+    }
+
+    const toolbar = document.getElementById("gninaDockToolbar");
+    if (toolbar) {
+        toolbar.style.display = window.gninaAvailable && activePdbId ? "flex" : "none";
+    }
+    const registrationLink = document.getElementById("authToggleLink");
+    if (registrationLink && !window.registrationEnabled && isLoginMode) {
+        registrationLink.style.display = "none";
+    }
+}
 
 async function checkAuth() {
     try {
@@ -59,6 +91,7 @@ window.hideLoginModal = function() {
     if(modal) modal.style.display = "none";
 };
 window.toggleAuthMode = function() {
+    if (isLoginMode && !window.registrationEnabled) return;
     isLoginMode = !isLoginMode;
     const title = document.getElementById("authTitle");
     const btn = document.getElementById("authSubmitBtn");
@@ -162,29 +195,33 @@ function clickTaipyButton(buttonId) {
     }
 }
 
-// SMILES pasting bridge
-async function triggerSmilesPasted() {
-    const smilesVal = document.getElementById("visible_smiles_input").value;
+async function submitSmilesAnalysis(smilesValue) {
+    const smilesVal = String(smilesValue || "").trim();
     if (!smilesVal) {
         if (atoms.length === 0) {
             const logBox = document.getElementById("dynamicCheckpointLogs");
             if (logBox) {
                 logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[WARNING]</span> Please draw a molecule or enter a SMILES string to analyze.</div>`;
             }
-            return;
+            return { ok: false, error: "SMILES is required." };
         }
         const logBox = document.getElementById("dynamicCheckpointLogs");
         if (logBox) {
             logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[INFO]</span> Molecule drawn on canvas is being analyzed automatically. Check the panels for results.</div>`;
         }
-        return;
+        return { ok: false, error: "SMILES is required." };
     }
 
-    const renderButton = document.querySelector(".smiles-bar .premium-btn");
+    const unifiedInput = document.getElementById("unified_input");
+    if (unifiedInput) unifiedInput.value = smilesVal;
+
+    const renderButton = document.getElementById("unified_submit_btn");
+    const unifiedStatus = document.getElementById("unified_status");
     if (renderButton) {
         renderButton.disabled = true;
         renderButton.textContent = "Loading...";
     }
+    if (unifiedStatus) unifiedStatus.textContent = "Analyzing molecule...";
 
     try {
         const response = await fetch("/api/analyze_smiles", {
@@ -195,29 +232,51 @@ async function triggerSmilesPasted() {
             body: JSON.stringify({ smiles: smilesVal, job_id: window.currentJobId })
         });
         const data = await response.json();
+        if (!response.ok || !data.ok) {
+            const message = data.error || `Analysis failed (HTTP ${response.status})`;
+            const logBox = document.getElementById("dynamicCheckpointLogs");
+            if (logBox) {
+                logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[ERROR]</span> ${escapeHtml(message)}</div>`;
+            }
+            if (unifiedStatus) unifiedStatus.textContent = message;
+            return data;
+        }
+
         applyAnalysisResponse(data);
         console.log("SMILES analysis response:", data);
-        if (data.ok) {
-            try {
-                const sdfRes = await fetch(`/api/download/${window.currentJobId}/sdf`);
-                const sdfData = await sdfRes.text();
-                render3DModel(sdfData);
-            } catch (err) {
-                console.error("Failed to fetch molecule.sdf for 3D render:", err);
-            }
+        if (unifiedStatus) unifiedStatus.textContent = "Analysis complete.";
+        try {
+            const sdfRes = await fetch(`/api/download/${window.currentJobId}/sdf?t=${Date.now()}`);
+            if (!sdfRes.ok) throw new Error(`SDF download failed (HTTP ${sdfRes.status})`);
+            const sdfData = await sdfRes.text();
+            render3DModel(sdfData);
+        } catch (err) {
+            console.error("Failed to fetch molecule.sdf for 3D render:", err);
         }
+        return data;
     } catch (e) {
         const logBox = document.getElementById("dynamicCheckpointLogs");
         if (logBox) {
-            logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[ERROR]</span> Failed to analyze SMILES.</div>`;
+            logBox.innerHTML = `<div class="checkpoint-log-line"><span class="checkpoint-time">[ERROR]</span> ${escapeHtml(e.message || "Failed to analyze SMILES.")}</div>`;
         }
+        if (unifiedStatus) unifiedStatus.textContent = e.message || "Failed to analyze SMILES.";
         console.error("triggerSmilesPasted: request failed:", e);
+        return { ok: false, error: e.message || "Failed to analyze SMILES." };
     } finally {
         if (renderButton) {
             renderButton.disabled = false;
             renderButton.textContent = "Render";
         }
     }
+}
+
+// Public bridge used by the unified drug-name/SMILES input.
+window.submitSmilesFromExternal = submitSmilesAnalysis;
+
+// Legacy compatibility bridge retained for older callers.
+async function triggerSmilesPasted() {
+    const input = document.getElementById("unified_input");
+    return submitSmilesAnalysis(input ? input.value : "");
 }
 
 // Chat prompts bridge — posts directly to /api/chat
@@ -428,7 +487,7 @@ function render3DModel(sdfData) {
         console.log("3D molecular conformer successfully rendered.");
     } catch (err) {
         console.error("Error rendering 3D model with 3Dmol.js:", err);
-        container.innerHTML = `<div style='color: #F87171; padding: 1.5rem; text-align: center; font-size: 0.8rem;'>Error initializing 3D viewer: ${err.message}</div>`;
+        container.innerHTML = `<div style='color: #F87171; padding: 1.5rem; text-align: center; font-size: 0.8rem;'>Error initializing 3D viewer: ${escapeHtml(err.message)}</div>`;
     }
 }
 
@@ -1343,7 +1402,7 @@ async function runLive3DSync() {
 }
 
 async function getActiveSmiles() {
-    // Read from the unified smart input field (replaces old Taipy-era visible_smiles_input)
+    // Read from the unified smart input field.
     const unifiedInput = document.getElementById("unified_input");
     const inputVal = unifiedInput ? unifiedInput.value.trim() : "";
     // Only use it if it looks like a SMILES string (not a drug name)
@@ -1555,9 +1614,9 @@ async function fetchPdbTarget() {
             activePdbId = data.pdb_id;
             activeLigands = data.ligands;
             populateLigandSelect(data.ligands);
-            // Show GNINA dock button regardless of ligand count
+            // GNINA is optional and absent from the standard deployment.
             const gninaTb = document.getElementById("gninaDockToolbar");
-            if (gninaTb) gninaTb.style.display = "flex";
+            if (gninaTb) gninaTb.style.display = window.gninaAvailable ? "flex" : "none";
             
             const logBox = document.getElementById("dynamicCheckpointLogs");
             if (logBox) {
@@ -1594,13 +1653,13 @@ async function uploadPdbFile(event) {
             activePdbId = data.filename.split(".")[0].toUpperCase().substring(0, 4);
             activeLigands = data.ligands;
             populateLigandSelect(data.ligands);
-            // Show GNINA dock button regardless of ligand count
+            // GNINA is optional and absent from the standard deployment.
             const gninaTb = document.getElementById("gninaDockToolbar");
-            if (gninaTb) gninaTb.style.display = "flex";
+            if (gninaTb) gninaTb.style.display = window.gninaAvailable ? "flex" : "none";
             
             const logBox = document.getElementById("dynamicCheckpointLogs");
             if (logBox) {
-                logBox.innerHTML += `<div class="checkpoint-log-line"><span class="checkpoint-time">[PDB]</span> Uploaded ${data.filename} successfully. Found ${activeLigands.length} ligands.</div>`;
+                logBox.innerHTML += `<div class="checkpoint-log-line"><span class="checkpoint-time">[PDB]</span> Uploaded ${escapeHtml(data.filename)} successfully. Found ${activeLigands.length} ligands.</div>`;
                 document.getElementById("checkpointBody").scrollTop = 99999;
             }
         } else {
@@ -1699,6 +1758,10 @@ async function computeInteractions() {
 }
 
 async function runOneClickDocking() {
+    if (!window.gninaAvailable) {
+        alert("Docking is not enabled on this deployment.");
+        return;
+    }
     const pdbIdInput = document.getElementById("pdbIdInput");
     const pdbId = pdbIdInput ? pdbIdInput.value.trim().toUpperCase() : "";
     if (!pdbId || pdbId.length !== 4) {
@@ -1782,16 +1845,17 @@ async function triggerPubChemSearch() {
     
     const logBox = document.getElementById("dynamicCheckpointLogs");
     if (logBox) {
-        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="checkpoint-time">[PUBCHEM]</span> Querying PubChem database for '${searchVal}'...</div>`;
+        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="checkpoint-time">[PUBCHEM]</span> Querying PubChem database for '${escapeHtml(searchVal)}'...</div>`;
     }
     
     try {
         const res = await fetch(`/api/pubchem/fetch?name=${encodeURIComponent(searchVal)}`);
         const data = await res.json();
         if (data.ok && data.smiles) {
-            document.getElementById("visible_smiles_input").value = data.smiles;
+            const unifiedInput = document.getElementById("unified_input");
+            if (unifiedInput) unifiedInput.value = data.smiles;
             if (logBox) {
-                logBox.innerHTML += `<div class="checkpoint-log-line"><span class="checkpoint-time">[PUBCHEM]</span> Found SMILES: ${data.smiles}</div>`;
+                logBox.innerHTML += `<div class="checkpoint-log-line"><span class="checkpoint-time">[PUBCHEM]</span> Found SMILES: ${escapeHtml(data.smiles)}</div>`;
                 document.getElementById("checkpointBody").scrollTop = 99999;
             }
             // Automatically analyze and render the resolved compound
@@ -1887,7 +1951,7 @@ async function runDeepADMET() {
         });
         const data = await res.json();
         if (!data.ok) {
-            div.innerHTML = `<div style='color:#F59E0B; font-size:0.8rem;'> ${data.error || "Prediction failed"}</div>`;
+            div.innerHTML = `<div style='color:#F59E0B; font-size:0.8rem;'> ${escapeHtml(data.error || "Prediction failed")}</div>`;
             return;
         }
 
@@ -1927,7 +1991,7 @@ async function runDeepADMET() {
             ${rows.join("")}
         `;
     } catch(e) {
-        if (div) div.innerHTML = `<div style='color:#EF4444;font-size:0.8rem;'>Error: ${e.message}</div>`;
+        if (div) div.innerHTML = `<div style='color:#EF4444;font-size:0.8rem;'>Error: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -1952,7 +2016,7 @@ async function runMCSAlign() {
         });
         const data = await res.json();
         if (!data.ok) {
-            resultDiv.innerHTML = `<span style='color:#EF4444;'>Error: ${data.error}</span>`;
+            resultDiv.innerHTML = `<span style='color:#EF4444;'>Error: ${escapeHtml(data.error)}</span>`;
             return;
         }
 
@@ -1972,7 +2036,7 @@ async function runMCSAlign() {
             document.getElementById("checkpointBody").scrollTop = 99999;
         }
     } catch(e) {
-        resultDiv.innerHTML = `<span style='color:#EF4444;'>Failed: ${e.message}</span>`;
+        resultDiv.innerHTML = `<span style='color:#EF4444;'>Failed: ${escapeHtml(e.message)}</span>`;
     }
 }
 
@@ -1994,7 +2058,7 @@ async function submitHPCTask(taskType) {
             if (chevron) chevron.className = 'fa-solid fa-chevron-up';
         }
         const ts = new Date().toLocaleTimeString("en-GB", {hour12: false});
-        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="${cls}">[${ts}]</span> ${text}</div>`;
+        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="${cls}">[${ts}]</span> ${escapeHtml(text)}</div>`;
         if (logBody) logBody.scrollTop = 99999;
     }
 
@@ -2097,7 +2161,7 @@ async function pollHPCTask(taskId, label) {
     const logBox = document.getElementById("dynamicCheckpointLogs");
     const logBody = document.getElementById("checkpointBody");
 
-    function appendLog(icon, cls, text) {
+    function appendLog(icon, cls, text, trustedHtml = false) {
         if (!logBox) return;
         // Auto-expand the log body so results are always visible
         if (logBody && logBody.style.display === 'none') {
@@ -2106,7 +2170,8 @@ async function pollHPCTask(taskId, label) {
             if (chevron) chevron.className = 'fa-solid fa-chevron-up';
         }
         const ts = new Date().toLocaleTimeString("en-GB", {hour12: false});
-        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="${cls}">[${ts}]</span> ${text}</div>`;
+        const content = trustedHtml ? text : escapeHtml(text);
+        logBox.innerHTML += `<div class="checkpoint-log-line"><span class="${cls}">[${ts}]</span> ${content}</div>`;
         if (logBody) logBody.scrollTop = 99999;
     }
 
@@ -2131,7 +2196,7 @@ async function pollHPCTask(taskId, label) {
                     const numAtoms = rmsfArr.length || 0;
                     const meanRmsf = numAtoms > 0 ? rmsfArr.reduce((s, a) => s + (Array.isArray(a) ? a[0] : (typeof a === 'number' ? a : 0)), 0) / numAtoms : 0;
                     const meanSasa = numAtoms > 0 ? sasaArr.reduce((s, val) => s + (typeof val === 'number' ? val : 0), 0) / numAtoms : 0;
-                    const ffUsed = r.force_field || "MMFF94";
+                    const ffUsed = escapeHtml(r.force_field || "MMFF94");
                     const rmsdVal = r.rmsd_angstrom !== undefined ? r.rmsd_angstrom.toFixed(4) : "—";
 
                     resultHtml = `<div style="background:#020617;padding:10px 12px;border-radius:6px;margin-top:6px;border:1px solid #1e293b;font-size:10px;">
@@ -2140,7 +2205,7 @@ async function pollHPCTask(taskId, label) {
   <div style="color:#94a3b8;margin-bottom:4px;">Mean RMSF: <span style="color:#38bdf8;">${meanRmsf.toFixed(3)} Å</span> &nbsp;|&nbsp; Mean SASA: <span style="color:#38bdf8;">${meanSasa.toFixed(2)} Å²</span> &nbsp;|&nbsp; Partial Charges: <span style="color:#cbd5e1;">Gasteiger-Marsili (PEOE)</span></div>
   <div style="color:#94a3b8;margin-bottom:2px;">MW: <span style="color:#e2e8f0;">${adme.mw ? adme.mw.toFixed(2) : "—"} Da</span> &nbsp; cLogP: <span style="color:#e2e8f0;">${adme.logp !== undefined ? adme.logp.toFixed(2) : "—"}</span> &nbsp; HBD: <span style="color:#e2e8f0;">${adme.hbd ?? "—"}</span> &nbsp; HBA: <span style="color:#e2e8f0;">${adme.hba ?? "—"}</span> &nbsp; TPSA: <span style="color:#e2e8f0;">${adme.tpsa ? adme.tpsa.toFixed(1) : "—"} Å²</span></div>
   <div style="color:${adme.lipinski_pass ? '#4ade80' : '#f87171'};margin-top:4px;">Lipinski: ${adme.lipinski_pass ? " Pass" : " " + (adme.lipinski_violations || 0) + " violation(s)"} &nbsp;|&nbsp; Veber: ${adme.veber_pass ? " Pass" : " Fail"}</div>
-  <div style="color:#64748b;margin-top:6px;">Files written: ${Object.values(r.files || {}).join(", ")}</div>
+  <div style="color:#64748b;margin-top:6px;">Files written: ${Object.values(r.files || {}).map(escapeHtml).join(", ")}</div>
 </div>`;
 
 
@@ -2149,7 +2214,7 @@ async function pollHPCTask(taskId, label) {
                     const total = r.interactions.length;
                     const byType = {};
                     r.interactions.forEach(i => { byType[i.type] = (byType[i.type] || 0) + 1; });
-                    const breakdown = Object.entries(byType).map(([t, c]) => `${t}: <span style="color:#38bdf8;">${c}</span>`).join(" &nbsp;|&nbsp; ");
+                    const breakdown = Object.entries(byType).map(([t, c]) => `${escapeHtml(t)}: <span style="color:#38bdf8;">${c}</span>`).join(" &nbsp;|&nbsp; ");
                     resultHtml = `<div style="background:#020617;padding:10px 12px;border-radius:6px;margin-top:6px;border:1px solid #1e293b;font-size:10px;">
   <div style="color:#a3e635;font-weight:600;margin-bottom:6px;">&#128279; Interaction Profile</div>
   <div style="color:#94a3b8;">Total contacts: <span style="color:#38bdf8;font-weight:600;">${total}</span></div>
@@ -2159,19 +2224,19 @@ async function pollHPCTask(taskId, label) {
 
                 } else if (r.message) {
                     // md_simulation result
-                    const filesLabel = Object.keys(r.files || {}).length > 0 ? ` &nbsp;|&nbsp; Files: ${Object.values(r.files).join(", ")}` : "";
+                    const filesLabel = Object.keys(r.files || {}).length > 0 ? ` &nbsp;|&nbsp; Files: ${Object.values(r.files).map(escapeHtml).join(", ")}` : "";
                     resultHtml = `<div style="background:#020617;padding:10px 12px;border-radius:6px;margin-top:6px;border:1px solid #1e293b;font-size:10px;">
   <div style="color:#a3e635;font-weight:600;margin-bottom:6px;">&#128187; MD Workflow Demonstration</div>
-  <div style="color:#e2e8f0;">${r.message}</div>
+  <div style="color:#e2e8f0;">${escapeHtml(r.message)}</div>
   <div style="color:#64748b;margin-top:4px;">Duration: ${r.duration_seconds ? r.duration_seconds.toFixed(1) + "s" : "—"}${filesLabel}</div>
   ${r.plot_svg ? `<div style="margin-top:8px;">${r.plot_svg}</div>` : ""}
 </div>`;
 
                 } else {
                     // Generic fallback
-                    resultHtml = `<pre style="background:#020617;padding:8px;border-radius:4px;margin-top:4px;color:#38bdf8;font-size:10px;max-height:200px;overflow:auto;border:1px solid #1e293b;">${JSON.stringify(r, null, 2)}</pre>`;
+                    resultHtml = `<pre style="background:#020617;padding:8px;border-radius:4px;margin-top:4px;color:#38bdf8;font-size:10px;max-height:200px;overflow:auto;border:1px solid #1e293b;">${escapeHtml(JSON.stringify(r, null, 2))}</pre>`;
                 }
-                appendLog("", "", resultHtml);
+                appendLog("", "", resultHtml, true);
             }
             if (statusDiv) statusDiv.classList.add("hidden");
 
@@ -2212,4 +2277,7 @@ async function probeRedisHealth() {
 }
 
 // Auto-probe Redis status 2 seconds after page load (give server time to warm up)
-window.addEventListener("load", () => setTimeout(probeRedisHealth, 2000));
+window.addEventListener("load", () => {
+    probeCapabilities();
+    setTimeout(probeRedisHealth, 2000);
+});

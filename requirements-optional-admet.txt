@@ -1,0 +1,3 @@
+# Optional neural ADMET backend. The application uses its labelled RDKit
+# heuristic fallback when this package is not installed.
+admet-ai==2.0.1

@@ -1,15 +1,30 @@
-# KineticSketch
+---
+title: CASCADE
+emoji: 🧬
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+fullWidth: true
+pinned: false
+short_description: Molecular sketching, cheminformatics, and research analysis workspace
+---
 
-KineticSketch is a molecular sketching and analysis project that I built to bring several computational chemistry steps into one browser workspace. A molecule can be drawn on the custom canvas, entered as SMILES, or searched by drug name. The same structure can then be viewed in 3D, checked for common drug-likeness rules, passed through a graph neural network, compared with a local drug database, and studied against a PDB protein structure.
+# CASCADE
+<sub>Computational Architecture for Sketching, Conformation, ADMET, and Docking Evaluation</sub>
 
-This project was developed by Prawin under the guidance of Dr. Rajiv K. Kar, Assistant Professor, Jyoti and Bhupat Mehta School of Health Sciences & Technology, IIT Guwahati.
+CASCADE is a comprehensive molecular sketching and analysis platform designed to unify several computational chemistry pipelines into a single browser-based workspace. Molecules can be drawn natively on the custom canvas, entered directly as SMILES strings, or resolved dynamically via a text-based drug name search. The resulting structure acts as a unified molecular object that can be visualized in 3D, evaluated against common drug-likeness rules, processed through a message-passing graph neural network (MPNN), compared against a local pharmacological database, and profiled for non-covalent interactions against PDB protein structures.
 
-> KineticSketch is a research and learning prototype. The model outputs, docking results, ADMET values, design score, similarity-based estimates, and interaction maps are computational estimates. They are not experimental or clinical results.
+The application features a deterministic SMILES workflow. When a structure is drawn, the frontend canvas graph is serialized and converted into a validated RDKit molecule and canonical SMILES. Text-based drug name queries are resolved instantaneously through an optimized local SQLite FTS5 database, with the PubChem API available as a reliable fallback. The normalized SMILES string subsequently drives the downstream pipeline, acting as the foundation for 2D cleanup, 3D conformer generation, descriptor calculation, model inference, and target-interaction analysis.
+
+CASCADE was developed by Prawin under the supervision of Dr. Rajiv K. Kar (Assistant Professor, Jyoti and Bhupat Mehta School of Health Sciences & Technology, IIT Guwahati).
+
+> CASCADE is an advanced computational chemistry tool. The model predictions, docking poses, ADMET profiles, heuristic design scores, similarity-based binding estimates, and non-covalent interaction maps are computational approximations and do not substitute for in vitro or clinical validation.
 
 ## Main features
 
 - Custom 2D molecular sketcher with draw, move, erase, zoom, pan, undo/redo, bond orders, and 23 ring/scaffold templates.
-- Input by SMILES or drug name, with local autocomplete and PubChem fallback.
+- Canvas-to-SMILES conversion, direct SMILES input, and automatic drug-name-to-SMILES resolution through local autocomplete with PubChem fallback.
 - RDKit 2D cleanup and ETKDGv3 3D conformer generation.
 - MMFF94, MMFF94s, and UFF force field minimization paths. (OPLS-AA is explicitly disabled/unsupported in the active release).
 - Interactive 3Dmol.js viewer and SDF, XYZ, and MOL2 downloads.
@@ -22,9 +37,7 @@ This project was developed by Prawin under the guidance of Dr. Rajiv K. Kar, Ass
 - Ollama-assisted natural-language commands for the 3D viewer.
 - Celery/Redis task submission and activity log.
 
-The detailed explanation of every UI feature, force field, formula, charge method, model layer, and current limitation is in [Project_KineticSketch.md](Project_KineticSketch.md).
-
-The reusable internet-hosting, security, storage-lifecycle, testing, monitoring, and release checklist is in [PRODUCTION_READINESS_CHECKLIST.md](PRODUCTION_READINESS_CHECKLIST.md).
+A comprehensive engineering and security audit detailing the implementation, dependencies, and verification findings is available in [AUDIT_REPORT.md](AUDIT_REPORT.md).
 
 ## How the pipeline works
 
@@ -78,7 +91,7 @@ KineticSketch/
 ├── scripts/
 │   ├── build_drug_db.py
 │   └── train_mdrepo.py
-├── Project_KineticSketch.md        # Full explanation and live-demo guide
+├── AUDIT_REPORT.md                 # Verified engineering findings
 ├── requirements.txt
 ├── run.py
 └── wsgi.py
@@ -86,7 +99,22 @@ KineticSketch/
 
 ## Setup
 
-The current reference environment is Fedora Linux with Python 3.13. A virtual environment is recommended.
+### 1. Docker Installation (Recommended)
+The easiest and most reliable way to run the application across any operating system (Windows, Mac, Linux) is using Docker. This avoids manual dependency management and guarantees computational reproducibility.
+
+If you do not have Docker installed, please download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+Once Docker is running on your machine, simply execute:
+
+```bash
+git clone https://github.com/prawinin/KineticSketch.git
+cd KineticSketch
+python compose_up.py
+```
+The script will automatically allocate a free port, spin up all required databases and Python dependencies isolated in a container, and launch the application in your default web browser.
+
+### 2. Traditional Local Installation
+Alternatively, if you prefer running it directly on your host machine, the portable runtime targets Python 3.11 or newer and CPU inference. A virtual environment is highly recommended.
 
 ```bash
 git clone https://github.com/prawinin/KineticSketch.git
@@ -109,12 +137,13 @@ Useful settings include:
 
 ```env
 HOST=127.0.0.1
-PORT=5000
+# Leave PORT unset locally to select the first free port from 7860.
 REDIS_URL=redis://localhost:6379/0
-OLLAMA_ENABLED=1
+OLLAMA_ENABLED=0
 OLLAMA_API_URL=http://localhost:11434
 OLLAMA_MODEL=qwen2.5-coder:7b
 PYMOL_ENABLED=0
+GNINA_ENABLED=0
 ```
 
 The actual defaults are defined in `app/config.py`. Do not store real secrets in the repository.
@@ -126,11 +155,8 @@ source .venv/bin/activate
 python run.py
 ```
 
-Then open:
-
-```text
-http://127.0.0.1:5000
-```
+The launcher prints the selected URL. If `PORT` is not set, it chooses the first
+available port starting at 7860. Hosting-provider ports are honored exactly.
 
 For queued Compute-page operations, Redis and a Celery worker are also required. The exact Celery app is `app.tasks.celery_app:celery_app`.
 
@@ -139,7 +165,7 @@ redis-server
 celery -A app.tasks.celery_app:celery_app worker --loglevel=info
 ```
 
-Without Redis, normal molecule rendering still works and 3D optimization has a local threaded fallback. Queued interaction and MD tasks require Redis/Celery.
+Without Redis, normal molecule rendering still works, but every Compute-page task returns HTTP 503. This fail-closed behavior avoids inconsistent task state across multiple web workers.
 
 ## Optional components
 
@@ -153,7 +179,9 @@ ollama pull qwen2.5-coder:7b
 
 ### GNINA
 
-Place an executable named `gnina` in the project root or set `GNINA_PATH`. Docking is unavailable without it.
+GNINA is not required. Deployed builds disable it by default and hide docking
+controls. For an optional local installation, place an executable named `gnina`
+in the project root or set `GNINA_PATH` and `GNINA_ENABLED=1`.
 
 ### Local data and checkpoint
 
@@ -164,6 +192,12 @@ The current working repository contains:
 - `app/models/mdrepo_predictor.pt`.
 
 These are large/generated research assets, so availability may differ between distributions of the repository. Their source and redistribution permissions should be checked before publishing them.
+
+Copy these assets to the listed project-relative paths before building. Runtime
+locations are resolved from the installed project root, not the shell's working
+directory, and every storage path has an environment override.
+
+
 
 ## Main API endpoints
 
@@ -194,6 +228,8 @@ These are large/generated research assets, so availability may differ between di
 - **Fail-Closed GNN Loading:** SHA-256 weight hash validation with automatic abort on checkpoint mismatch or corruption.
 - **Authentication & Ownership:** Session security flags, rate-limited login, and SQLite task ownership mapping.
 - **Container Hardening:** Isolated internal service ports (Redis, PyMOL, Ollama) and shared persistent volumes.
+- **Explicit Inference Device:** `MODEL_DEVICE=cpu` is the safe default; GPU execution must be selected explicitly.
+- **Health Probes:** `/health/live` reports liveness and `/health/ready` verifies Redis, SQLite, writable job storage, and the model checkpoint.
 
 ## Training
 

@@ -11,13 +11,12 @@ import logging  # noqa: E402
 import sqlite3  # noqa: E402
 import numpy as np  # noqa: E402
 from typing import List, Dict, Any, Optional  # noqa: E402
+from app.paths import DRUG_DATABASE_PATH, DRUG_FINGERPRINT_PATH
 
 logger = logging.getLogger("KineticSketch.DrugDatabase")
 
-# Paths — relative to project root
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB_PATH = os.path.join(_PROJECT_ROOT, "data", "drug_database.sqlite")
-FP_PATH = os.path.join(_PROJECT_ROOT, "data", "drug_fingerprints.npz")
+DB_PATH = str(DRUG_DATABASE_PATH)
+FP_PATH = str(DRUG_FINGERPRINT_PATH)
 
 # Popular common synonyms mapping to standard INN names
 POPULAR_SYNONYMS = {
@@ -327,4 +326,5 @@ def get_db_stats() -> Dict[str, int]:
         fps = int(_fp_drug_ids.shape[0]) if _fp_drug_ids is not None else 0
         return {"status": "available", "drugs": drugs, "targets": targets, "fingerprints": fps}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        logger.error("Failed to read drug database statistics: %s", e)
+        return {"status": "error", "error": "Statistics unavailable"}

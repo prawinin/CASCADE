@@ -151,4 +151,4 @@ def _predict_with_rdkit_fallback(smiles: str) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"RDKit ADMET fallback error: {e}")
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "ADMET fallback calculation failed"}

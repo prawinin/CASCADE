@@ -1,15 +1,4 @@
 from celery import Celery  # noqa: E402
-import os  # noqa: E402
-import sys  # noqa: E402
-
-# Ensure app and parent directories are in python path
-current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-parent_dir = os.path.dirname(current_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
 from app.config import get_config  # noqa: E402
 
 config = get_config()
@@ -28,6 +17,12 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    result_expires=3600,
+    task_time_limit=600,
+    task_soft_time_limit=540,
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
     beat_schedule={
         "storage-cleanup-hourly": {
             "task": "app.tasks.compute_tasks.storage_cleanup_task",

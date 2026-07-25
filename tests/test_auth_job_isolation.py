@@ -3,6 +3,7 @@ import os
 import json
 import sqlite3
 from app.main import flask_app, DB_USERS_PATH
+from app.paths import JOBS_DIR
 
 @pytest.fixture
 def client():
@@ -91,7 +92,7 @@ def test_auth_flow_and_job_isolation(client):
     assert job_id is not None
 
     # Check that job directories exist and are properly scoped
-    job_dir = os.path.join(os.getcwd(), "jobs", user_id, job_id)
+    job_dir = os.path.join(JOBS_DIR, user_id, job_id)
     assert os.path.isdir(job_dir)
     assert os.path.isfile(os.path.join(job_dir, "outputs", "molecule.sdf"))
     assert os.path.isfile(os.path.join(job_dir, "outputs", "molecule.xyz"))

@@ -90,6 +90,7 @@ semgrep*.json
 bandit*.json
 sonar-report.*
 pdf-forge-exports/
+/Project_kinetic_sketch.pdf
 
 # Temporary repair and debugging scripts
 /fix_*.py
@@ -105,6 +106,14 @@ gnina
 DEPLOYMENT.md
 TESTING.md
 COMPLETION_SUMMARY.md
-PRODUCTION_READINESS_CHECKLIST.md
-Project_KineticSketch.md
-Project_kinetic_sketch.pdf
+
+# Local operator, deployment, and instruction documents
+/DEPLOYMENT*.md
+/*GUIDE*.md
+/*CHECKLIST*.md
+/*INSTRUCTION*.md
+/Project_KineticSketch.md
+
+# Office and manuscript documents
+*.docx
+*.pdf

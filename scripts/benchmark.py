@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KineticSketch Pipeline Benchmark
+CASCADE Pipeline Benchmark
 Measures real-world latency for every module and reports the results.
 
 Run from the project root:
@@ -11,7 +11,7 @@ import sys  # noqa: E402
 import os  # noqa: E402
 import time  # noqa: E402
 
-# --- Setup paths so we can import from the app ---
+# --- Configure system path to import core modules ---
 ROOT = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.join(ROOT, "app")
 for p in [ROOT, APP_DIR, os.path.join(APP_DIR, "services")]:
@@ -50,7 +50,7 @@ def measure(label, fn, runs=3):
 
 print()
 print("=" * 58)
-print("  KineticSketch AI — Pipeline Benchmark")
+print("  CASCADE AI — Pipeline Benchmark")
 print(f"  Test molecule: Aspirin  ({TEST_SMILES})")
 print("=" * 58)
 

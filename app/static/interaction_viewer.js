@@ -1,6 +1,12 @@
 // app/static/interaction_viewer.js
 // Standalone SVG Interaction Diagram Renderer for KineticSketch
 
+function escapeSvgText(value) {
+    return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+    })[character]);
+}
+
 function renderInteractionDiagram(interactions, ligand2d) {
     const container = document.getElementById("interactionDiagramContainer");
     if (!container) return;
@@ -211,7 +217,7 @@ function renderInteractionDiagram(interactions, ligand2d) {
             <g transform="translate(${midX}, ${midY})">
                 <rect x="-24" y="-8" width="48" height="15" rx="3" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="0.5" />
                 <text x="0" y="2" font-size="8px" font-weight="600" fill="${labelColor}" text-anchor="middle">
-                    ${inter.distance_angstrom}Å
+                    ${Number.isFinite(Number(inter.distance_angstrom)) ? Number(inter.distance_angstrom).toFixed(2) : "—"}Å
                 </text>
             </g>
         `;
@@ -267,7 +273,7 @@ function renderInteractionDiagram(interactions, ligand2d) {
         svgContent += `
             <text x="${coord.x}" y="${coord.y + 0.5}" font-size="11px" font-weight="700" fill="${color}" 
                   text-anchor="middle" dominant-baseline="central">
-                ${atom.element}
+                ${escapeSvgText(atom.element)}
             </text>
         `;
     });
@@ -298,7 +304,7 @@ function renderInteractionDiagram(interactions, ligand2d) {
 
     residues.forEach(res => {
         const style = getResidueColorStyles(res.name);
-        const label = `${res.name} ${res.chain}:${res.seq}`;
+        const label = escapeSvgText(`${res.name} ${res.chain}:${res.seq}`);
         
         // Calculate pill dimensions based on text length
         const charCount = label.length;

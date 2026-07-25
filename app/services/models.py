@@ -1,22 +1,17 @@
 import os  # noqa: E402
 import logging  # noqa: E402
 
-# Override GFX version for AMD Radeon RX 6500M (reported as gfx1030 on Manjaro/ROCm).
-# Maps the GPU to the supported RDNA2 gfx1030 instruction set for PyTorch HIP dispatch.
-if "HSA_OVERRIDE_GFX_VERSION" not in os.environ:
-    os.environ["HSA_OVERRIDE_GFX_VERSION"] = "10.3.0"
-
 
 import torch  # noqa: E402
 import torch.nn as nn  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 from typing import List, Optional, Dict, Any  # noqa: E402
+from app.paths import MODEL_WEIGHTS_PATH
 
 logger = logging.getLogger("KineticSketch.Models")
 
 #  Weights path 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-WEIGHTS_PATH = os.path.join(_PROJECT_ROOT, "app", "models", "mdrepo_predictor.pt")
+WEIGHTS_PATH = str(MODEL_WEIGHTS_PATH)
 
 #  Singleton predictor (loaded once at server startup) 
 _predictor_instance: Optional["MDRepoPredictor"] = None
@@ -24,6 +19,24 @@ _predictor_device: Optional[torch.device] = None
 
 # Common organic & bio-elements vocabulary
 ELEMENT_VOCAB: List[str] = ['H', 'C', 'N', 'O', 'P', 'S', 'F', 'Cl', 'Br', 'I', 'B', 'Si']
+
+
+def verify_model_checkpoint() -> bool:
+    """Verify that the configured model exists and matches its trusted digest."""
+
+    import hashlib
+
+    if not os.path.isfile(WEIGHTS_PATH) or os.path.getsize(WEIGHTS_PATH) <= 0:
+        return False
+    digest = hashlib.sha256()
+    with open(WEIGHTS_PATH, "rb") as checkpoint_file:
+        for byte_block in iter(lambda: checkpoint_file.read(65536), b""):
+            digest.update(byte_block)
+    expected_hash = os.getenv(
+        "MODEL_SHA256",
+        "f9d35a9adccf8756db869ae7dba94c04d7025470efbd6a2550a232bca8b8c030",
+    ).lower()
+    return bool(expected_hash) and digest.hexdigest() == expected_hash
 
 
 def get_one_hot_nodes(mol) -> torch.Tensor:
@@ -329,25 +342,16 @@ def get_predictor(device: Optional[torch.device] = None) -> MDRepoPredictor:
     }
     state_dict = None
 
-    import hashlib
-
     if not os.path.exists(WEIGHTS_PATH):
         raise FileNotFoundError(
             f"Trained weights checkpoint not found at {WEIGHTS_PATH}. "
             "Please train the model first."
         )
 
-    # SHA-256 Verification
-    sha256_hash = hashlib.sha256()
-    with open(WEIGHTS_PATH, "rb") as f:
-        for byte_block in iter(lambda: f.read(65536), b""):
-            sha256_hash.update(byte_block)
-    chk_hash = sha256_hash.hexdigest()
-    expected_hash = "f9d35a9adccf8756db869ae7dba94c04d7025470efbd6a2550a232bca8b8c030"
-    if chk_hash != expected_hash:
+    if not verify_model_checkpoint():
         raise ValueError(
-            f"Checkpoint SHA-256 mismatch! Got: {chk_hash}, expected: {expected_hash}. "
-            "Checkpoint may be corrupted or modified."
+            "Checkpoint SHA-256 mismatch. Set MODEL_SHA256 to the trusted digest "
+            "when intentionally deploying a different trained checkpoint."
         )
 
     try:

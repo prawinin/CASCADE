@@ -10,22 +10,26 @@ import sys  # noqa: E402
 import json  # noqa: E402
 import logging  # noqa: E402
 import html as html_module  # noqa: E402
-from datetime import datetime  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
 from types import SimpleNamespace  # noqa: E402
 from typing import Any, Dict, List, Optional  # noqa: E402
 
-# Setup relative paths so the project can be run from anywhere
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-services_dir = os.path.join(current_dir, "services")
-if services_dir not in sys.path:
-    sys.path.insert(0, services_dir)
-
 from app.config import get_config  # noqa: E402
+from app.paths import (  # noqa: E402
+    APP_DIR,
+    GUI_DIR,
+    JOBS_DIR,
+    USERS_DATABASE_PATH,
+    ensure_runtime_directories,
+)
+
+ensure_runtime_directories()
+current_dir = str(APP_DIR)
 
 config = get_config()
+is_valid_config, config_errors = config.validate()
+if not is_valid_config:
+    raise RuntimeError("Invalid KineticSketch configuration: " + "; ".join(config_errors))
 
 # Configure native logging
 logging.basicConfig(
@@ -39,7 +43,7 @@ logger = logging.getLogger("KineticSketch.Main")
 
 # Import custom modular services from services package
 try:
-    from services import (
+    from app.services import (
         CheckpointManager,
         optimize_conformer_3d,
         write_all_conformers,
@@ -56,7 +60,7 @@ except ImportError as e:
 
 # Import drug database service (optional — gracefully unavailable until built)
 try:
-    from services.drug_database import (
+    from app.services.drug_database import (
         lookup_smiles_by_name,
         get_autocomplete_suggestions,
         is_available as drug_db_available,
@@ -72,7 +76,7 @@ except ImportError:
 
 # Import singleton predictor factory
 try:
-    from services.models import get_predictor
+    from app.services.models import get_predictor
 except ImportError:
     get_predictor = None
 
@@ -170,7 +174,7 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
         log_checkpoint_to_ui(state, "Error: Invalid molecular structure", "error")
         return
 
-    logger.info(f"Initiating modular dynamics pipeline for SMILES: {smiles}")
+    logger.info("Initiating molecular dynamics pipeline for a validated structure")
 
     state.predictions_html = "<div style='color: var(--text-secondary); font-size: 0.95rem;'><i class='fa-solid fa-spinner fa-spin' style='margin-right: 8px;'></i>Running structural dynamics optimization pipeline...</div>"
     state.repurposing_html = "<div style='color: var(--text-secondary); font-size: 0.95rem;'><i class='fa-solid fa-spinner fa-spin' style='margin-right: 8px;'></i>Searching 5,576 PDB targets...</div>"
@@ -590,9 +594,12 @@ def process_smiles_submission(state: State, smiles: str, submission_key: Optiona
         return False
 
     try:
-        # Validate SMILES length (max 2000 chars)
-        if len(smiles) > 2000:
-            log_checkpoint_to_ui(state, "Error: SMILES string too long (max 2000 chars)", "error")
+        if len(smiles) > config.SMILES_LENGTH_LIMIT:
+            log_checkpoint_to_ui(
+                state,
+                f"Error: SMILES string too long (max {config.SMILES_LENGTH_LIMIT} chars)",
+                "error",
+            )
             return False
 
         # Strict sanitization with RDKit
@@ -601,9 +608,12 @@ def process_smiles_submission(state: State, smiles: str, submission_key: Optiona
             log_checkpoint_to_ui(state, f"Invalid SMILES string: '{smiles[:50]}'", "error")
             return False
 
-        # Validate molecule size
-        if mol.GetNumAtoms() > 200:
-            log_checkpoint_to_ui(state, "Error: Molecule too large (max 200 atoms)", "error")
+        if mol.GetNumAtoms() > config.MOLECULE_SIZE_LIMIT:
+            log_checkpoint_to_ui(
+                state,
+                f"Error: Molecule too large (max {config.MOLECULE_SIZE_LIMIT} atoms)",
+                "error",
+            )
             return False
 
         # Calculate 2D coordinates layout
@@ -822,7 +832,7 @@ def build_smiles_response(state: Any, smiles: str, user_id: Optional[str] = None
     success = process_smiles_submission(
         response_state,
         smiles,
-        f"api:{smiles}:{datetime.utcnow().isoformat()}",
+        f"api:{smiles}:{datetime.now(timezone.utc).isoformat()}",
     )
     canvas_payload_obj = {}
     try:
@@ -848,27 +858,57 @@ import uuid  # noqa: E402
 import hashlib  # noqa: E402
 import hmac  # noqa: E402
 import functools  # noqa: E402
+import time  # noqa: E402
+from urllib.parse import quote  # noqa: E402
 from datetime import timedelta  # noqa: E402
 from flask import Flask, jsonify, request, send_from_directory, session  # noqa: E402
+from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: E402
 
 flask_app = Flask(__name__, static_folder=os.path.join(current_dir, "static"))
 
-secret_key = os.environ.get("FLASK_SECRET_KEY")
+secret_key = config.SECRET_KEY
 if not secret_key or len(secret_key) < 32:
     raise RuntimeError("FLASK_SECRET_KEY must be set to a random value of at least 32 characters.")
 
 flask_app.secret_key = secret_key
+embedded_mode = config.EMBEDDED_MODE
 flask_app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV", "development") == "production",
-    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=(
+        os.environ.get("FLASK_ENV", "development") == "production" or embedded_mode
+    ),
+    SESSION_COOKIE_SAMESITE="None" if embedded_mode else "Lax",
+    # CHIPS keeps an embedded Space session partitioned to its top-level site.
+    # Flask 3.1+ emits the Secure and Partitioned cookie attributes together.
+    SESSION_COOKIE_PARTITIONED=embedded_mode,
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+    MAX_CONTENT_LENGTH=12 * 1024 * 1024,
+    JSON_SORT_KEYS=False,
 )
+
+
+@flask_app.errorhandler(413)
+def request_too_large(_error):
+    return jsonify({"ok": False, "error": "Request body exceeds the configured size limit"}), 413
+if config.TRUST_PROXY_HOPS:
+    flask_app.wsgi_app = ProxyFix(
+        flask_app.wsgi_app,
+        x_for=config.TRUST_PROXY_HOPS,
+        x_proto=config.TRUST_PROXY_HOPS,
+        x_host=config.TRUST_PROXY_HOPS,
+        x_port=config.TRUST_PROXY_HOPS,
+    )
 
 @flask_app.after_request
 def add_security_headers(response):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
-    response.headers.setdefault("X-Frame-Options", "DENY")
+    frame_ancestors = config.FRAME_ANCESTORS
+    if frame_ancestors == "'none'":
+        response.headers.setdefault("X-Frame-Options", "DENY")
+    else:
+        # X-Frame-Options has no standard multi-origin allow-list. CSP's
+        # frame-ancestors directive is the authoritative restriction here.
+        response.headers.pop("X-Frame-Options", None)
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault(
         "Content-Security-Policy",
@@ -877,64 +917,107 @@ def add_security_headers(response):
         "https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data:; "
         "connect-src 'self'; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com",
     )
+    response.headers["Content-Security-Policy"] += (
+        f"; object-src 'none'; base-uri 'self'; frame-ancestors {frame_ancestors}; "
+        "form-action 'self'"
+    )
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if request.path.startswith("/api/auth/"):
+        response.headers.setdefault("Cache-Control", "no-store")
     if flask_app.config.get("SESSION_COOKIE_SECURE"):
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
 
-# Test dummy
+# In-memory limiter is used only for tests or explicitly Redis-free demos.
 test_login_attempts = {}
+
+
+def _rate_limit(bucket: str, limit: int, window_seconds: int, identity: str):
+    key_suffix = hashlib.sha256(identity.encode("utf-8", errors="replace")).hexdigest()
+    if flask_app.config.get("TESTING") or not config.REQUIRE_REDIS:
+        now = time.time()
+        memory_key = (bucket, key_suffix)
+        attempts = [t for t in test_login_attempts.get(memory_key, []) if now - t < window_seconds]
+        test_login_attempts[memory_key] = attempts
+        if len(attempts) >= limit:
+            return jsonify({"ok": False, "error": "Too many requests. Please try again later."}), 429
+        attempts.append(now)
+        return None
+
+    try:
+        import redis as redis_lib
+
+        redis_client = redis_lib.from_url(
+            config.REDIS_URL, socket_connect_timeout=1, socket_timeout=1
+        )
+        redis_key = f"rate:{bucket}:{key_suffix}"
+        current = redis_client.incr(redis_key)
+        if current == 1:
+            redis_client.expire(redis_key, window_seconds)
+        if current > limit:
+            return jsonify({"ok": False, "error": "Too many requests. Please try again later."}), 429
+        return None
+    except Exception:
+        return jsonify({"ok": False, "error": "Request limiting service unavailable"}), 503
 
 @flask_app.before_request
 def rate_limit_login():
-    if request.path == "/api/auth/login" and request.method == "POST":
-        ip = request.remote_addr
-        if flask_app.config.get("TESTING"):
-            import time
-            now = time.time()
-            attempts = test_login_attempts.get(ip, [])
-            attempts = [t for t in attempts if now - t < 60]
-            test_login_attempts[ip] = attempts
-            if len(attempts) >= 5:
-                return jsonify({"ok": False, "error": "Too many login attempts. Please try again in 1 minute."}), 429
-            attempts.append(now)
-            return
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return None
 
-        try:
-            import redis as redis_lib
-            from app.config import get_config
-            url = get_config().REDIS_URL
-            r = redis_lib.from_url(url, socket_connect_timeout=1, socket_timeout=1)
-            key = f"login_rate_{ip}"
-            current = r.get(key)
-            if current and int(current) >= 5:
-                return jsonify({"ok": False, "error": "Too many login attempts. Please try again in 1 minute."}), 429
-            pipe = r.pipeline()
-            pipe.incr(key)
-            pipe.expire(key, 60)
-            pipe.execute()
-        except Exception:
-            return jsonify({"ok": False, "error": "Authentication service unavailable (Redis offline)"}), 503
+    fetch_site = request.headers.get("Sec-Fetch-Site", "")
+    if fetch_site == "cross-site" and request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "Cross-site request rejected"}), 403
 
-DB_USERS_PATH = os.path.join(current_dir, "..", "data", "users.sqlite")
+    client_ip = request.remote_addr or "unknown"
+    if request.path == "/api/auth/login":
+        limited = _rate_limit("login", 5, 60, client_ip)
+        if limited:
+            response, status = limited
+            if status == 429:
+                return jsonify({
+                    "ok": False,
+                    "error": "Too many login attempts. Please try again in 1 minute.",
+                }), 429
+            return response, status
+    if request.path == "/api/auth/register":
+        return _rate_limit("register", 5, 3600, client_ip)
+    if request.path in {
+        "/api/analyze_smiles", "/api/pdb/upload", "/api/pdb/fetch",
+        "/api/dock", "/api/admet", "/api/mcs_align", "/api/tasks/submit",
+    }:
+        identity = str(session.get("user_id") or client_ip)
+        return _rate_limit("compute", 30, 60, identity)
+    return None
+
+DB_USERS_PATH = str(USERS_DATABASE_PATH)
 os.makedirs(os.path.dirname(DB_USERS_PATH), exist_ok=True)
 
 def hash_password(password: str) -> str:
+    iterations = int(os.getenv("PASSWORD_HASH_ITERATIONS", "600000"))
     salt = os.urandom(16)
-    pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
-    return salt.hex() + ":" + pw_hash.hex()
+    pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, iterations)
+    return f"pbkdf2_sha256${iterations}${salt.hex()}${pw_hash.hex()}"
 
 def check_password(password: str, hashed: str) -> bool:
     try:
-        salt_hex, hash_hex = hashed.split(":")
+        if hashed.startswith("pbkdf2_sha256$"):
+            _, iteration_text, salt_hex, hash_hex = hashed.split("$", 3)
+            iterations = int(iteration_text)
+        else:
+            salt_hex, hash_hex = hashed.split(":", 1)
+            iterations = 100000
         salt = bytes.fromhex(salt_hex)
-        pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+        pw_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, iterations)
         return hmac.compare_digest(pw_hash.hex(), hash_hex)
     except Exception:
         return False
 
 def init_users_db():
-    conn = sqlite3.connect(DB_USERS_PATH)
+    conn = sqlite3.connect(DB_USERS_PATH, timeout=10)
     cursor = conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
@@ -988,6 +1071,9 @@ def login_required(f):
 
 @flask_app.post("/api/auth/register")
 def register():
+    if not config.REGISTRATION_ENABLED:
+        return jsonify({"ok": False, "error": "New account registration is disabled"}), 403
+
     payload = request.get_json(silent=True) or {}
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", ""))
@@ -998,8 +1084,8 @@ def register():
     if len(username) < 3 or len(username) > 32 or not all(c.isalnum() or c in "_-" for c in username):
         return jsonify({"ok": False, "error": "Username must be 3-32 alphanumeric, underscore, or hyphen characters"}), 400
 
-    if len(password) < 12:
-        return jsonify({"ok": False, "error": "Password must be at least 12 characters long"}), 400
+    if len(password) < 12 or len(password) > 1024:
+        return jsonify({"ok": False, "error": "Password must be between 12 and 1024 characters"}), 400
 
     conn = sqlite3.connect(DB_USERS_PATH)
     try:
@@ -1020,7 +1106,7 @@ def login():
     username = str(payload.get("username", "")).strip()
     password = str(payload.get("password", ""))
 
-    if not username or not password:
+    if not username or not password or len(password) > 1024:
         return jsonify({"ok": False, "error": "Username and password are required"}), 400
 
     conn = sqlite3.connect(DB_USERS_PATH)
@@ -1030,6 +1116,12 @@ def login():
     conn.close()
 
     if row and check_password(password, row[1]):
+        if not row[1].startswith("pbkdf2_sha256$"):
+            with sqlite3.connect(DB_USERS_PATH) as upgrade_conn:
+                upgrade_conn.execute(
+                    "UPDATE users SET password_hash = ? WHERE id = ?",
+                    (hash_password(password), row[0]),
+                )
         session.permanent = True
         session["user_id"] = row[0]
         session["username"] = username
@@ -1081,7 +1173,7 @@ def download_job_file(job_id, file_type):
 
     return send_from_directory(directory, filename, as_attachment=False)
 
-gui_dir = os.path.join(current_dir, "gui")
+gui_dir = str(GUI_DIR)
 
 @flask_app.route('/static/<filename>')
 def serve_static_files(filename):
@@ -1117,12 +1209,14 @@ def drug_lookup():
     name = request.args.get("name", "").strip()
     if not name:
         return jsonify({"ok": False, "error": "Name parameter is required."}), 400
+    if len(name) > 200:
+        return jsonify({"ok": False, "error": "Name exceeds 200 characters"}), 400
 
     # 1. Try local drug database first
     try:
         result = lookup_smiles_by_name(name)
         if result and result.get("smiles"):
-            logger.info(f"Drug lookup hit (local DB): {name} → {result['smiles'][:40]}")
+            logger.info("Drug lookup hit in local database")
             return jsonify({
                 "ok": True,
                 "smiles": result["smiles"],
@@ -1135,18 +1229,19 @@ def drug_lookup():
 
     # 2. Fallback: PubChem REST API
     try:
-        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{name}/property/CanonicalSMILES/json"
+        encoded_name = quote(name, safe="")
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{encoded_name}/property/CanonicalSMILES/json"
         res = requests.get(url, timeout=5)
         if res.status_code == 200:
             data = res.json()
             smiles = data.get("PropertyTable", {}).get("Properties", [{}])[0].get("CanonicalSMILES")
             if smiles:
-                logger.info(f"Drug lookup hit (PubChem fallback): {name}")
+                logger.info("Drug lookup hit using PubChem fallback")
                 return jsonify({"ok": True, "smiles": smiles, "name": name, "source": "pubchem"})
         return jsonify({"ok": False, "error": f"Could not find SMILES for compound '{name}'."}), 404
     except Exception as e:
         logger.error(f"PubChem fallback error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Drug lookup service failed"}), 500
 
 
 @flask_app.get("/api/drug/autocomplete")
@@ -1156,7 +1251,10 @@ def drug_autocomplete():
     Used by the unified input field's live dropdown.
     """
     prefix = request.args.get("prefix", "").strip()
-    limit = min(int(request.args.get("limit", 10)), 20)
+    try:
+        limit = max(1, min(int(request.args.get("limit", 10)), 20))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "limit must be an integer"}), 400
     if len(prefix) < 2:
         return jsonify({"ok": True, "suggestions": []})
     try:
@@ -1168,17 +1266,23 @@ def drug_autocomplete():
 
 @flask_app.get("/health")
 def health():
+    from app.services import is_gnina_available
     return jsonify({
         "status": "healthy",
         "environment": config.ENVIRONMENT,
+        "capabilities": {
+            "gnina": is_gnina_available(),
+            "registration": config.REGISTRATION_ENABLED,
+        },
         "services": {
             "rdkit": "available" if Chem is not None else "unavailable",
             "torch": "available" if torch is not None else "unavailable",
             "pymol": "enabled" if config.PYMOL_ENABLED else "disabled",
             "ollama": "enabled" if config.OLLAMA_ENABLED else "disabled",
+            "gnina": "available" if is_gnina_available() else "disabled",
             "drug_database": get_db_stats(),
         },
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     })
 
 @flask_app.post("/api/analyze_smiles")
@@ -1187,6 +1291,13 @@ def analyze_smiles():
     smiles = str(payload.get("smiles", "")).strip()
     if not smiles:
         return jsonify({"ok": False, "error": "SMILES is required."}), 400
+    if len(smiles) > config.SMILES_LENGTH_LIMIT:
+        return jsonify({"ok": False, "error": "SMILES exceeds configured length limit"}), 400
+    validation_mol = Chem.MolFromSmiles(smiles, sanitize=True)
+    if validation_mol is None:
+        return jsonify({"ok": False, "error": "Invalid SMILES"}), 400
+    if validation_mol.GetNumAtoms() > config.MOLECULE_SIZE_LIMIT:
+        return jsonify({"ok": False, "error": "Molecule exceeds configured atom limit"}), 400
 
     user_id = session.get("user_id")
     job_id = payload.get("job_id") or str(uuid.uuid4())
@@ -1203,6 +1314,8 @@ def chat():
     prompt = str(payload.get("prompt", "")).strip()
     if not prompt:
         return jsonify({"ok": False, "error": "Prompt is required."}), 400
+    if len(prompt) > 1000:
+        return jsonify({"ok": False, "error": "Prompt exceeds 1000 characters"}), 400
     try:
         cmd = query_ollama_for_pymol(prompt)
         source = "ollama" if config.OLLAMA_ENABLED else "fallback"
@@ -1210,7 +1323,7 @@ def chat():
         return jsonify({"ok": True, "command": cmd, "result": result, "source": source})
     except Exception as e:
         logger.error(f"Chat API error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Chat processing failed"}), 500
 
 @flask_app.post("/api/optimize_2d")
 def optimize_2d():
@@ -1243,15 +1356,17 @@ def descriptors():
     smiles = str(payload.get("smiles", "")).strip()
     if not smiles:
         return jsonify({"ok": False, "error": "SMILES is required"}), 400
+    if len(smiles) > config.SMILES_LENGTH_LIMIT:
+        return jsonify({"ok": False, "error": "SMILES exceeds configured length limit"}), 400
     try:
         mol = smiles_to_rdkit_mol(smiles)
         if mol is None:
-            return jsonify({"ok": False, "error": f"Invalid SMILES: {smiles}"}), 400
+            return jsonify({"ok": False, "error": "Invalid SMILES"}), 400
         desc = calculate_adme_descriptors(mol)
         return jsonify(desc)
     except Exception as e:
         logger.error(f"Descriptors error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Descriptor calculation failed"}), 500
 
 @flask_app.post("/api/pdb/upload")
 def pdb_upload():
@@ -1282,7 +1397,7 @@ def pdb_upload():
         return jsonify({"ok": False, "error": f"Unsupported file type: {ext}. Upload a .pdb or .pdb.gz file."}), 400
 
     max_decompressed_size = 10 * 1024 * 1024
-    content_bytes = b""
+    content_buffer = bytearray()
     try:
         if ext == ".pdb.gz":
             try:
@@ -1291,20 +1406,20 @@ def pdb_upload():
                     chunk = gzip_file.read(65536)
                     if not chunk:
                         break
-                    content_bytes += chunk
-                    if len(content_bytes) > max_decompressed_size:
+                    content_buffer.extend(chunk)
+                    if len(content_buffer) > max_decompressed_size:
                         return jsonify({"ok": False, "error": "Decompressed file size exceeds limit of 10 MB."}), 400
             except Exception as ex:
                 return jsonify({"ok": False, "error": f"Failed to decompress file: {ex}"}), 400
         else:
-            content_bytes = file.read(max_decompressed_size + 1)
-            if len(content_bytes) > max_decompressed_size:
+            content_buffer.extend(file.read(max_decompressed_size + 1))
+            if len(content_buffer) > max_decompressed_size:
                 return jsonify({"ok": False, "error": "File size exceeds limit of 10 MB."}), 400
     except Exception as e:
         return jsonify({"ok": False, "error": f"Error reading upload stream: {e}"}), 400
 
     try:
-        content_str = content_bytes.decode("utf-8", errors="ignore")
+        content_str = bytes(content_buffer).decode("utf-8", errors="ignore")
         lines = content_str.splitlines()
 
         pdb_keywords = {"HEADER", "TITLE", "REMARK", "ATOM", "HETATM", "CRYST1", "SEQRES", "HELIX", "SHEET"}
@@ -1346,14 +1461,14 @@ def pdb_upload():
 
         return jsonify({
             "ok": True,
-            "filename": filename,
+            "filename": safe_name,
             "pdb_id": pseudo_id,
             "job_id": job_id,
             "ligands": [{"resname": name, "chain": chain, "seq": seq} for name, chain, seq in ligands]
         })
     except Exception as e:
         logger.error(f"PDB upload error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "PDB upload processing failed"}), 500
 
 @flask_app.get("/api/pdb/fetch")
 def pdb_fetch():
@@ -1373,7 +1488,7 @@ def pdb_fetch():
         })
     except Exception as e:
         logger.error(f"PDB fetch error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "PDB retrieval failed"}), 502
 
 @flask_app.post("/api/interactions")
 def interactions():
@@ -1452,7 +1567,7 @@ def interactions():
         })
     except Exception as e:
         logger.error(f"Interactions profiling error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Interaction profiling failed"}), 500
 
 @flask_app.post("/api/dock")
 def dock():
@@ -1490,12 +1605,17 @@ def dock():
         result = dock_molecule(
             ligand_sdf_path=ligand_sdf,
             receptor_pdb_path=receptor_path,
+            output_dir=os.path.join(job_dir, "outputs"),
             **box_params
         )
+        if result.get("ok"):
+            # Do not disclose host filesystem locations in an API response.
+            result["output_sdf"] = "docked_poses.sdf"
+            result.pop("log_path", None)
         return jsonify(result)
     except Exception as e:
         logger.error(f"Docking error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Docking failed"}), 500
 
 @flask_app.post("/api/admet")
 def admet():
@@ -1505,12 +1625,14 @@ def admet():
     smiles = str(payload.get("smiles", "")).strip()
     if not smiles:
         return jsonify({"ok": False, "error": "SMILES is required"}), 400
+    if len(smiles) > config.SMILES_LENGTH_LIMIT:
+        return jsonify({"ok": False, "error": "SMILES exceeds configured length limit"}), 400
     try:
         result = predict_admet_nn(smiles)
         return jsonify(result)
     except Exception as e:
         logger.error(f"ADMET prediction error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "ADMET prediction failed"}), 500
 
 @flask_app.post("/api/mcs_align")
 def mcs_align():
@@ -1518,15 +1640,21 @@ def mcs_align():
     from app.services import smiles_to_rdkit_mol
     payload = request.get_json(silent=True) or {}
     smiles_list = payload.get("smiles_list", [])
-    if not smiles_list or len(smiles_list) < 2:
+    if not isinstance(smiles_list, list) or len(smiles_list) < 2:
         return jsonify({"ok": False, "error": "At least 2 SMILES are required for alignment."}), 400
+    if len(smiles_list) > 20:
+        return jsonify({"ok": False, "error": "At most 20 SMILES can be aligned at once."}), 400
 
     try:
         mols = []
         for s in smiles_list:
+            if not isinstance(s, str) or len(s) > config.SMILES_LENGTH_LIMIT:
+                return jsonify({"ok": False, "error": "Invalid SMILES input length"}), 400
             mol = smiles_to_rdkit_mol(s)
             if mol is None:
-                return jsonify({"ok": False, "error": f"Invalid SMILES in list: {s}"}), 400
+                return jsonify({"ok": False, "error": "Invalid SMILES in list"}), 400
+            if mol.GetNumAtoms() > config.MOLECULE_SIZE_LIMIT:
+                return jsonify({"ok": False, "error": "Molecule exceeds configured atom limit"}), 400
             mols.append(mol)
 
         from rdkit.Chem import rdDepictor
@@ -1563,7 +1691,7 @@ def mcs_align():
         return jsonify({"ok": True, "aligned": aligned_coords})
     except Exception as e:
         logger.error(f"MCS align error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "MCS alignment failed"}), 500
 
 def _redis_available() -> bool:
     """Fast Redis ping — returns True only if Redis is reachable within 1 second."""
@@ -1591,7 +1719,13 @@ def health_live():
 
 @flask_app.get("/health/ready")
 def health_ready():
-    checks = {"redis": _redis_available(), "database": False, "storage": False, "model": False}
+    checks = {
+        "redis": _redis_available(),
+        "database": False,
+        "storage": False,
+        "model": False,
+        "drug_data": False,
+    }
     try:
         with sqlite3.connect(DB_USERS_PATH) as conn:
             conn.execute("SELECT 1").fetchone()
@@ -1599,7 +1733,7 @@ def health_ready():
     except Exception as exc:
         logger.warning(f"Readiness database check failed: {exc}")
 
-    jobs_dir = os.path.abspath(os.path.join(current_dir, "..", "jobs"))
+    jobs_dir = str(JOBS_DIR)
     try:
         os.makedirs(jobs_dir, exist_ok=True)
         checks["storage"] = os.access(jobs_dir, os.W_OK)
@@ -1607,14 +1741,35 @@ def health_ready():
         pass
 
     try:
-        from app.services.models import WEIGHTS_PATH
-        checks["model"] = os.path.isfile(WEIGHTS_PATH) and os.path.getsize(WEIGHTS_PATH) > 0
+        from app.services.models import verify_model_checkpoint
+        checks["model"] = verify_model_checkpoint()
     except Exception as exc:
         logger.warning(f"Readiness model check failed: {exc}")
 
-    ready = all(checks.values())
+    try:
+        from app.paths import DRUG_DATABASE_PATH, DRUG_FINGERPRINT_PATH
+        checks["drug_data"] = (
+            DRUG_DATABASE_PATH.is_file() and DRUG_DATABASE_PATH.stat().st_size > 0
+            and DRUG_FINGERPRINT_PATH.is_file() and DRUG_FINGERPRINT_PATH.stat().st_size > 0
+        )
+    except OSError as exc:
+        logger.warning(f"Readiness drug-data check failed: {exc}")
+
+    required = {
+        "database": True,
+        "storage": True,
+        "redis": config.REQUIRE_REDIS,
+        "model": config.REQUIRE_MODEL,
+        "drug_data": config.REQUIRE_DRUG_DATA,
+    }
+    ready = all(checks[name] for name, is_required in required.items() if is_required)
     status = 200 if ready else 503
-    return jsonify({"ok": ready, "status": "ready" if ready else "not_ready", "checks": checks}), status
+    return jsonify({
+        "ok": ready,
+        "status": "ready" if ready else "not_ready",
+        "checks": checks,
+        "required": required,
+    }), status
 
 
 @flask_app.post("/api/tasks/submit")
@@ -1706,7 +1861,7 @@ def tasks_submit():
         })
     except Exception as e:
         logger.error(f"Task submission error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Task submission failed"}), 500
 
 @flask_app.get("/api/tasks/status/<task_id>")
 def tasks_status(task_id):
@@ -1734,7 +1889,8 @@ def tasks_status(task_id):
         if state == "SUCCESS":
             response_data["result"] = res.result
         elif state == "FAILURE":
-            response_data["error"] = str(res.result)
+            logger.error("Background task %s failed: %s", task_id, res.result)
+            response_data["error"] = "Background task failed; check server logs"
         elif state == "PROGRESS":
             meta = res.info or {}
             response_data["percent"] = meta.get("percent", 0)
@@ -1743,7 +1899,7 @@ def tasks_status(task_id):
         return jsonify(response_data)
     except Exception as e:
         logger.error(f"Task status retrieval error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Task status retrieval failed"}), 500
 
 @flask_app.delete("/api/tasks/cancel/<task_id>")
 def tasks_cancel(task_id):
@@ -1761,23 +1917,33 @@ def tasks_cancel(task_id):
         return jsonify({"ok": True, "message": f"Task {task_id} successfully revoked."})
     except Exception as e:
         logger.error(f"Task cancel error: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "error": "Task cancellation failed"}), 500
 
 @flask_app.post("/api/action_log")
 def action_log():
     """Silently log user drawing actions for generative AI training data."""
+    if not config.ACTION_LOGGING_ENABLED:
+        return jsonify({"ok": True, "enabled": False}), 200
     from app.services import log_action
     payload = request.get_json(silent=True) or {}
     action_type = payload.get("action", "")
     data = payload.get("data", {})
     session_id = payload.get("session_id")
-    if action_type:
-        log_action(action_type, data, session_id)
+    allowed_actions = {
+        "add_atom", "delete_atom", "move_atom", "add_bond", "delete_bond",
+        "change_bond_type", "change_element", "clear_canvas", "undo", "redo",
+        "submit_render",
+    }
+    if action_type not in allowed_actions or not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "Invalid action log payload"}), 400
+    log_action(action_type, data, session_id)
     return jsonify({"ok": True}), 200
 
 @flask_app.post("/api/action_log/start")
 def action_log_start():
     """Start a new action logging session."""
+    if not config.ACTION_LOGGING_ENABLED:
+        return jsonify({"ok": True, "enabled": False, "session_id": None})
     from app.services import start_session
     sid = start_session()
     return jsonify({"ok": True, "session_id": sid})
@@ -1790,6 +1956,8 @@ def design_score():
     smiles = str(payload.get("smiles", "")).strip()
     if not smiles:
         return jsonify({"ok": False, "score": 0, "grade": "F", "color": "#EF4444"}), 200
+    if len(smiles) > config.SMILES_LENGTH_LIMIT:
+        return jsonify({"ok": False, "error": "SMILES exceeds configured length limit"}), 400
     result = calculate_design_score(smiles)
     return jsonify(result)
 

@@ -25,22 +25,22 @@ import sys
 import time
 import argparse
 import webbrowser
+from urllib.parse import urlparse
 
-#  Paths 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_DIR  = os.path.join(ROOT_DIR, "app")
+from app.paths import APP_DIR as APP_PATH, PROJECT_ROOT
+from app.runtime import select_available_port
 
-for p in (ROOT_DIR, APP_DIR):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+# Paths
+ROOT_DIR = str(PROJECT_ROOT)
+APP_DIR = str(APP_PATH)
 
 #  Defaults 
 DEFAULT_HOST       = os.getenv("HOST", "127.0.0.1")
-DEFAULT_PORT       = int(os.getenv("PORT", 5000))
-REDIS_HOST         = "127.0.0.1"
-REDIS_PORT         = 6379
+DEFAULT_PORT       = int(os.environ["PORT"]) if os.getenv("PORT") else None
+REDIS_URL          = os.getenv("REDIS_URL")
 REDIS_STARTUP_WAIT = 5.0   # seconds to wait for Redis to accept connections
 FLASK_STARTUP_WAIT = 30.0  # seconds to wait for Flask to be ready
+CELERY_CONCURRENCY = int(os.getenv("CELERY_CONCURRENCY", "1"))
 
 #  Process registry 
 _procs: dict[str, subprocess.Popen] = {}   # name → process
@@ -59,12 +59,11 @@ def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
         return False
 
 
-def _redis_ping() -> bool:
+def _redis_ping(redis_url: str) -> bool:
     """True if Redis is reachable and responding to PING."""
     try:
-        import subprocess
-        result = subprocess.run(["redis-cli", "ping"], capture_output=True, text=True, timeout=1.0)
-        return "PONG" in result.stdout
+        import redis
+        return bool(redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1).ping())
     except Exception:
         return False
 
@@ -118,9 +117,23 @@ def _signal_handler(signum, frame) -> None:
 
 def start_redis() -> bool:
     """Ensure Redis is running. Returns True if ready."""
-    if _redis_ping():
+    global REDIS_URL
+    if REDIS_URL and _redis_ping(REDIS_URL):
         _log("Redis already running — skipping.")
         return True
+
+    parsed = urlparse(REDIS_URL) if REDIS_URL else None
+    if parsed and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        _log("Configured external Redis is unavailable; it will not be started locally.")
+        return False
+
+    requested_port = parsed.port if parsed else None
+    redis_port = select_available_port("127.0.0.1", requested=requested_port, preferred=6379)
+    if requested_port and _port_open("127.0.0.1", redis_port):
+        _log(f"ERROR: configured Redis port {redis_port} is occupied by a non-Redis service.")
+        return False
+    REDIS_URL = f"redis://127.0.0.1:{redis_port}/0"
+    os.environ["REDIS_URL"] = REDIS_URL
 
     redis_bin = _find_binary("redis-server")
     if not redis_bin:
@@ -131,19 +144,19 @@ def start_redis() -> bool:
     proc = subprocess.Popen(
         [redis_bin, "--daemonize", "no",
          "--loglevel", "warning",
-         "--port", str(REDIS_PORT)],
+         "--port", str(redis_port)],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     _procs["redis"] = proc
     _we_started.add("redis")
 
-    ready = _wait_until(_redis_ping, timeout=REDIS_STARTUP_WAIT)
+    ready = _wait_until(lambda: _redis_ping(REDIS_URL), timeout=REDIS_STARTUP_WAIT)
     if not ready:
         _log("ERROR: Redis did not become ready in time.")
         return False
 
-    _log(f" Redis ready on port {REDIS_PORT}")
+    _log(f" Redis ready on port {redis_port}")
     return True
 
 
@@ -165,7 +178,7 @@ def start_celery() -> bool:
             "-A", "app.tasks.celery_app",
             "worker",
             "--loglevel=warning",
-            "--concurrency=2",
+            f"--concurrency={max(1, CELERY_CONCURRENCY)}",
             "-n", "kinetic@%h",
         ],
         cwd=ROOT_DIR,
@@ -188,9 +201,8 @@ def start_celery() -> bool:
 
 def start_flask(host: str, port: int) -> bool:
     """Start the Flask dev server. Returns True when it accepts connections."""
-    main_script = os.path.join(APP_DIR, "main.py")
-    if not os.path.isfile(main_script):
-        _log(f"ERROR: Cannot find {main_script}")
+    if not os.path.isfile(os.path.join(APP_DIR, "main.py")):
+        _log(f"ERROR: Cannot find the app.main module under {APP_DIR}")
         return False
 
     env = os.environ.copy()
@@ -200,7 +212,7 @@ def start_flask(host: str, port: int) -> bool:
 
     _log(f"Starting Flask server on http://{host}:{port} …")
     proc = subprocess.Popen(
-        [sys.executable, main_script],
+        [sys.executable, "-m", "app.main"],
         cwd=ROOT_DIR,
         env=env,
         stdout=sys.stdout,
@@ -231,11 +243,14 @@ def _find_binary(name: str) -> str | None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="KineticSketch unified launcher")
     parser.add_argument("--host",       default=DEFAULT_HOST)
-    parser.add_argument("--port",       type=int, default=DEFAULT_PORT)
+    parser.add_argument("--port",       type=int, default=DEFAULT_PORT,
+                        help="Web port; scans from 7860 when omitted")
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--no-celery",  action="store_true",
                         help="Skip Celery worker (async HPC tasks will be unavailable)")
     args = parser.parse_args()
+    explicit_port = args.port is not None
+    args.port = select_available_port(args.host, requested=args.port, preferred=7860)
 
     # Register cleanup
     atexit.register(_shutdown_all)
@@ -246,10 +261,11 @@ def main() -> None:
 
     #  Already fully running? 
     if _port_open("127.0.0.1", args.port):
-        _log(f"Server already running → {url}")
-        if not args.no_browser:
-            webbrowser.open(url)
-        return
+        if explicit_port:
+            _log(f"ERROR: configured web port {args.port} is already in use.")
+            sys.exit(1)
+        args.port = select_available_port(args.host, preferred=args.port + 1)
+        url = f"http://{'localhost' if args.host in ('0.0.0.0', '') else args.host}:{args.port}"
 
     print()
     print("  ")
@@ -262,7 +278,7 @@ def main() -> None:
         _log("Continuing without Redis — async HPC tasks will be unavailable.")
 
     #  2. Celery 
-    if not args.no_celery and _redis_ping():
+    if not args.no_celery and REDIS_URL and _redis_ping(REDIS_URL):
         if not start_celery():
             _log("Continuing without Celery — async HPC tasks will be unavailable.")
     elif args.no_celery:

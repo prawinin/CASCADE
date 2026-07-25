@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-KineticSketch — Local LLM & AI Environment Scanner
+CASCADE — Local LLM & AI Environment Scanner
 =====================================================
 Scans local system hardware and inspects running/installed local LLM services.
 Provides personalized step-by-step installation instructions for PyMOL AI integration.
@@ -33,7 +33,7 @@ def print_header(title: str):
 def check_http_endpoint(url: str, timeout: float = 2.0) -> tuple[bool, dict]:
     """Probes an HTTP endpoint for JSON response."""
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "KineticSketch-Scanner"})
+        req = urllib.request.Request(url, headers={"User-Agent": "CASCADE-Scanner"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status == 200:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -119,7 +119,7 @@ def scan_llm_services() -> list[dict]:
     """Scans for active local LLM servers."""
     found = []
 
-    # 1. Ollama (Default KineticSketch engine)
+    # 1. Ollama (Default CASCADE engine)
     ok, data = check_http_endpoint("http://localhost:11434/api/tags")
     if ok:
         models = [m.get("name") for m in data.get("models", [])]
@@ -129,7 +129,7 @@ def scan_llm_services() -> list[dict]:
             "status": "Running (Active)",
             "models": models,
             "recommended": True,
-            "desc": "Primary engine supported by KineticSketch PyMOL AI assistant."
+            "desc": "Primary engine supported by CASCADE PyMOL AI assistant."
         })
     else:
         # Check if installed in PATH
@@ -211,7 +211,7 @@ def scan_llm_services() -> list[dict]:
     return found
 
 def main():
-    print_header("KineticSketch — Local LLM & AI Environment Scanner")
+    print_header("CASCADE — Local LLM & AI Environment Scanner")
 
     # Step 1: System Specs
     specs = get_system_specs()
@@ -247,13 +247,13 @@ def main():
                 ollama_active = True
 
     # Step 3: Installation & Configuration Guidance
-    print_header("KineticSketch PyMOL AI Setup Guidance")
+    print_header("CASCADE PyMOL AI Setup Guidance")
 
     if ollama_active and ollama_has_qwen:
         print(colored("   EXCELLENT SETUP DETECTED!", GREEN))
         print("  Ollama is running with compatible coding models (Qwen2.5-Coder or Llama3).")
-        print("  KineticSketch will automatically connect to Ollama on http://localhost:11434.")
-        print("\n  To test in KineticSketch:")
+        print("  CASCADE will automatically connect to Ollama on http://localhost:11434.")
+        print("\n  To test in CASCADE:")
         print("  Switch to '3D View' tab → type in PyMOL AI box: 'show surface, color red'")
 
     elif ollama_active:

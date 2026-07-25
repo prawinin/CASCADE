@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-KineticSketch — Drug Database Builder
+CASCADE — Drug Database Builder
 ======================================
 Builds the local SQLite drug database and pre-computed fingerprint matrix
 from the downloaded data files in the data/ directory.  # noqa: E402
 
 Run once before starting the server:
-    cd /home/prawin/KineticSketch
-    source .venv/bin/activate
-    python scripts/build_drug_db.py
+    .venv/bin/python scripts/build_drug_db.py
 
 What it does:
 1. Reads DrugCentral structures.smiles.tsv  → 4,100 drugs with SMILES + INN names
@@ -183,7 +181,7 @@ def extract_pdb_targets_from_sql(conn: sqlite3.Connection, id_map: Dict[str, int
 
     This avoids needing a running PostgreSQL instance by parsing INSERT statements directly.
     Targets are: pdb | struct_id | chain_id | ligand_id
-    We join on struct_id → INN name using the structures table INSERTs.
+    Join on struct_id → INN name using the structures table INSERTs.
     """
     dump_files = [f for f in os.listdir(DATA_DIR) if f.startswith("drugcentral.dump") and f.endswith(".sql.gz")]
     if not dump_files:
@@ -195,7 +193,7 @@ def extract_pdb_targets_from_sql(conn: sqlite3.Connection, id_map: Dict[str, int
 
     import re
 
-    # We parse two tables from the SQL dump:
+    # Parse two tables from the SQL dump:
     # 1. structures table: id | name | ...  → struct_id → inn name
     # 2. pdb table: struct_id | pdb | chain_id | ligand_id | ...
 
@@ -302,11 +300,11 @@ def load_chembl_approved(conn: sqlite3.Connection) -> None:
     that don't already exist in the database.
 
     ChEMBL chemreps columns: chembl_id | canonical_smiles | standard_inchi | standard_inchi_key
-    We filter to max_phase=4 using chembl_id prefix heuristic... but since chemreps
-    doesn't include phase, we load ALL and deduplicate by InChIKey.
+    Filter to max_phase=4 using chembl_id prefix heuristic... but since chemreps
+    doesn't include phase, load ALL and deduplicate by InChIKey.
     (Phase filter requires the full SQLite dump — this is safe to load all ~2.9M and deduplicate)
 
-    For performance we skip duplicates by InChIKey.
+    For performance, skip duplicates by InChIKey.
     """
     if not os.path.exists(CHEMBL_GZ):
         logger.warning(f"   {CHEMBL_GZ} not found — skipping ChEMBL supplement")
@@ -339,7 +337,7 @@ def load_chembl_approved(conn: sqlite3.Connection) -> None:
                 if not smiles or not chembl_id:
                     continue
 
-                # Skip if we already have this molecule
+                # Skip existing molecules
                 if inchikey and inchikey in existing_keys:
                     skipped += 1
                     continue
@@ -448,7 +446,7 @@ def build_fingerprint_matrix(conn: sqlite3.Connection) -> None:
 # Main
 
 def main():
-    parser = argparse.ArgumentParser(description="Build KineticSketch drug database")
+    parser = argparse.ArgumentParser(description="Build CASCADE drug database")
     parser.add_argument("--skip-chembl", action="store_true", help="Skip ChEMBL loading (faster build)")
     parser.add_argument("--skip-fingerprints", action="store_true", help="Skip fingerprint computation")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite existing database")
@@ -462,7 +460,7 @@ def main():
 
     start = time.time()
     logger.info("=" * 60)
-    logger.info("KineticSketch Drug Database Builder")
+    logger.info("CASCADE Drug Database Builder")
     logger.info("=" * 60)
 
     conn = sqlite3.connect(DB_PATH)

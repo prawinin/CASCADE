@@ -101,4 +101,4 @@ def calculate_adme_descriptors(mol: Chem.Mol) -> dict:
         }
     except Exception as e:
         logger.error(f"Error calculating descriptors: {e}")
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "Descriptor calculation failed"}

@@ -1,67 +1,120 @@
-# KineticSketch Comprehensive Security & Quality Audit Report
+# KineticSketch Engineering Audit Report
 
-**Date:** July 20, 2026  
-**Status:** **Fully Audited & Remediation Complete**  
-**Executive Summary:** A comprehensive, full-suite automated static analysis and remediation effort was performed across the `KineticSketch` backend codebase. The audit evaluated Code Quality, Security, Cyclomatic Complexity, and Static Typing constraints. Following strategic refactoring and security hardening, the codebase is completely clean and complies with strict enterprise engineering standards.
+**Audit date:** July 20, 2026
 
----
+**Scope:** Current local working tree
 
-## 1. Code Quality & Linting
+**Status:** Local engineering and single-container checks passed; full-stack staging remains
 
-### Ruff (Fast Python Linter)
-**Status:** **Passed (Zero Errors)**
-* **Remediation Details:**
-  * Cleaned up redundant multi-line imports across `app/main.py`.
-  * Removed dead/unused `os` imports and resolved ambiguous variable names (e.g., `l` to `line`) in helper scripts.
+## 1. Purpose and limits
 
-### Pylint (Deep Code Smell & Architecture Detector)
-**Status:** **Passed (Score: 8.14/10 - "Good" Category)**
-* **Remediation Details:**
-  * **Code Duplication (R0801):** Extracted identical coordinate-parsing and 3D molecule processing logic from `app/main.py` and `app/tasks/compute_tasks.py` into a centralized, modular `cheminformatics.py` service.
-  * **Configuration Tuning:** Created a strict `.pylintrc` to ignore expected dynamic web-framework boundaries and decouple script linting from core application metrics.
+This report details the comprehensive security, architectural, and functional checks performed on the KineticSketch deployment. These controls verify technical integrity and loadability, though they do not claim independent clinical validation, standalone scientific accuracy without a trained checkpoint, or general enterprise scalability guarantees.
 
-### Vulture (Dead Code Detection)
-**Status:** **Clean**
-* **Remediation Details:** 
-  * Purged legitimately dead variables from configuration and legacy models.
-  * Implemented a `.vulture_whitelist.py` file to document and preserve critical dynamic Flask routes, UI callbacks, and exported environment variables that are invisible to naive static analysis.
+## 2. Verified commands and results
 
----
+The final local checks were run from the repository root.
 
-## 2. Complexity Analysis
+| Check | Command | Result |
+|---|---|---|
+| Automated tests | `.venv/bin/python -m pytest -q --disable-warnings` | 23 passed |
+| Python lint | `ruff check app tests scripts/build_drug_db.py serve.py run.py app.py wsgi.py compose_up.py` | Passed |
+| Static typing | `mypy app` | Passed; no issues in 23 source files |
+| JavaScript syntax | `node --check app/static/sketch.js` and `node --check app/static/interaction_viewer.js` | Passed |
+| Patch whitespace | `git diff --check` | Passed |
+| Python security scan | `bandit -q -r app` | Passed with no reported findings |
+| Compose syntax | Parsed with PyYAML safe loader, including anchors | Passed |
+| Production WSGI smoke test | `serve.py` from `/tmp`, then all health endpoints | Passed |
+| Production image build | `podman build --tag kineticsketch:production-smoke .` | Passed |
+| Hardened container runtime | Read-only root, non-root user, all capabilities dropped, dynamic host port | Readiness passed |
 
-### Radon (Cyclomatic Complexity)
-**Status:** **Passed (Average Complexity: A/B)**
-* **Remediation Details:**
-  * **`interaction_profiler.py`:** Deconstructed the monolithic `detect_interactions` handler into highly modular, decoupled private helper functions (`_find_ligand_rings`, `_find_h_and_halogen_bonds`, etc.).
-  * **`pdb_parser.py`:** Streamlined the `extract_pocket_residues` algorithm into cleaner, single-responsibility extraction methods.
-  * **`drug_database.py`:** Re-architected `fast_repurposing_search` by extracting result-building loops into modular functions.
-  * **`main.py`:** Simplified `mcs_align` utilizing the shared parsing utilities.
+The production Docker image builds successfully from the locked Python 3.11 dependency set. The container runtime enforces a read-only root filesystem, drops unnecessary capabilities, utilizes `no-new-privileges`, mounts writable runtime-only volumes, and automatically assigns a loopback host port. Subsequent requests to `/health/ready` reliably return HTTP 200 with database, model checkpoint, drug-data, and storage checks fully passing.
 
----
+## 3. Functional and isolation checks
 
-## 3. Security Hardening
+The automated tests and code review cover:
 
-### Bandit (Vulnerability Scanner)
-**Status:** **Passed (0 High, 0 Medium, 0 Low)**
-* **Remediation Details:**
-  * **[B104] Interface Binding:** Removed the hardcoded open internet bind (`0.0.0.0`) in `app/config.py` in favor of a secure local development bind (`127.0.0.1`).
-  * **[B108] Temporary Storage:** Replaced insecure and unportable `/tmp` paths with Python's secure, cross-platform `tempfile.gettempdir()`.
-  * **[B614] PyTorch Loading:** Enforced strict `weights_only=True` configuration across `torch.load` calls in `app/services/models.py` to prevent arbitrary code execution from malicious tensor checkpoints.
-  * **[B310] URL Retrieval:** Ripped out legacy, vulnerable `urllib.request.urlretrieve` methods in `app/services/pdb_parser.py` and replaced them with the modern, secure `requests` library wrapped with strict timeout limits.
+- public UI and JavaScript assets are present and non-empty;
+- protected API routes reject unauthenticated requests;
+- registration, login, session lookup, and logout;
+- per-user and per-job output directories;
+- authenticated SDF download;
+- static routes do not expose generated workspace files;
+- UUID/path-traversal rejection;
+- task status and cancellation ownership;
+- invalid PDB rejection;
+- compressed-upload decompression and record limits;
+- login rate limiting;
+- model checkpoint loading and prediction;
+- fail-closed missing-checkpoint and checksum-mismatch behavior;
+- browser-contract flow from authentication through analysis, task submission, status, and download;
+- liveness and dependency-aware readiness behavior;
+- dynamic port selection and explicit provider-port preservation;
+- project-root path resolution independent of the current working directory;
+- model-digest readiness verification;
+- nested task-parameter validation; and
+- uploaded-filename response sanitization; and
+- allow-listed iframe embedding and partitioned embedded-session cookies.
 
----
+Generated structures are stored under:
 
-## 4. Static Typing Validation
+```text
+jobs/<user-id>/<job-id>/
+  input/
+  scratch/
+  outputs/
+```
 
-### Mypy (Strict Type Checking)
-**Status:** **Passed (Zero Errors)**
-* **Remediation Details:**
-  * Cleaned up extensive `Optional` assignment errors, dict typings, and missing `TypedDict` declarations in the heavy compute tasks.
-  * Enforced robust handling of nullable types in `compute_tasks.py` and `pdb_repurposing.py`.
-  * Provisioned `mypy.ini` with strategic exception policies for dynamic third-party C-extensions (`rdkit`, `celery`, `torch`) lacking official python type stubs, enforcing strict type-checking on the internal codebase without causing artificial build failures.
+Job and user identifiers are validated as UUIDs. Resolved paths are constrained to the owning user's job directory. Generated files are downloaded only through the authenticated allow-listed endpoint.
 
----
+## 4. Authentication and web security
 
-## Conclusion
-The remediation effort was a total success. `KineticSketch` is now operating with a heavily fortified architecture, strictly typed bounds, and zero known security vulnerabilities. No further immediate technical debt remediation is necessary.
+Implemented controls include:
+
+- mandatory `FLASK_SECRET_KEY` of at least 32 characters;
+- `HttpOnly`, default `SameSite=Lax`, and production `Secure` session cookies;
+- explicit allow-listed embedding with Secure, `SameSite=None`, partitioned
+  cookies when embedded mode is enabled;
+- eight-hour permanent-session lifetime after login;
+- Redis-backed production login rate limiting;
+- twelve-character minimum passwords and restricted usernames;
+- PBKDF2-HMAC password storage with random salts;
+- constant-time password-hash comparison;
+- HSTS in production;
+- Content Security Policy;
+- CSP frame-ancestor allow-listing, MIME-sniffing, and referrer-policy headers;
+- task ownership checks; and
+- no client-selected server filesystem paths for docking.
+
+## 5. Model loading and scientific status
+
+The model loader:
+
+- uses `MODEL_DEVICE=cpu` by default;
+- supports explicitly configured `cuda` or `auto` modes;
+- verifies the checkpoint SHA-256 digest;
+- uses `torch.load(..., weights_only=True)`;
+- fails closed for missing, corrupt, or incompatible weights; and
+- performs a deterministic startup shape/type check.
+
+These controls verify technical integrity and loadability. They do not prove predictive accuracy. Claims about RMSF, SASA, B-factor, charge, or HOMO-LUMO-gap performance still require documented training provenance, target definitions and units, held-out metrics, baselines, uncertainty, and applicability-domain analysis.
+
+The MD workflow is a task-orchestration demonstration. It does not perform physical molecular dynamics and must not be presented as such. OPLS-AA is disabled; supported minimization choices are MMFF94, MMFF94s, and UFF.
+
+## 6. Upload, storage, and cleanup controls
+
+PDB uploads are stored in the authenticated job directory and enforce:
+
+- request-size checks;
+- a 10 MB decompressed limit;
+- a maximum of 100,000 records;
+- a maximum of 50,000 atoms;
+- `.pdb`, `.ent`, and `.pdb.gz` handling;
+- basic PDB-record validation; and
+- opaque client references instead of absolute server paths.
+
+Celery Beat schedules hourly cleanup. The cleanup task removes only expired,
+UUID-shaped job directories contained by the configured jobs root. It retains
+recently modified jobs and reports deleted jobs and reclaimed bytes. Per-user
+quotas and a low-free-disk admission control remain future operational work.
+
+Runtime jobs, uploads, user databases, action logs, generated molecules, profiling output, and repository-analysis exports are excluded from Git and the production image where appropriate.

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KineticSketch - Molecular Dynamics Workspace</title>
+    <title>CASCADE - Molecular AI Workspace</title>
     <!-- Google Fonts: Inter and JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
@@ -1277,6 +1277,53 @@
             gap: 1rem;
         }
 
+        .ai-assistant-sidebar {
+            width: 380px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            overflow-y: auto;
+        }
+        .ai-local-note {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.65rem;
+            padding: 0.8rem 0.9rem;
+            border: 1px solid #FDE68A;
+            border-radius: var(--radius-md);
+            background: #FFFBEB;
+            color: #92400E;
+            font-size: 0.72rem;
+            line-height: 1.5;
+        }
+        .ai-local-note i {
+            margin-top: 0.12rem;
+            color: #D97706;
+        }
+        .ai-local-note strong {
+            display: block;
+            margin-bottom: 0.15rem;
+            color: #78350F;
+        }
+        .ai-sidebar-footer {
+            margin-top: auto;
+            padding: 1rem 0.75rem 0.25rem;
+            text-align: center;
+            color: var(--text-tertiary);
+            font-size: 0.7rem;
+            line-height: 1.5;
+        }
+        .ai-sidebar-footer p { margin: 0; }
+        .ai-sidebar-footer a {
+            display: inline-block;
+            margin-top: 0.15rem;
+            color: var(--accent-blue);
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .ai-sidebar-footer a:hover { text-decoration: underline; }
+
         /* Compute page terminal */
         .hpc-terminal {
             background: #0F172A;
@@ -1315,8 +1362,9 @@
 <body>
 
     <header>
-        <div class="logo-container">
-            <h1>Kinetic<span>Sketch</span></h1>
+        <div class="logo-container" style="flex-direction: column; align-items: flex-start; gap: 0; padding-left: 0.5rem;">
+            <h1 style="line-height: 1;"><span>CASCADE</span></h1>
+            <span style="font-size: 0.48rem; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.2; max-width: 260px; margin-top: 2px;">Computational Architecture for Sketching, Conformation, ADMET, and Docking Evaluation</span>
         </div>
 
         <div style="flex: 1;"></div>
@@ -1723,7 +1771,7 @@
                                     </select>
                                     <button class="premium-btn" onclick="computeInteractions()" style="padding:0.25rem 0.6rem; font-size:0.75rem; white-space:nowrap;">Profile</button>
                                 </div>
-                                <div id="gninaDockToolbar" style="display:flex; align-items:center; margin-left:auto;">
+                                <div id="gninaDockToolbar" style="display:none; align-items:center; margin-left:auto;">
                                     <button id="btnDockGnina" class="premium-btn" onclick="runOneClickDocking()"
                                             style="background:linear-gradient(135deg,#6366F1,#8B5CF6); padding:0.25rem 0.9rem; font-size:0.75rem; white-space:nowrap;"
                                             title="Dock drawn molecule against loaded PDB target using GNINA">
@@ -1743,7 +1791,7 @@
             </div>
                 </div>
 <!-- Right Sidebar: Molecular AI Assistant -->
-                <div style="width:380px; flex-shrink:0; display:flex; flex-direction:column; overflow-y:auto;">
+                <aside class="ai-assistant-sidebar" aria-label="Molecular AI Assistant">
                     <!-- Panel 1: Molecular AI Assistant Chat -->
             <section class="rounded-lg border border-slate-200 bg-white shadow-sm p-4">
                 <header class="text-sm font-semibold text-slate-900 leading-5 tracking-normal mb-2 flex items-center gap-2">
@@ -1767,7 +1815,18 @@
                     <button class="premium-btn shrink-0 h-9 px-3 rounded-md bg-cyan-600 text-sm font-medium text-white leading-5 hover:bg-cyan-700 disabled:opacity-50" onclick="triggerChatSend()">Send</button>
                 </div>
             </section>
-                </div>
+                    <div class="ai-local-note" role="note">
+                        <i class="fa-solid fa-laptop-code" aria-hidden="true"></i>
+                        <div>
+                            <strong>Local LLM feature</strong>
+                            The Molecular AI Assistant is available when CASCADE is run locally with an LLM endpoint connected.
+                        </div>
+                    </div>
+                    <footer class="ai-sidebar-footer">
+                        <p>Built by Prawin Kumar</p>
+                        <a href="https://prawin.app" target="_blank" rel="noopener noreferrer">prawin.app</a>
+                    </footer>
+                </aside>
             </div> <!-- end 3D Layout Wrapper -->
 
 
@@ -1923,7 +1982,7 @@
 
     <!-- Script section for Canvas 2D Interaction -->
     <script src="/static/interaction_viewer.js"></script>
-    <script src="/static/sketch.js?v=20"></script>
+    <script src="/static/sketch.js?v=21"></script>
 
     <!-- Unified Smart Input Logic -->
     <script>
@@ -1993,9 +2052,14 @@
                 const badgeStyle = isSynonym
                     ? 'background:#EFF6FF; color:#2563EB; border:1px solid #DBEAFE;'
                     : 'background:#ECFDF5; color:#059669; border:1px solid #D1FAE5;';
-                div.innerHTML =
-                    '<span class="ac-name">' + s.name + '</span>' +
-                    '<span class="ac-badge" style="' + badgeStyle + '">' + badgeText + '</span>';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'ac-name';
+                nameSpan.textContent = s.name || '';
+                const typeSpan = document.createElement('span');
+                typeSpan.className = 'ac-badge';
+                typeSpan.style.cssText = badgeStyle;
+                typeSpan.textContent = badgeText;
+                div.append(nameSpan, typeSpan);
                 div.addEventListener('mousedown', function(e) {
                     e.preventDefault();
                     selectAutocomplete(i);
@@ -2107,15 +2171,16 @@
         /* ---------------------------------------------------------------
          * Render SMILES directly (bypasses lookup)
          * --------------------------------------------------------------- */
-        function renderSmilesDirect(smiles, label) {
+        async function renderSmilesDirect(smiles, label) {
             setStatus('Rendering: ' + (label || smiles.slice(0, 40)) + '...');
             updateBadge('loading', '');
             // Delegate to sketch.js's existing SMILES handler
             if (typeof window.submitSmilesFromExternal === 'function') {
-                window.submitSmilesFromExternal(smiles);
+                return await window.submitSmilesFromExternal(smiles);
             } else if (typeof window.handleExternalSmiles === 'function') {
-                window.handleExternalSmiles(smiles);
+                return await window.handleExternalSmiles(smiles);
             }
+            throw new Error('SMILES analysis handler is unavailable. Refresh the page and try again.');
         }
 
         /* ---------------------------------------------------------------
@@ -2132,7 +2197,7 @@
             try {
                 if (looksLikeSmiles(val)) {
                     // Direct SMILES render
-                    renderSmilesDirect(val);
+                    await renderSmilesDirect(val);
                 } else {
                     // Drug name lookup
                     updateBadge('loading', '');
@@ -2151,7 +2216,7 @@
                         // SMILES from the 2D canvas coordinates — losing structural fidelity!
                         input.value = d.smiles;
                         
-                        renderSmilesDirect(d.smiles, d.name || val);
+                        await renderSmilesDirect(d.smiles, d.name || val);
                     } else {
                         setStatus(' Not found: ' + (d.error || 'unknown'), '#F43F5E');
                         updateBadge('', '');

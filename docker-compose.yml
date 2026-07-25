@@ -1,134 +1,130 @@
-version: '3.9'
+x-runtime-security: &runtime-security
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  read_only: true
+  tmpfs:
+    - /tmp:size=256m,mode=1777
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: kinetic-sketch-app
+    init: true
+    <<: *runtime-security
     ports:
-      - "7860:7860"
-    environment:
-      - FLASK_ENV=production
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY environment variable must be set}
-      - MODEL_DEVICE=${MODEL_DEVICE:-cpu}
-      - HOST=0.0.0.0
-      - PORT=7860
-      - PYMOL_SERVER_HOST=pymol
-      - PYMOL_SERVER_PORT=9123
-      - PYMOL_ENABLED=0
-      - OLLAMA_API_URL=http://ollama:11434
-      - OLLAMA_ENABLED=0
-      - MOLECULE_SIZE_LIMIT=200
-      - SMILES_LENGTH_LIMIT=2000
-      - LOG_LEVEL=INFO
-      - LOG_FORMAT=json
-      - REDIS_URL=redis://redis:6379/0
-    networks:
-      - kinetic-sketch
+      - "127.0.0.1:${HOST_PORT:-7860}:7860"
+    environment: &app-environment
+      FLASK_ENV: production
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:?FLASK_SECRET_KEY must be set}
+      HOST: 0.0.0.0
+      PORT: 7860
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-2}
+      MODEL_DEVICE: ${MODEL_DEVICE:-cpu}
+      MODEL_SHA256: ${MODEL_SHA256:-f9d35a9adccf8756db869ae7dba94c04d7025470efbd6a2550a232bca8b8c030}
+      REDIS_URL: redis://redis:6379/0
+      REQUIRE_REDIS: "1"
+      REQUIRE_MODEL: "1"
+      REQUIRE_DRUG_DATA: ${REQUIRE_DRUG_DATA:-1}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-0}
+      ACTION_LOGGING_ENABLED: "0"
+      GNINA_ENABLED: "0"
+      PYMOL_ENABLED: "0"
+      OLLAMA_ENABLED: "0"
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      EMBEDDED_MODE: ${EMBEDDED_MODE:-0}
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-'none'}
+      MOLECULE_SIZE_LIMIT: ${MOLECULE_SIZE_LIMIT:-200}
+      SMILES_LENGTH_LIMIT: ${SMILES_LENGTH_LIMIT:-2000}
+      KINETICSKETCH_DATA_DIR: /var/lib/kineticsketch/data
+      KINETICSKETCH_STATE_DIR: /var/lib/kineticsketch/data
+      KINETICSKETCH_JOBS_DIR: /var/lib/kineticsketch/jobs
+      KINETICSKETCH_CACHE_DIR: /var/cache/kineticsketch
+      MODEL_WEIGHTS_PATH: /opt/kineticsketch/app/models/mdrepo_predictor.pt
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
-    volumes:
-      - /tmp/kinetic_sketch_logs:/tmp
-      - jobs-data:/app/jobs
-      - sqlite-db:/app/data
+    volumes: &app-volumes
+      - type: bind
+        source: ${KINETICSKETCH_DATA_HOST_PATH:-./data}
+        target: /var/lib/kineticsketch/data
+      - type: bind
+        source: ${KINETICSKETCH_MODELS_HOST_PATH:-./app/models}
+        target: /opt/kineticsketch/app/models
+        read_only: true
+      - jobs-data:/var/lib/kineticsketch/jobs
+      - cache-data:/var/cache/kineticsketch
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7860/health/ready"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7860/health/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 5s
-
-  redis:
-    image: redis:7-alpine
-    container_name: kinetic-sketch-redis
+      start_period: 60s
     networks:
       - kinetic-sketch
+
+  redis:
+    image: redis:7.4-alpine
+    user: redis
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     restart: unless-stopped
+    <<: *runtime-security
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - kinetic-sketch
 
   celery_worker:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: kinetic-sketch-celery
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    init: true
+    <<: *runtime-security
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=1"]
     depends_on:
-      - redis
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - FLASK_ENV=production
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY environment variable must be set}
-      - MODEL_DEVICE=${MODEL_DEVICE:-cpu}
+      redis:
+        condition: service_healthy
+    environment: *app-environment
+    restart: unless-stopped
+    volumes: *app-volumes
     networks:
       - kinetic-sketch
-    restart: unless-stopped
-    volumes:
-      - jobs-data:/app/jobs
-      - sqlite-db:/app/data
 
   celery_beat:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: kinetic-sketch-beat
-    command: celery -A app.tasks.celery_app beat --loglevel=info
+    init: true
+    <<: *runtime-security
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "beat", "--loglevel=info", "--schedule", "/var/lib/kineticsketch/data/celerybeat-schedule"]
     depends_on:
-      - redis
-    environment:
-      - REDIS_URL=redis://redis:6379/0
-      - FLASK_ENV=production
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?FLASK_SECRET_KEY environment variable must be set}
+      redis:
+        condition: service_healthy
+    environment: *app-environment
+    restart: unless-stopped
+    volumes: *app-volumes
     networks:
       - kinetic-sketch
-    restart: unless-stopped
-    volumes:
-      - jobs-data:/app/jobs
-      - sqlite-db:/app/data
-
-  pymol:
-    image: pymol/pymol:latest
-    container_name: kinetic-sketch-pymol
-    environment:
-      - PYMOL_SERVER_PORT=9123
-    networks:
-      - kinetic-sketch
-    restart: unless-stopped
-    profiles:
-      - visualizer
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: kinetic-sketch-ollama
-    environment:
-      - OLLAMA_HOST=0.0.0.0:11434
-      - OLLAMA_MODEL=mistral
-    networks:
-      - kinetic-sketch
-    restart: unless-stopped
-    volumes:
-      - ollama-data:/root/.ollama
-    profiles:
-      - llm
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: kinetic-sketch-prometheus
-    ports:
-      - "127.0.0.1:9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
-    networks:
-      - kinetic-sketch
-    restart: unless-stopped
-    profiles:
-      - monitoring
 
 networks:
   kinetic-sketch:
     driver: bridge
 
 volumes:
-  ollama-data:
-  prometheus-data:
   jobs-data:
-  sqlite-db:
+  cache-data:
+  redis-data:
