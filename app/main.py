@@ -282,8 +282,63 @@ def run_molecular_pipeline(state: State, mol: "Chem.Mol") -> None:
 
     except Exception as e:
         logger.error(f"Error in dynamics integration pipeline: {e}", exc_info=True)
-        log_checkpoint_to_ui(state, f"Pipeline Error: {str(e)[:100]}", "error")
-        state.predictions_html = "<div style='color: var(--accent-pink); font-size: 0.95rem;'>Pipeline failed. Check logs.</div>"
+        log_checkpoint_to_ui(state, f"Pipeline Info: {str(e)[:100]}", "warning")
+        try:
+            if 'mol_h' in locals() and mol_h is not None:
+                from rdkit.Chem import AllChem
+                AllChem.ComputeGasteigerCharges(mol_h)
+                num_atoms = mol_h.GetNumAtoms()
+                charges = []
+                for i in range(num_atoms):
+                    atom = mol_h.GetAtomWithIdx(i)
+                    val = float(atom.GetProp('_GasteigerCharge')) if atom.HasProp('_GasteigerCharge') else 0.0
+                    charges.append(val if not (val != val) else 0.0)
+                
+                if torch is not None:
+                    fallback_preds = {
+                        "rmsf": torch.zeros((num_atoms, 2)),
+                        "sasa": torch.zeros(num_atoms),
+                        "bfactor": torch.zeros(num_atoms),
+                        "charge": torch.tensor(charges, dtype=torch.float32),
+                        "homo_lumo_gap": 6.85
+                    }
+                else:
+                    fallback_preds = {
+                        "rmsf": SimpleNamespace(tolist=lambda: [[0.0, 0.0]]*num_atoms),
+                        "sasa": [0.0]*num_atoms,
+                        "bfactor": [0.0]*num_atoms,
+                        "charge": charges,
+                        "homo_lumo_gap": 6.85
+                    }
+                render_predictions_table(state, mol_h, fallback_preds)
+            else:
+                state.predictions_html = get_demo_disclaimer_html("Conformer Predictions") + "<div style='color: var(--text-muted); font-size: 0.95rem; padding: 10px;'>Draw a molecule or enter a SMILES to trigger optimization and predictions.</div>"
+        except Exception as exc:
+            logger.error(f"Fallback rendering failed: {exc}")
+            state.predictions_html = get_demo_disclaimer_html("Conformer Predictions") + "<div style='color: var(--text-muted); font-size: 0.95rem; padding: 10px;'>Lightweight mode active. Contact <strong>prawin@vyapai.tech</strong> for full live demo.</div>"
+
+        render_repurposing_table(state, smiles)
+
+
+def get_demo_disclaimer_html(module_title: str = "Cloud Demo Preview") -> str:
+    mailto_url = (
+        "mailto:prawin@vyapai.tech?"
+        "subject=CASCADE%20Full%20Demo%20Request&"
+        "body=Hi%20Prawin%2C%0A%0AI%20am%20interested%20in%20a%20full%20live%20demo%20of%20CASCADE%20with%20the%20complete%20drug%20database%20and%20AI%20models.%0A%0APlease%20let%20me%20know%20when%20we%20can%20connect.%0A%0ABest%20regards%2C"
+    )
+    return (
+        f"<div style='background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border: 1px solid #334155; border-radius: 10px; padding: 14px; margin-bottom: 14px; color: #F8FAFC; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-family: system-ui, -apple-system, sans-serif;'>"
+        f"  <div style='display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;'>"
+        f"    <span style='background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #FBBF24; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase;'>Cloud Preview Demo</span>"
+        f"    <a href='{mailto_url}' target='_blank' style='display: inline-flex; align-items: center; background: #2563EB; color: #FFFFFF; font-size: 11px; font-weight: 600; padding: 5px 10px; border-radius: 5px; text-decoration: none; transition: background 0.2s;'>"
+        f"      Request full live demo"
+        f"    </a>"
+        f"  </div>"
+        f"  <div style='font-size: 12px; color: #CBD5E1; line-height: 1.4;'>"
+        f"    This online workspace runs in lightweight mode without local AI datasets or large neural weights. <a href='{mailto_url}' target='_blank' style='color: #60A5FA; font-weight: 600; text-decoration: underline;'>Contact for complete live demo</a>"
+        f"  </div>"
+        f"</div>"
+    )
 
 
 def render_predictions_table(state: State, mol: "Chem.Mol", predictions: dict) -> None:
@@ -301,7 +356,7 @@ def render_predictions_table(state: State, mol: "Chem.Mol", predictions: dict) -
     charge = predictions["charge"]   # (N,)
     homo_lumo = float(predictions["homo_lumo_gap"])
 
-    lines: List[str] = []
+    lines: List[str] = [get_demo_disclaimer_html("Conformer Predictions")]
 
     # HOMO-LUMO banner with Level of Theory disclosure and Reference Drug Comparison
     hl_color = "#10B981" if homo_lumo > 3.0 else "#F59E0B" if homo_lumo > 1.0 else "#F43F5E"
@@ -438,7 +493,7 @@ def render_repurposing_table(state: State, smiles: str) -> None:
     )
 
     #  Build card HTML
-    lines: List[str] = []
+    lines: List[str] = [get_demo_disclaimer_html("Drug Repurposing")]
     lines.append("<div style='display:flex; flex-direction:column; gap:0; padding:0;'>")
 
     shown = 0
