@@ -77,7 +77,7 @@ A comprehensive engineering and security audit detailing the implementation, dep
 ## Repository structure
 
 ```text
-KineticSketch/
+CASCADE/
 ├── app/
 │   ├── gui/index.html              # Complete browser interface
 │   ├── static/sketch.js            # Sketcher and page interactions
@@ -107,8 +107,8 @@ If you do not have Docker installed, please download and install [Docker Desktop
 Once Docker is running on your machine, simply execute:
 
 ```bash
-git clone https://github.com/prawinin/KineticSketch.git
-cd KineticSketch
+git clone https://github.com/prawinin/CASCADE.git
+cd CASCADE
 python compose_up.py
 ```
 The script will automatically allocate a free port, spin up all required databases and Python dependencies isolated in a container, and launch the application in your default web browser.
@@ -117,8 +117,8 @@ The script will automatically allocate a free port, spin up all required databas
 Alternatively, if you prefer running it directly on your host machine, the portable runtime targets Python 3.11 or newer and CPU inference. A virtual environment is highly recommended.
 
 ```bash
-git clone https://github.com/prawinin/KineticSketch.git
-cd KineticSketch
+git clone https://github.com/prawinin/CASCADE.git
+cd CASCADE
 
 python3 -m venv .venv
 source .venv/bin/activate

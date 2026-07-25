@@ -23,7 +23,7 @@ def main() -> None:
 
     environment = os.environ.copy()
     environment["HOST_PORT"] = str(port)
-    command = [docker, "compose", "up", "-d", "--build", *sys.argv[1:]]
+    command = [docker, "compose", "up", "-d", *sys.argv[1:]]
     subprocess.run(command, env=environment, check=True)
     
     import webbrowser

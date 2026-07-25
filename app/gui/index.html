@@ -516,6 +516,13 @@
             pointer-events: none;
         }
 
+        /* Hide Taipy's default injected connection indicator/menu floating buttons that poke out from under the navbar */
+        .taipy-indicator, 
+        .taipy-watermark,
+        .MuiFab-root {
+            display: none !important;
+        }
+
         .premium-input {
             width: 100%;
             background: var(--bg-input);
