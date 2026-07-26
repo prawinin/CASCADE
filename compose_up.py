@@ -21,8 +21,12 @@ def main() -> None:
     if requested and not is_port_available("127.0.0.1", port):
         raise SystemExit(f"Configured HOST_PORT {port} is already in use")
 
+    import secrets
     environment = os.environ.copy()
     environment["HOST_PORT"] = str(port)
+    if "FLASK_SECRET_KEY" not in environment:
+        environment["FLASK_SECRET_KEY"] = secrets.token_urlsafe(32)
+    
     command = [docker, "compose", "up", "-d", *sys.argv[1:]]
     subprocess.run(command, env=environment, check=True)
     
