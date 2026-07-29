@@ -97,6 +97,8 @@ CASCADE/
 └── wsgi.py
 ```
 
+> For a step-by-step setup guide including GPU, Ollama, GNINA, and performance tuning, see [CASCADE_QuickStart_Guide.md](CASCADE_QuickStart_Guide.md).
+
 ## Quick Start
 
 ### Requirements

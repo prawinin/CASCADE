@@ -881,7 +881,7 @@ flask_app.config.update(
     # CHIPS keeps an embedded Space session partitioned to its top-level site.
     # Flask 3.1+ emits the Secure and Partitioned cookie attributes together.
     SESSION_COOKIE_PARTITIONED=embedded_mode,
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
     MAX_CONTENT_LENGTH=12 * 1024 * 1024,
     JSON_SORT_KEYS=False,
 )
