@@ -97,107 +97,160 @@ CASCADE/
 └── wsgi.py
 ```
 
-## Setup
+## Quick Start
 
-### 1. Docker Installation (Recommended)
-The easiest and most reliable way to run the application across any operating system (Windows, Mac, Linux) is using Docker. This avoids manual dependency management and guarantees computational reproducibility.
+### Requirements
 
-If you do not have Docker installed, please download and install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS / Linux)
+- Python 3.11+ (for `compose_up.py`; not needed if you use `docker compose` directly)
+- ~900 MB free disk space for the data and model files
 
-Once Docker is running on your machine, simply execute:
+### 1. Clone the repo
 
 ```bash
 git clone https://github.com/prawinin/CASCADE.git
 cd CASCADE
+```
+
+### 2. Download data files
+
+The drug database, fingerprints, and model weights are hosted as a GitHub Release
+(too large for the repository itself). Run the setup script for your OS:
+
+**Linux / macOS:**
+```bash
+bash setup.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\setup.ps1
+```
+
+This downloads three files into the correct locations:
+- `data/drug_database.sqlite` — 2.89 M compounds
+- `data/drug_fingerprints.npz` — memory-mapped fingerprint index
+- `app/models/mdrepo_predictor.pt` — trained GNN weights
+
+If any file already exists it is skipped automatically.
+
+### 3. Start the application
+
+```bash
 python compose_up.py
 ```
-The script will automatically allocate a free port, spin up all required databases and Python dependencies isolated in a container, and launch the application in your default web browser.
 
-### 2. Traditional Local Installation
-Alternatively, if you prefer running it directly on your host machine, the portable runtime targets Python 3.11 or newer and CPU inference. A virtual environment is highly recommended.
+That's it. The script will:
+1. Create a `.env` file from `.env.example` if one does not exist
+2. Auto-generate a secure `FLASK_SECRET_KEY` and save it to `.env`
+3. Pick a free port (default 7860) and launch all services
+4. Open the app in your browser
 
-```bash
-git clone https://github.com/prawinin/CASCADE.git
-cd CASCADE
-
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-The AMD/ROCm dependency notes are in `requirements_amd_rocm63_rdna2.txt`.
-
-Copy the example environment file if configuration is needed:
+Or launch without Python if you prefer:
 
 ```bash
-cp .env.example .env
+docker compose up
 ```
 
-Useful settings include:
+(You must set `FLASK_SECRET_KEY` in `.env` manually if using this path directly.)
+
+### 4. Register your account
+
+On first run, registration is open. Go to `http://localhost:7860`, create your
+account, then optionally close registration in `.env`:
 
 ```env
-HOST=127.0.0.1
-# Leave PORT unset locally to select the first free port from 7860.
-REDIS_URL=redis://localhost:6379/0
-OLLAMA_ENABLED=0
-OLLAMA_API_URL=http://localhost:11434
-OLLAMA_MODEL=qwen2.5-coder:7b
-PYMOL_ENABLED=0
-GNINA_ENABLED=0
+REGISTRATION_ENABLED=0
 ```
 
-The actual defaults are defined in `app/config.py`. Do not store real secrets in the repository.
+Run `docker compose restart app` to apply.
 
-## Running the application
+### Stopping
 
 ```bash
-source .venv/bin/activate
-python run.py
+docker compose down
 ```
 
-The launcher prints the selected URL. If `PORT` is not set, it chooses the first
-available port starting at 7860. Hosting-provider ports are honored exactly.
-
-For queued Compute-page operations, Redis and a Celery worker are also required. The exact Celery app is `app.tasks.celery_app:celery_app`.
-
-```bash
-redis-server
-celery -A app.tasks.celery_app:celery_app worker --loglevel=info
-```
-
-Without Redis, normal molecule rendering still works, but every Compute-page task returns HTTP 503. This fail-closed behavior avoids inconsistent task state across multiple web workers.
+---
 
 ## Optional components
 
-### Ollama
+### Ollama (local LLM assistant)
 
-Ollama is used to convert plain-English visualization requests into a limited command set. If it is unavailable, a keyword-based fallback is used.
+CASCADE can use a locally running Ollama instance to interpret plain-English
+commands for the 3D viewer. To enable it:
 
-```bash
-ollama pull qwen2.5-coder:7b
+1. Install Ollama from [ollama.com](https://ollama.com) and pull a model:
+   ```bash
+   ollama pull qwen2.5-coder:7b
+   ```
+2. Edit `.env`:
+   ```env
+   OLLAMA_ENABLED=1
+   OLLAMA_API_URL=http://host.docker.internal:11434
+   OLLAMA_MODEL=qwen2.5-coder:7b
+   ```
+3. Restart: `docker compose restart app celery_worker`
+
+`host.docker.internal` is the special Docker hostname that routes to your host
+machine where Ollama is running. On Linux, replace it with your host IP if needed.
+
+### GNINA docking
+
+To enable real CNN-based molecular docking, place the `gnina` binary in the
+project root and add to `.env`:
+
+```env
+GNINA_ENABLED=1
+GNINA_PATH=./gnina
 ```
 
-### GNINA
+### GPU inference
 
-GNINA is not required. Deployed builds disable it by default and hide docking
-controls. For an optional local installation, place an executable named `gnina`
-in the project root or set `GNINA_PATH` and `GNINA_ENABLED=1`.
+Change `MODEL_DEVICE` in `.env`:
 
-### Local data and checkpoint
+```env
+MODEL_DEVICE=cuda    # NVIDIA
+MODEL_DEVICE=cpu     # default
+```
 
-The current working repository contains:
+---
 
-- `data/drug_database.sqlite` with 2,898,063 drug rows and 5,576 drug-target rows;
-- `data/drug_fingerprints.npz`; and
-- `app/models/mdrepo_predictor.pt`.
+## Traditional local installation (no Docker)
 
-These are large/generated research assets, so availability may differ between distributions of the repository. Their source and redistribution permissions should be checked before publishing them.
+The portable runtime targets Python 3.11+ and CPU inference. A virtual environment is recommended.
 
-Copy these assets to the listed project-relative paths before building. Runtime
-locations are resolved from the installed project root, not the shell's working
-directory, and every storage path has an environment override.
+```bash
+git clone https://github.com/prawinin/CASCADE.git
+cd CASCADE
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
+Copy and configure the environment file:
 
+```bash
+cp .env.example .env
+# Edit .env — at minimum set a real FLASK_SECRET_KEY
+```
+
+Download the data files (same as the Docker path):
+
+```bash
+bash setup.sh   # Linux/macOS
+# or .\setup.ps1 on Windows
+```
+
+Start the full stack manually:
+
+```bash
+redis-server &
+celery -A app.tasks.celery_app:celery_app worker --loglevel=info &
+python run.py
+```
+
+Without Redis, molecule rendering still works but every Compute-page task returns HTTP 503.
 
 ## Main API endpoints
 

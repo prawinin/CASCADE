@@ -20,10 +20,10 @@ services:
     init: true
     <<: *runtime-security
     ports:
-      - "127.0.0.1:${HOST_PORT:-7860}:7860"
+      - "${HOST_PORT:-7860}:7860"
     environment: &app-environment
       FLASK_ENV: production
-      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY:-default_local_secret_key_for_cascade}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
       HOST: 0.0.0.0
       PORT: 7860
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
@@ -33,36 +33,40 @@ services:
       REDIS_URL: redis://redis:6379/0
       REQUIRE_REDIS: "1"
       REQUIRE_MODEL: "1"
-      REQUIRE_DRUG_DATA: ${REQUIRE_DRUG_DATA:-1}
-      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-0}
+      REQUIRE_DRUG_DATA: "1"
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-1}
       ACTION_LOGGING_ENABLED: "0"
-      GNINA_ENABLED: "0"
-      PYMOL_ENABLED: "0"
-      OLLAMA_ENABLED: "0"
-      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
-      EMBEDDED_MODE: ${EMBEDDED_MODE:-0}
-      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-'none'}
+      GNINA_ENABLED: ${GNINA_ENABLED:-0}
+      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-0}
+      OLLAMA_API_URL: ${OLLAMA_API_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+      EMBEDDED_MODE: "0"
+      FRAME_ANCESTORS: "'none'"
       MOLECULE_SIZE_LIMIT: ${MOLECULE_SIZE_LIMIT:-200}
       SMILES_LENGTH_LIMIT: ${SMILES_LENGTH_LIMIT:-2000}
-      KINETICSKETCH_DATA_DIR: /var/lib/kineticsketch/data
-      KINETICSKETCH_STATE_DIR: /var/lib/kineticsketch/data
-      KINETICSKETCH_JOBS_DIR: /var/lib/kineticsketch/jobs
-      KINETICSKETCH_CACHE_DIR: /var/cache/kineticsketch
-      MODEL_WEIGHTS_PATH: /opt/kineticsketch/app/models/mdrepo_predictor.pt
+      KINETICSKETCH_DATA_DIR: /var/lib/cascade/data
+      KINETICSKETCH_STATE_DIR: /var/lib/cascade/state
+      KINETICSKETCH_JOBS_DIR: /var/lib/cascade/jobs
+      KINETICSKETCH_CACHE_DIR: /var/cache/cascade
+      DRUG_DATABASE_PATH: /var/lib/cascade/data/drug_database.sqlite
+      DRUG_FINGERPRINT_PATH: /var/lib/cascade/data/drug_fingerprints.npz
+      MODEL_WEIGHTS_PATH: /var/lib/cascade/models/mdrepo_predictor.pt
     depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
     volumes: &app-volumes
       - type: bind
-        source: ${KINETICSKETCH_DATA_HOST_PATH:-./data}
-        target: /var/lib/kineticsketch/data
+        source: ${CASCADE_DATA_HOST_PATH:-./data}
+        target: /var/lib/cascade/data
       - type: bind
-        source: ${KINETICSKETCH_MODELS_HOST_PATH:-./app/models}
-        target: /opt/kineticsketch/app/models
+        source: ${CASCADE_MODELS_HOST_PATH:-./app/models}
+        target: /var/lib/cascade/models
         read_only: true
-      - jobs-data:/var/lib/kineticsketch/jobs
-      - cache-data:/var/cache/kineticsketch
+      - state-data:/var/lib/cascade/state
+      - jobs-data:/var/lib/cascade/jobs
+      - cache-data:/var/cache/cascade
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7860/health/ready || exit 1"]
       interval: 30s
@@ -70,7 +74,7 @@ services:
       retries: 3
       start_period: 60s
     networks:
-      - kinetic-sketch
+      - cascade-net
 
   redis:
     image: redis:7.4-alpine
@@ -86,7 +90,7 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - kinetic-sketch
+      - cascade-net
 
   celery_worker:
     build:
@@ -102,7 +106,7 @@ services:
     restart: unless-stopped
     volumes: *app-volumes
     networks:
-      - kinetic-sketch
+      - cascade-net
 
   celery_beat:
     build:
@@ -110,7 +114,7 @@ services:
       dockerfile: Dockerfile
     init: true
     <<: *runtime-security
-    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "beat", "--loglevel=info", "--schedule", "/var/lib/kineticsketch/data/celerybeat-schedule"]
+    command: ["celery", "-A", "app.tasks.celery_app:celery_app", "beat", "--loglevel=info", "--schedule", "/var/lib/cascade/state/celerybeat-schedule"]
     depends_on:
       redis:
         condition: service_healthy
@@ -118,13 +122,14 @@ services:
     restart: unless-stopped
     volumes: *app-volumes
     networks:
-      - kinetic-sketch
+      - cascade-net
 
 networks:
-  kinetic-sketch:
+  cascade-net:
     driver: bridge
 
 volumes:
+  state-data:
   jobs-data:
   cache-data:
   redis-data:
