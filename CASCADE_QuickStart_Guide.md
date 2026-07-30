@@ -31,9 +31,30 @@ cd CASCADE
 
 ---
 
-## Step 2: Download Data Files
+## Step 2: Start CASCADE
 
-CASCADE needs three large files (drug database, fingerprints, trained model) that are too big to include in the code download. Run the script for your operating system — it downloads everything automatically.
+### Option A — Universal launcher (recommended, requires Python 3.11+)
+
+```bash
+python compose_up.py
+```
+
+This is all you need to run. It will automatically:
+- Check for and download any missing data files from GitHub Releases (first run only)
+- Create a `.env` config file with a secure secret key
+- Pick a free port and start all services via Docker Compose
+- Wait for the app to be ready, then open it in your browser
+
+The three data files downloaded on first run (~810 MB total):
+- `data/drug_database.sqlite` — 2.89 M compounds
+- `data/drug_fingerprints.npz` — fingerprint index
+- `app/models/mdrepo_predictor.pt` — trained model weights
+
+Files that already exist are always skipped — downloads only ever happen once.
+
+### Option B — Manual data download + direct Docker (no Python needed)
+
+If you don't have Python, download the data files first:
 
 **Linux / macOS** — open a terminal inside the CASCADE folder:
 ```bash
@@ -45,45 +66,33 @@ bash setup.sh
 .\setup.ps1
 ```
 
-If a file already exists it is skipped. The download is about 810 MB total and only happens once.
-
 > **How to open a terminal inside the CASCADE folder:**
 > - **Windows 11:** Right-click inside the folder → *Open in Terminal*
 > - **Windows 10:** Shift + right-click inside the folder → *Open PowerShell window here*
 > - **macOS:** Right-click the folder in Finder → *Services → New Terminal at Folder*
 > - **Linux:** Right-click inside the folder → *Open in Terminal*
 
----
-
-## Step 3: Start CASCADE
-
-### Option A — Universal launcher (recommended, requires Python 3.11+)
+Then create a `.env` file and start Docker:
 
 ```bash
-python compose_up.py
+# Linux/macOS
+cp .env.example .env
+docker compose up -d
 ```
 
-This automatically:
-- Creates a `.env` config file on first run
-- Generates a secure secret key for you
-- Picks a free port and starts all services
-- Opens the app in your browser
-
-### Option B — Direct Docker command
-
-```bash
+```powershell
+# Windows
+Copy-Item .env.example .env
 docker compose up -d
 ```
 
 Then open your browser and go to `http://localhost:7860`.
 
-> If using Option B for the first time, you must first create a `.env` file:
-> - **Linux/macOS:** `cp .env.example .env`
-> - **Windows:** `Copy-Item .env.example .env`
+> **Note:** You must set a real `FLASK_SECRET_KEY` in your `.env` file before starting when using this path. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 
 ---
 
-## Step 4: Create Your Account
+## Step 3: Create Your Account
 
 On first run, registration is open. Go to `http://localhost:7860` and sign up. Once you have created all the accounts you need, you can close registration so no one else can sign up:
 
@@ -100,7 +109,7 @@ On first run, registration is open. Go to `http://localhost:7860` and sign up. O
 
 ---
 
-## Step 5: Shut Down
+## Step 4: Shut Down
 
 When you are done:
 
@@ -241,8 +250,9 @@ Restart with `docker compose restart app`.
 | Problem | Fix |
 |---|---|
 | "Port already in use" | Set `HOST_PORT=8080` (or any free port) in `.env` |
-| App starts but shows "model not ready" | Check `app/models/mdrepo_predictor.pt` exists — re-run `setup.sh` |
-| Drug search returns nothing | Check `data/drug_database.sqlite` exists — re-run `setup.sh` |
+| App starts but shows "model not ready" | Re-run `python compose_up.py` — it will auto-download the model file |
+| Drug search returns nothing | Re-run `python compose_up.py` — it will auto-download the database |
+| Download failed / incomplete file | Re-run `python compose_up.py` — incomplete files are detected and re-downloaded automatically |
 | Docker says "no such service: app" | Make sure you are in the CASCADE folder when running docker commands |
 | Ollama commands not working | Confirm Ollama is running on your host and `OLLAMA_ENABLED=1` is in `.env` |
 | GPU not detected | Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) and add the `deploy` block to `docker-compose.yml` |

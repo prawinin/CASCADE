@@ -89,8 +89,10 @@ CASCADE/
 │   └── main.py                     # Flask application and API routes
 ├── data/                           # Local database, fingerprints, action logs
 ├── scripts/
+│   ├── download_data.py            # Auto-downloads data files from GitHub Releases
 │   ├── build_drug_db.py
 │   └── train_mdrepo.py
+├── compose_up.py                   # One-command launcher (handles env, data, browser)
 ├── AUDIT_REPORT.md                 # Verified engineering findings
 ├── requirements.txt
 ├── run.py
@@ -114,47 +116,49 @@ git clone https://github.com/prawinin/CASCADE.git
 cd CASCADE
 ```
 
-### 2. Download data files
+### 2. Start the application
 
-The drug database, fingerprints, and model weights are hosted as a GitHub Release
-(too large for the repository itself). Run the setup script for your OS:
-
-**Linux / macOS:**
-```bash
-bash setup.sh
-```
-
-**Windows (PowerShell):**
-```powershell
-.\setup.ps1
-```
-
-This downloads three files into the correct locations:
-- `data/drug_database.sqlite` — 2.89 M compounds
-- `data/drug_fingerprints.npz` — memory-mapped fingerprint index
-- `app/models/mdrepo_predictor.pt` — trained GNN weights
-
-If any file already exists it is skipped automatically.
-
-### 3. Start the application
+**Recommended — one command does everything:**
 
 ```bash
 python compose_up.py
 ```
 
 That's it. The script will:
-1. Create a `.env` file from `.env.example` if one does not exist
-2. Auto-generate a secure `FLASK_SECRET_KEY` and save it to `.env`
-3. Pick a free port (default 7860) and launch all services
-4. Open the app in your browser
+1. Check for (and automatically download) the required data files from GitHub Releases
+2. Create a `.env` config file from `.env.example` if one does not exist
+3. Auto-generate a secure `FLASK_SECRET_KEY` and save it to `.env`
+4. Pick a free port (default 7860) and launch all services via Docker Compose
+5. Wait for the application to be ready, then open it in your browser
 
-Or launch without Python if you prefer:
+The three data files downloaded on first run are:
+- `data/drug_database.sqlite` — 2.89 M compounds
+- `data/drug_fingerprints.npz` — memory-mapped fingerprint index
+- `app/models/mdrepo_predictor.pt` — trained GNN weights
+
+Files are skipped on subsequent runs if they already exist — downloads only happen once.
+
+**Alternative — download data files manually, then start with Docker directly:**
 
 ```bash
-docker compose up
+# Linux / macOS
+bash setup.sh
+
+# Windows (PowerShell)
+.\setup.ps1
 ```
 
-(You must set `FLASK_SECRET_KEY` in `.env` manually if using this path directly.)
+Then:
+
+```bash
+docker compose up -d
+```
+
+> You must create a `.env` file first when using this path:
+> - **Linux/macOS:** `cp .env.example .env`
+> - **Windows:** `Copy-Item .env.example .env`
+> 
+> You must also set a real `FLASK_SECRET_KEY` in `.env` before starting.
 
 ### 4. Register your account
 
@@ -242,6 +246,7 @@ Download the data files (same as the Docker path):
 ```bash
 bash setup.sh   # Linux/macOS
 # or .\setup.ps1 on Windows
+# or: python scripts/download_data.py
 ```
 
 Start the full stack manually:
