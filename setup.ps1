@@ -13,7 +13,7 @@ function Write-Warn  { param($msg) Write-Host "[setup] $msg" -ForegroundColor Ye
 function Download-File {
     param($Url, $Dest)
     $name = Split-Path -Leaf $Dest
-    if (Test-Path $Dest) {
+    if ((Test-Path $Dest) -and ((Get-Item $Dest).Length -gt 0)) {
         Write-Info "Already exists: $name — skipping."
         return
     }
@@ -32,9 +32,22 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 
 Write-Info "CASCADE setup starting..."
 
-Download-File "$RELEASE_BASE/drug_database.sqlite"  "$REPO_ROOT\data\drug_database.sqlite"
-Download-File "$RELEASE_BASE/drug_fingerprints.npz" "$REPO_ROOT\data\drug_fingerprints.npz"
-Download-File "$RELEASE_BASE/mdrepo_predictor.pt"   "$REPO_ROOT\app\models\mdrepo_predictor.pt"
+# Pre-create target directories before Docker runs
+New-Item -ItemType Directory -Force -Path "$REPO_ROOT\data" | Out-Null
+New-Item -ItemType Directory -Force -Path "$REPO_ROOT\app\models" | Out-Null
+
+$python = Get-Command python -ErrorAction SilentlyContinue
+if (-not $python) {
+    $python = Get-Command python3 -ErrorAction SilentlyContinue
+}
+
+if ($python -and (Test-Path "$REPO_ROOT\scripts\download_data.py")) {
+    & $python.Source "$REPO_ROOT\scripts\download_data.py"
+} else {
+    Download-File "$RELEASE_BASE/drug_database.sqlite"  "$REPO_ROOT\data\drug_database.sqlite"
+    Download-File "$RELEASE_BASE/drug_fingerprints.npz" "$REPO_ROOT\data\drug_fingerprints.npz"
+    Download-File "$RELEASE_BASE/mdrepo_predictor.pt"   "$REPO_ROOT\app\models\mdrepo_predictor.pt"
+}
 
 Write-Info "All data files ready."
 Write-Host ""

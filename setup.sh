@@ -18,7 +18,7 @@ check_cmd() {
 
 download() {
     local url="$1" dest="$2"
-    if [[ -f "$dest" ]]; then
+    if [[ -f "$dest" && -s "$dest" ]]; then
         info "Already exists: $(basename "$dest") — skipping."
         return
     fi
@@ -28,14 +28,28 @@ download() {
     info "Saved: $dest"
 }
 
-check_cmd curl
 check_cmd docker
 
 info "CASCADE setup starting..."
 
-download "$RELEASE_BASE/drug_database.sqlite"  "$REPO_ROOT/data/drug_database.sqlite"
-download "$RELEASE_BASE/drug_fingerprints.npz" "$REPO_ROOT/data/drug_fingerprints.npz"
-download "$RELEASE_BASE/mdrepo_predictor.pt"   "$REPO_ROOT/app/models/mdrepo_predictor.pt"
+# Pre-create target directories with current user ownership before Docker runs
+mkdir -p "$REPO_ROOT/data" "$REPO_ROOT/app/models"
+
+PYTHON_BIN=""
+if command -v python3 &>/dev/null; then
+    PYTHON_BIN="python3"
+elif command -v python &>/dev/null; then
+    PYTHON_BIN="python"
+fi
+
+if [[ -n "$PYTHON_BIN" && -f "$REPO_ROOT/scripts/download_data.py" ]]; then
+    "$PYTHON_BIN" "$REPO_ROOT/scripts/download_data.py"
+else
+    check_cmd curl
+    download "$RELEASE_BASE/drug_database.sqlite"  "$REPO_ROOT/data/drug_database.sqlite"
+    download "$RELEASE_BASE/drug_fingerprints.npz" "$REPO_ROOT/data/drug_fingerprints.npz"
+    download "$RELEASE_BASE/mdrepo_predictor.pt"   "$REPO_ROOT/app/models/mdrepo_predictor.pt"
+fi
 
 info "All data files ready."
 echo ""

@@ -236,6 +236,52 @@ def _find_binary(name: str) -> str | None:
     return shutil.which(name)
 
 
+def _ensure_directories_and_data() -> None:
+    """Ensure runtime directories exist and required data files are present."""
+    (PROJECT_ROOT / "data").mkdir(parents=True, exist_ok=True)
+    (PROJECT_ROOT / "app" / "models").mkdir(parents=True, exist_ok=True)
+
+    try:
+        from scripts.download_data import ensure_data_files
+        ensure_data_files(verbose=True)
+    except Exception as exc:
+        _log(f"Warning during data file check: {exc}")
+
+
+def _open_browser(url: str) -> None:
+    """Open URL in default system browser with fallbacks for WSL and Linux environments."""
+    import shutil
+
+    _log(f"Opening browser at: {url} ...")
+
+    # WSL support: check if wslview is present
+    wslview = shutil.which("wslview")
+    if wslview:
+        try:
+            subprocess.Popen([wslview, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return
+        except Exception:
+            pass
+
+    # Standard python webbrowser module
+    try:
+        if webbrowser.open(url):
+            return
+    except Exception:
+        pass
+
+    # Linux fallback commands
+    for cmd in ["xdg-open", "gio", "x-www-browser", "sensible-browser", "firefox", "google-chrome", "chromium"]:
+        bin_path = shutil.which(cmd)
+        if bin_path:
+            try:
+                args = [bin_path, "open", url] if cmd == "gio" else [bin_path, url]
+                subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+            except Exception:
+                pass
+
+
 # 
 # Main
 # 
@@ -273,6 +319,9 @@ def main() -> None:
     print("  ")
     print()
 
+    # Ensure directories & download missing data files
+    _ensure_directories_and_data()
+
     #  1. Redis 
     if not start_redis():
         _log("Continuing without Redis — async HPC tasks will be unavailable.")
@@ -297,7 +346,7 @@ def main() -> None:
 
     #  4. Open browser 
     if not args.no_browser:
-        webbrowser.open(url)
+        _open_browser(url)
 
     #  5. Wait — block until Flask exits or we're killed 
     flask_proc = _procs.get("flask")
@@ -312,3 +361,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
