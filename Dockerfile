@@ -46,8 +46,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Create the runtime identity before copying large assets so ownership is set in
 # one layer (Hugging Face Docker Spaces also run applications as UID 1000).
 RUN useradd -m -u 1000 appuser && \
-    mkdir -p /var/lib/kineticsketch/state /var/lib/kineticsketch/jobs /var/cache/kineticsketch && \
-    chown -R appuser:appuser /var/lib/kineticsketch /var/cache/kineticsketch
+    mkdir -p /var/lib/cascade/state /var/lib/cascade/jobs /var/cache/cascade /var/lib/kineticsketch/state /var/lib/kineticsketch/jobs /var/cache/kineticsketch && \
+    chown -R appuser:appuser /var/lib/cascade /var/cache/cascade /var/lib/kineticsketch /var/cache/kineticsketch
+
 
 # Copy application code and any manually supplied model/data assets.
 COPY --chown=appuser:appuser . /opt/kineticsketch
