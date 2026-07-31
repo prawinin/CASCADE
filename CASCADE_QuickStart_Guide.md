@@ -195,7 +195,9 @@ GNINA is a deep-learning molecular docking engine. It is not included in the def
 
 ### Change the port
 
-If port 7860 is already in use on your machine:
+If port 7860 is already in use on your machine, the `compose_up.py` launcher will **automatically scan** and pick the next available port (e.g., 7861, 7862) and open it for you. 
+
+However, if you want to manually hardcode a specific port, you can set it in your `.env` file:
 
 ```env
 HOST_PORT=8080
@@ -247,6 +249,8 @@ Restart with `docker compose restart app`.
 
 ## Troubleshooting
 
+### General Issues
+
 | Problem | Fix |
 |---|---|
 | "Port already in use" | Set `HOST_PORT=8080` (or any free port) in `.env` |
@@ -256,6 +260,54 @@ Restart with `docker compose restart app`.
 | Docker says "no such service: app" | Make sure you are in the CASCADE folder when running docker commands |
 | Ollama commands not working | Confirm Ollama is running on your host and `OLLAMA_ENABLED=1` is in `.env` |
 | GPU not detected | Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) and add the `deploy` block to `docker-compose.yml` |
+
+---
+
+### OS-Specific Docker Engine Issues
+
+If `python compose_up.py` fails or Docker Desktop is stuck on **"Starting the Docker Engine..."**, find your OS below:
+
+#### Windows
+
+**Fix 1 — Enable Hardware Virtualization (BIOS)**
+Docker requires hardware virtualization. Restart your PC, hold `Shift` while clicking "Restart" to access Advanced Options, and boot into your BIOS/UEFI settings. Look for **Virtualization Technology (VT-x)** for Intel or **SVM Mode (AMD-V)** for AMD, and set it to **Enabled**.
+
+**Fix 2 — Turn on Windows Features**
+1. Search the Windows Start Menu for **"Turn Windows features on or off"**.
+2. Make sure these boxes are checked:
+   - **Virtual Machine Platform**
+   - **Windows Subsystem for Linux**
+   - **Hyper-V** *(Note: Windows Home edition will not have this. Just check the other two).*
+3. Restart your PC.
+
+**Fix 3 — Update WSL**
+1. Open PowerShell **as Administrator**.
+2. Run: `wsl --update`
+3. Restart Docker Desktop.
+
+#### macOS
+
+**Fix 1 — Check Background Permissions**
+1. Go to **System Settings > General > Login Items** (or Background Items).
+2. Ensure any Docker-related toggles are turned **ON**.
+
+**Fix 2 — Allocate More Memory**
+PyTorch requires significant RAM. In Docker Desktop, go to **Settings > Resources**. Ensure Docker is allowed to use at least **6 GB to 8 GB of Memory**.
+
+**Fix 3 — Reset Docker Data**
+If the app opens but the engine won't start, click the **Bug/Troubleshoot icon** (top right of the Docker window). Click **Clean / Purge data** or **Reset to factory defaults**.
+
+#### Linux
+
+**Fix 1 — Add your user to the Docker group**
+If you get a `Permission denied` socket error:
+1. Run: `sudo usermod -aG docker $USER`
+2. **Log out and log back in** (or restart your computer).
+
+**Fix 2 — Start the Docker Service**
+If the daemon isn't running automatically in the background:
+1. Run: `sudo systemctl start docker`
+2. To make it start on boot: `sudo systemctl enable docker`
 
 ---
 
